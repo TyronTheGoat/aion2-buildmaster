@@ -4,7 +4,26 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
+// Inline local original icons (public/item-icons) so the offline file shows them without a server.
+const inlineIcons = {
+  name: "inline-item-icons",
+  setup(b) {
+    b.onLoad({ filter: /item-catalog\.json$/ }, (args) => {
+      const items = JSON.parse(readFileSync(args.path, "utf8"));
+      for (const it of items) {
+        if (!it.icon?.startsWith("/item-icons/")) continue;
+        const file = path.join(root, "public", decodeURIComponent(it.icon));
+        try {
+          const ext = path.extname(file).slice(1).replace("jpg", "jpeg");
+          it.icon = `data:image/${ext};base64,${readFileSync(file).toString("base64")}`;
+        } catch { it.icon = ""; }
+      }
+      return { contents: JSON.stringify(items), loader: "json" };
+    });
+  },
+};
 const js = await build({
+  plugins: [inlineIcons],
   entryPoints: [path.join(root, "offline/main.tsx")],
   bundle: true, minify: true, write: false, format: "iife", jsx: "automatic",
   alias: { "@": path.join(root, "src") },

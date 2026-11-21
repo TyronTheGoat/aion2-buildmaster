@@ -4,6 +4,7 @@ import type { Character, Item, StatLine } from "@/lib/types";
 import { compareIdeal, type IdealRow } from "@/lib/compare";
 import { buildPlan, shareOf, GOOD_SHARE } from "@/lib/advisor";
 import { SLOT_LABEL_DE } from "@/lib/knowledge/slots";
+import { findCatalogItem, iconFor } from "@/lib/knowledge/item-catalog";
 import { GradeBadge } from "./GradeBadge";
 import { ItemIcon, SkillIcon, Sheet, isSkillLine } from "./ui";
 
@@ -42,12 +43,13 @@ export function ItemCards({ char, items, arcana = false }: { char: Character; it
               <button onClick={() => setOpen(item)} disabled={!item.scored && !item.lines.length}
                 className="w-full rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left transition active:scale-[0.99] enabled:hover:border-white/25">
                 <div className="flex gap-3">
-                  <ItemIcon src={item.icon} name={item.name} grade={item.grade} enhance={item.enhance} size={52} tall={arcana} />
+                  <ItemIcon src={iconFor(item)} name={item.name} grade={item.grade} enhance={item.enhance} size={52} tall={arcana} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-[10px] uppercase tracking-wide text-zinc-500">{SLOT_LABEL_DE[item.slot]}</div>
                         <div className="truncate font-semibold leading-snug">{item.name}</div>
+                        <SourceLine name={item.name} />
                       </div>
                       {item.scored ? <GradeBadge grade={item.grade} score={item.score} size="sm" /> : <span className="text-[10px] text-zinc-500">ohne Wertung</span>}
                     </div>
@@ -75,10 +77,11 @@ export function ItemCards({ char, items, arcana = false }: { char: Character; it
       <Sheet open={!!open} onClose={() => setOpen(undefined)}
         title={open && (
           <div className="flex items-center gap-3">
-            <ItemIcon src={open.icon} name={open.name} grade={open.grade} enhance={open.enhance} size={44} tall={open.slot === "arcana"} />
+            <ItemIcon src={iconFor(open)} name={open.name} grade={open.grade} enhance={open.enhance} size={44} tall={open.slot === "arcana"} />
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-wide text-zinc-500">{SLOT_LABEL_DE[open.slot]}</div>
               <div className="font-semibold leading-snug">{open.name}</div>
+              <SourceLine name={open.name} />
               <div className="mt-0.5"><GradeBadge grade={open.grade} score={open.score} size="sm" /></div>
             </div>
           </div>
@@ -156,6 +159,17 @@ function BisDetail({ char, item }: { char: Character; item: Item }) {
         </section>
       )}
       {!step && item.grade === "BiS" && <p className="text-sm text-amber-300">Schon BiS. Hier ist nichts mehr zu tun.</p>}
+    </div>
+  );
+}
+
+/** Where the item comes from (Feuertempel, Grimmhornhöhle, Ludra, Crafted Gear), if it is in the item catalog. */
+function SourceLine({ name }: { name: string }) {
+  const c = findCatalogItem(name);
+  if (!c) return null;
+  return (
+    <div className="truncate text-[11px] text-zinc-500">
+      {[c.source, c.rarity, c.faction !== "Beide" && c.faction].filter(Boolean).join(" · ")}
     </div>
   );
 }

@@ -18,6 +18,13 @@ jeden Slot bewertet, die BiS-Linien pro Slot zeigt und einen priorisierten Upgra
 - BiS-Linien: kisk.app/scoring (Stand 2026-10-19), aktuell nur Spiritmaster in `src/lib/knowledge/ideal-lines.ts`
 - Arcana-Quellen: metabot.gg Arcana-Guide, `src/lib/knowledge/arcana.ts`
 
+## Original-Itembilder (Gear-Asset-Paket)
+- `data/item-catalog.source.json`: 330 recherchierte Items (Feuertempel, Grimmhornhöhle, Ludra, Crafted Gear 62–102, Elyos/Asmodier)
+- `node scripts/build-item-catalog.mjs` erzeugt `src/lib/knowledge/item-catalog.json`; nur verifizierte Bilder werden eingetragen
+- Nach dem Lauf von `download_icons.py`: `node scripts/import-icons.mjs <assetpack-ordner>` kopiert `icons/` nach `public/item-icons/`
+  (per .gitignore nicht im öffentlichen Repo) und trägt sie ein; die Offline-Datei bettet sie ein
+- Fehlt ein Bild, zeigt die App „Bild fehlt“ statt eines Ersatzbildes
+
 ## Entwicklung
 ```bash
 npm install

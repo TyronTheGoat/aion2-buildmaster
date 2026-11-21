@@ -7,6 +7,7 @@ import { classKey } from "@/lib/knowledge/ideal-lines";
 import { GradeBadge } from "./GradeBadge";
 import { ItemCards } from "./ItemCards";
 import { ItemIcon } from "./ui";
+import { iconFor } from "@/lib/knowledge/item-catalog";
 
 type Tab = "gear" | "arcana" | "plan";
 
@@ -123,7 +124,7 @@ function PlanList({ steps, done }: { steps: UpgradeStep[]; done: Item[] }) {
         <li key={`${s.item.name}-${i}`} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
           <div className="flex items-start gap-3">
             <div className="relative">
-              <ItemIcon src={s.item.icon} name={s.item.name} grade={s.item.grade} size={44} tall={s.item.slot === "arcana"} />
+              <ItemIcon src={iconFor(s.item)} name={s.item.name} grade={s.item.grade} size={44} tall={s.item.slot === "arcana"} />
               <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-amber-400 text-xs font-bold text-black">{i + 1}</span>
             </div>
             <div className="min-w-0 flex-1">

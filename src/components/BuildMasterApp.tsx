@@ -7,6 +7,8 @@ import { CharacterView } from "./CharacterView";
 import { GradeBadge } from "./GradeBadge";
 import { ItemIcon, Sheet } from "./ui";
 import { AetherBackground } from "./AetherBackground";
+import { iconFor } from "@/lib/knowledge/item-catalog";
+import { ItemCatalog } from "./ItemCatalog";
 import { charKey, parseKiskLink, useCharacters, type SavedChar } from "./store";
 
 function useHashRoute(): [string | undefined, (k?: string) => void] {
@@ -41,6 +43,8 @@ export function BuildMasterApp() {
   const [adding, setAdding] = useState(false);
   const selected = chars.find((c) => charKey(c) === route);
 
+  if (route === "katalog") return <ItemCatalog onBack={() => go()} />;
+
   if (route && selected) {
     return <CharacterScreen key={route} saved={selected} onBack={() => go()} upsert={upsert}
       onRemove={() => { if (confirm(`${selected.name} entfernen?`)) { remove(route); go(); } }} />;
@@ -66,7 +70,7 @@ export function BuildMasterApp() {
             <li key={charKey(c)}>
               <button onClick={() => go(charKey(c))}
                 className="flex w-full items-center gap-4 rounded-2xl border border-white/10 bg-zinc-900/75 p-4 text-left shadow-xl shadow-black/50 backdrop-blur-xl transition active:scale-[0.99] hover:border-white/25 hover:bg-zinc-900/85">
-                <ItemIcon src={weapon?.icon} name={c.name} grade={s?.gearGrade ?? "?"} size={56} />
+                <ItemIcon src={weapon ? iconFor(weapon) : undefined} name={c.name} grade={s?.gearGrade ?? "?"} size={56} />
                 <div className="min-w-0 flex-1">
                   <div className="text-lg font-semibold">{c.name}</div>
                   <div className="truncate text-sm text-zinc-400">
@@ -86,6 +90,11 @@ export function BuildMasterApp() {
           </li>
         )}
       </ul>
+
+      <button onClick={() => go("katalog")}
+        className="w-full rounded-xl border border-white/10 bg-zinc-900/60 py-2.5 text-sm text-zinc-300 backdrop-blur-xl hover:text-white">
+        Item-Katalog: Feuertempel, Grimmhornhöhle, Ludra, Crafted Gear
+      </button>
 
       <AddCharacterSheet open={adding} onClose={() => setAdding(false)}
         onAdd={(c) => { upsert(c); setAdding(false); go(charKey(c)); }} />
