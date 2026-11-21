@@ -23,6 +23,7 @@ npm install
 npm run dev      # http://localhost:3000
 npm test         # Parser- und Advisor-Tests
 npm run build
+npm run offline  # dist/aion2-buildmaster-offline.html: eine Datei, läuft ohne Server
 ```
 Deploy: Repo bei Vercel importieren, keine Umgebungsvariablen nötig.
 
