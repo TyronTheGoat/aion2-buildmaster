@@ -6,6 +6,7 @@ import { textToLines } from "@/lib/kisk/html-to-text";
 import { CharacterView } from "./CharacterView";
 import { GradeBadge } from "./GradeBadge";
 import { ItemIcon, Sheet } from "./ui";
+import { AetherBackground } from "./AetherBackground";
 import { charKey, parseKiskLink, useCharacters, type SavedChar } from "./store";
 
 function useHashRoute(): [string | undefined, (k?: string) => void] {
@@ -43,10 +44,11 @@ export function BuildMasterApp() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-end justify-between">
+      <AetherBackground />
+      <div className="flex items-end justify-between pt-6">
         <div>
-          <h1 className="text-2xl font-bold">Charaktere</h1>
-          <p className="text-sm text-zinc-400">Wähle einen Charakter oder füge einen neuen hinzu.</p>
+          <h1 className="text-3xl font-bold drop-shadow-[0_2px_12px_rgba(251,191,36,0.35)]">Charaktere</h1>
+          <p className="text-sm text-zinc-300">Wähle einen Charakter oder füge einen neuen hinzu.</p>
         </div>
         <button onClick={() => setAdding(true)} aria-label="Charakter hinzufügen"
           className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-400 text-3xl font-light leading-none text-black shadow-lg shadow-amber-400/20 active:scale-95">+</button>
@@ -59,7 +61,7 @@ export function BuildMasterApp() {
           return (
             <li key={charKey(c)}>
               <button onClick={() => go(charKey(c))}
-                className="flex w-full items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left active:scale-[0.99] hover:border-white/25">
+                className="flex w-full items-center gap-4 rounded-2xl border border-white/15 bg-black/40 p-4 text-left shadow-lg shadow-black/40 backdrop-blur-md active:scale-[0.99] hover:border-amber-300/40">
                 <ItemIcon src={weapon?.icon} name={c.name} grade={s?.gearGrade ?? "?"} size={56} />
                 <div className="min-w-0 flex-1">
                   <div className="text-lg font-semibold">{c.name}</div>
@@ -199,3 +201,4 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
     </>
   );
 }
+
