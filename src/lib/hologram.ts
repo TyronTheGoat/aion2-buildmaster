@@ -36,11 +36,20 @@ export const BODY_SLOTS: SlotKind[] = [
   "necklace", "earring", "ring", "bracelet", "belt",
 ];
 
-/** Aura color per grade (same hues as the grade badges). Unrated items get no aura. */
+/**
+ * Aura per grade: a clearly different hue per tier, and a strength level that drives
+ * brightness, rim width, shell thickness and energy flow (BiS strongest, D faint).
+ * Unrated items get no aura.
+ */
 export const GRADE_HEX: Record<Grade, number | null> = {
-  BiS: 0xffc53d, "S+": 0xe64bff, S: 0x9b6bff, A: 0x3ad0ff,
-  B: 0x34e39a, C: 0xb8c0cc, D: 0xff3b3b, "?": null,
+  BiS: 0xffc23a, "S+": 0xff3ccf, S: 0x9d5cff, A: 0x3cff6e,
+  B: 0xd8f23a, C: 0xa7b0bd, D: 0xff3a24, "?": null,
 };
+export const GRADE_LEVEL: Record<Grade, number> = {
+  BiS: 1, "S+": 0.84, S: 0.7, A: 0.5, B: 0.36, C: 0.24, D: 0.14, "?": 0,
+};
+export const LEGEND_GRADES: Grade[] = ["BiS", "S+", "S", "A", "B", "C", "D"];
+export const hexCss = (g: Grade) => `#${(GRADE_HEX[g] ?? 0x5b6b80).toString(16).padStart(6, "0")}`;
 
 export interface SlotRef { slot: SlotKind; index: number }
 

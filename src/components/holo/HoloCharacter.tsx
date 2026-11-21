@@ -9,6 +9,7 @@ import { SLOT_LABEL_DE } from "@/lib/knowledge/slots";
 import { iconFor } from "@/lib/knowledge/item-catalog";
 import { GradeBadge } from "../GradeBadge";
 import { ItemIcon, SkillIcon, isSkillLine } from "../ui";
+import { AuraLegend } from "./HeroShowcase";
 
 const HoloScene = lazy(() => import("./HoloScene"));
 
@@ -60,7 +61,7 @@ export function HoloCharacter({ char, gender, onBack, onDetails, onGender }: {
         <div className="flex h-full items-center justify-center p-8 text-center text-sm text-sky-200/80">{error}</div>
       ) : (
         <Suspense fallback={<div className="flex h-full items-center justify-center text-sm tracking-[0.3em] text-sky-300/70">LADE HOLOGRAMM…</div>}>
-          <HoloScene gender={gender} weapon={weapon} grades={grades} focus={focus} panel={isWide ? "right" : "bottom"} onPick={pick} onError={setError} />
+          <HoloScene key={gender} gender={gender} weapon={weapon} grades={grades} focus={focus} panel={isWide ? "right" : "bottom"} onPick={pick} onError={setError} />
         </Suspense>
       )}
 
@@ -90,6 +91,7 @@ export function HoloCharacter({ char, gender, onBack, onDetails, onGender }: {
         </div>
       </div>
 
+      <AuraLegend className={`pointer-events-none absolute inset-x-0 bottom-[calc(3.2rem+env(safe-area-inset-bottom))] transition-opacity duration-500 ${focus ? "opacity-0" : "opacity-100"}`} />
       <p className={`pointer-events-none absolute inset-x-0 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] text-center text-xs tracking-[0.25em] text-sky-200/60 transition-opacity duration-700 ${hint && !focus ? "opacity-100" : "opacity-0"}`}>
         TIPPE AUF EIN TEIL · ZIEHEN ZUM DREHEN
       </p>

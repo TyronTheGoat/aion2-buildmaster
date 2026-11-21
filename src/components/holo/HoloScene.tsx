@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
@@ -7,7 +7,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import type { Grade, SlotKind } from "@/lib/types";
-import { GRADE_HEX, type Gender, type WeaponKind } from "@/lib/hologram";
+import type { Gender, WeaponKind } from "@/lib/hologram";
 import { buildFigure, type Figure } from "./figure";
 
 export interface HoloSceneProps {
@@ -21,6 +21,8 @@ export interface HoloSceneProps {
   panel: "bottom" | "right";
   onPick: (slotId: string | undefined) => void;
   onError?: (msg: string) => void;
+  /** "hero": showcase on the start page (slow turn, no orbit controls, tap opens the character) */
+  mode?: "full" | "hero";
 }
 
 /** How the camera frames each slot: distance and view direction (world space, character faces +z). */
@@ -43,6 +45,8 @@ const FOCUS: Partial<Record<SlotKind, { dist: number; dir: [number, number, numb
 
 const OVERVIEW_TARGET = new THREE.Vector3(0, 0.98, 0);
 const OVERVIEW_OFFSET = new THREE.Vector3(0, 0.2, 4.7);
+const HERO_TARGET = new THREE.Vector3(0, 0.78, 0);
+const HERO_OFFSET = new THREE.Vector3(1.0, 0.3, 4.7);
 const ease = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 
 export default function HoloScene(props: HoloSceneProps) {
@@ -56,8 +60,21 @@ export default function HoloScene(props: HoloSceneProps) {
   });
 
   const { gender, weapon } = props;
+  const [ready, setReady] = useState(false);
   useEffect(() => {
+    // build after the first paint so the loading state is visible while the body mesh is generated
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    const id = setTimeout(() => {
+      if (cancelled) return;
+      cleanup = init();
+      setReady(true);
+    }, 40);
+    return () => { cancelled = true; clearTimeout(id); cleanup?.(); };
+
+  function init(): (() => void) | undefined {
     const el = host.current!;
+    const hero = latest.current.mode === "hero";
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -69,7 +86,8 @@ export default function HoloScene(props: HoloSceneProps) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0x03070f, 1);
     el.appendChild(renderer.domElement);
-    renderer.domElement.style.touchAction = "none";
+    renderer.domElement.style.touchAction = hero ? "pan-y" : "none";
+    if (hero) renderer.domElement.style.cursor = "pointer";
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x03070f);
@@ -90,12 +108,14 @@ export default function HoloScene(props: HoloSceneProps) {
     controls.maxPolarAngle = Math.PI * 0.62;
     controls.target.copy(OVERVIEW_TARGET);
     controls.autoRotate = !reduce;
-    controls.autoRotateSpeed = 0.5;
+    controls.autoRotateSpeed = hero ? 0.8 : 0.5;
     controls.enabled = false;
+    const overviewTarget = hero ? HERO_TARGET : OVERVIEW_TARGET;
+    const overviewOffset = hero ? HERO_OFFSET : OVERVIEW_OFFSET;
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.25, 0.12);
+    const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.7, 0.3, 0.14);
     composer.addPass(bloom);
     composer.addPass(new OutputPass());
 
@@ -106,7 +126,7 @@ export default function HoloScene(props: HoloSceneProps) {
     const tw = {
       active: false, t0: 0, dur: 1.4,
       fromTarget: new THREE.Vector3(), fromSph: new THREE.Spherical(), toSph: new THREE.Spherical(),
-      toTarget: () => OVERVIEW_TARGET.clone(),
+      toTarget: () => new THREE.Vector3(0, 1, 0),
     };
     let shift = 0, shiftTo = 0;
     const tmp = new THREE.Vector3();
@@ -154,7 +174,7 @@ export default function HoloScene(props: HoloSceneProps) {
         controls.minDistance = Math.min(0.35, f.dist * 0.5);
       } else {
         focusMarker = undefined;
-        startTween(() => OVERVIEW_TARGET.clone(), OVERVIEW_OFFSET.clone(), 1.3);
+        startTween(() => overviewTarget.clone(), overviewOffset.clone(), 1.3);
         controls.minDistance = 0.35;
       }
       fig.setFocus(id);
@@ -162,11 +182,7 @@ export default function HoloScene(props: HoloSceneProps) {
     }
 
     function setGrades(grades: Record<string, Grade>) {
-      for (const id of Object.keys(fig.auras)) {
-        const g = grades[id];
-        const hex = g ? GRADE_HEX[g] : null;
-        fig.setAura(id, hex, g === "BiS");
-      }
+      for (const id of fig.slotIds) fig.setGrade(id, grades[id] && grades[id] !== "?" ? grades[id] : undefined);
     }
 
     api.current = {
@@ -179,7 +195,7 @@ export default function HoloScene(props: HoloSceneProps) {
     setGrades(latest.current.grades);
 
     // intro: camera glides in while the hologram materialises
-    startTween(() => OVERVIEW_TARGET.clone(), OVERVIEW_OFFSET.clone(), 2.6);
+    startTween(() => overviewTarget.clone(), overviewOffset.clone(), hero ? 2.2 : 2.6);
     if (latest.current.focus) setFocus(latest.current.focus);
 
     // ---- picking --------------------------------------------------------------
@@ -192,7 +208,8 @@ export default function HoloScene(props: HoloSceneProps) {
       ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
       ray.setFromCamera(ndc, camera);
       const hit = ray.intersectObjects(fig.hitTargets, false)[0];
-      return hit ? { id: hit.object.userData.slot as string, point: hit.point.clone() } : undefined;
+      const id = hit && fig.slotOf(hit);
+      return hit && id ? { id, point: hit.point.clone() } : undefined;
     };
     const onDown = (e: PointerEvent) => {
       down = { x: e.clientX, y: e.clientY, t: performance.now() };
@@ -204,12 +221,15 @@ export default function HoloScene(props: HoloSceneProps) {
       const quick = performance.now() - down.t < 600;
       down = undefined;
       if (moved > 7 || !quick) return;
+      if (hero) { latest.current.onPick("open"); return; }
       const h = pick(e.clientX, e.clientY);
       if (h) lastHit = h;
       latest.current.onPick(h?.id);
     };
+    let lastMove = 0;
     const onMove = (e: PointerEvent) => {
-      if (e.pointerType !== "mouse" || down) return;
+      if (hero || e.pointerType !== "mouse" || down || performance.now() - lastMove < 90) return;
+      lastMove = performance.now();
       const h = pick(e.clientX, e.clientY);
       if (h?.id !== hoverId) {
         hoverId = h?.id;
@@ -259,7 +279,7 @@ export default function HoloScene(props: HoloSceneProps) {
           THREE.MathUtils.lerp(tw.fromSph.theta, tw.toSph.theta, k),
         );
         camera.position.copy(controls.target).add(tmp.setFromSpherical(s));
-        if (k >= 1) { tw.active = false; controls.enabled = true; }
+        if (k >= 1) { tw.active = false; controls.enabled = !hero; }
         camera.lookAt(controls.target);
       } else {
         if (focusMarker) {
@@ -306,7 +326,14 @@ export default function HoloScene(props: HoloSceneProps) {
       renderer.domElement.remove();
       api.current = null;
     };
+  }
   }, [gender, weapon]);
 
-  return <div ref={host} className="absolute inset-0" />;
+  return (
+    <div ref={host} className="absolute inset-0">
+      <div className={`pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] tracking-[0.35em] text-sky-300/70 transition-opacity duration-700 ${ready ? "opacity-0" : "animate-pulse opacity-100"}`}>
+        LADE HOLOGRAMM…
+      </div>
+    </div>
+  );
 }

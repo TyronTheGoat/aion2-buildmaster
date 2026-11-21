@@ -10,6 +10,7 @@ import { AetherBackground } from "./AetherBackground";
 import { iconFor } from "@/lib/knowledge/item-catalog";
 import { ItemCatalog } from "./ItemCatalog";
 import { HoloCharacter, GenderPicker } from "./holo/HoloCharacter";
+import { HeroShowcase } from "./holo/HeroShowcase";
 import { charKey, parseKiskLink, useCharacters, type SavedChar } from "./store";
 
 function useHashRoute(): [string | undefined, (k?: string) => void] {
@@ -43,6 +44,9 @@ export function BuildMasterApp() {
   const [route, go] = useHashRoute();
   const [adding, setAdding] = useState(false);
   const selected = chars.find((c) => charKey(c) === route);
+  // featured in the hero: the character opened last, else the first one
+  const [lastKey] = useState(() => { try { return typeof window === "undefined" ? null : localStorage.getItem("bm:last"); } catch { return null; } });
+  const featured = chars.find((c) => charKey(c) === lastKey) ?? chars[0];
 
   if (route === "katalog") return <ItemCatalog onBack={() => go()} />;
 
@@ -54,10 +58,14 @@ export function BuildMasterApp() {
   return (
     <div className="space-y-5">
       <AetherBackground />
-      <div className="flex items-end justify-between pt-6">
+      {featured && (
+        <HeroShowcase char={featured.snapshot} name={featured.name} server={`${featured.server} · ${featured.region.toUpperCase()}`}
+          gender={featured.gender ?? "m"} onOpen={() => go(charKey(featured))} />
+      )}
+      <div className="flex items-end justify-between pt-2">
         <div>
           <div className="text-[11px] uppercase tracking-[0.3em] text-sky-300/70">Hologramm-Archiv</div>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">Charaktere</h1>
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight">Charaktere</h2>
           <p className="text-sm text-sky-100/60">Wähle einen Charakter oder füge einen neuen hinzu.</p>
         </div>
         <button onClick={() => setAdding(true)} aria-label="Charakter hinzufügen"
@@ -146,6 +154,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
   const [pasting, setPasting] = useState(false);
   const [text, setText] = useState("");
   const [view, setView] = useState<"holo" | "list">("holo");
+  useEffect(() => { try { localStorage.setItem("bm:last", charKey(saved)); } catch { /* private mode */ } }, [saved]);
 
   const refresh = useCallback(async () => {
     if (isOffline()) { setPasting(true); return; }
