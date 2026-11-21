@@ -8,7 +8,7 @@ const js = await build({
   entryPoints: [path.join(root, "offline/main.tsx")],
   bundle: true, minify: true, write: false, format: "iife", jsx: "automatic",
   alias: { "@": path.join(root, "src") },
-  define: { "process.env.NODE_ENV": '"production"' },
+  define: { "process.env.NODE_ENV": '"production"', __BM_OFFLINE__: "true" },
 });
 // Reuse the Tailwind CSS from the Next build (run `next build` first).
 const cssDir = path.join(root, ".next/static/chunks");

@@ -21,7 +21,11 @@ function useHashRoute(): [string | undefined, (k?: string) => void] {
   return [route, go];
 }
 
-const isOffline = () => typeof location !== "undefined" && location.protocol === "file:";
+// The single-file offline build sets this flag; opening the file on a phone is not always a file:// URL.
+declare const __BM_OFFLINE__: boolean | undefined;
+const isOffline = () =>
+  (typeof __BM_OFFLINE__ !== "undefined" && __BM_OFFLINE__) ||
+  (typeof location !== "undefined" && !/^https?:$/.test(location.protocol));
 
 async function fetchLive(c: SavedChar): Promise<Character> {
   const q = new URLSearchParams({ region: c.region, server: c.server, name: c.name });
@@ -139,7 +143,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
       upsert({ ...saved, snapshot: char });
       setStatus("idle");
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(e instanceof TypeError ? "kisk.app gerade nicht erreichbar" : e instanceof Error ? e.message : String(e));
       setStatus("error");
     }
   }, [saved, upsert]);
@@ -195,7 +199,12 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
   return (
     <>
       {status === "loading" && <p className="mb-2 animate-pulse text-center text-xs text-zinc-400">Aktualisiere von kisk.app…</p>}
-      {status === "error" && <p className="mb-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">Live-Update fehlgeschlagen ({error}). Zeige letzten Stand.</p>}
+      {status === "error" && <p className="mb-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">Aktualisieren hat nicht geklappt ({error}). Du siehst den letzten Stand.</p>}
+      {isOffline() && saved.snapshot && (
+        <p className="mb-2 rounded-lg bg-white/5 px-3 py-2 text-xs text-zinc-400">
+          Offline-Version: Stand vom {new Date(saved.snapshot.source.fetchedAt).toLocaleString("de-DE")}. Neuen Stand über „Aktualisieren“ einfügen.
+        </p>
+      )}
       <CharacterView char={saved.snapshot} onBack={onBack} onRemove={onRemove} onRefresh={refresh} />
       {pasteSheet}
     </>
