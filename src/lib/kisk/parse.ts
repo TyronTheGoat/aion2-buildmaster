@@ -1,4 +1,4 @@
-import type { Character, Grade, Item, StatLine } from "../types";
+import type { Character, Grade, IdealLine, Item, StatLine } from "../types";
 import { gradeFromScore } from "../grades";
 import { slotFromName } from "../knowledge/slots";
 
@@ -8,9 +8,10 @@ const GRADE_TOKEN = "(BiS|S\\+|S|A|B|C|D)";
 const GRADE_ONLY = new RegExp(`^${GRADE_TOKEN}$`);
 const GRADE_SCORE = new RegExp(`^(?:grade\\s*)?${GRADE_TOKEN}\\s*[·:,(]?\\s*(?:score\\s*)?(\\d{1,3})\\)?$`, "i");
 const SCORE_GRADE = new RegExp(`^(?:score\\s*)?(\\d{1,3})\\s*[·:,(]?\\s*${GRADE_TOKEN}\\)?$`, "i");
-const VAL = "\\+?(-?[\\d.,]+%?)";
+const VAL = "(\\+?-?[\\d.,]+%?)";
 const STAT_WITH_MAX = new RegExp(`^(.+?)\\s+${VAL}\\s*/\\s*${VAL}(?:\\s*\\(?\\s*(\\d{1,3})\\s*%\\s*\\)?)?$`);
 const STAT_SIMPLE = new RegExp(`^([A-Za-z][A-Za-z' :\\[\\]-]+?)\\s+${VAL}(?:\\s*\\(?\\s*(\\d{1,3})\\s*%\\s*\\)?)?$`);
+const IMG_RE = /^\[img:(.+)\]$/;
 const STOP_RE = /^(ideal|yours has|best in slot|how we (score|plan)|unscored|arcana|equipment|gear)\b/i;
 
 function num(s: string | undefined): number | undefined {
@@ -34,8 +35,9 @@ function parseStat(line: string): StatLine | undefined {
 }
 
 /** Finds item starts: index of the "Lv NN Rarity" line + the item name. */
-function findItemStarts(lines: string[]): { at: number; nameAt: number; name: string }[] {
-  const out: { at: number; nameAt: number; name: string }[] = [];
+type Start = { at: number; nameAt: number; name: string };
+function findItemStarts(lines: string[]): Start[] {
+  const out: Start[] = [];
   lines.forEach((line, i) => {
     const m = line.match(LV_RE);
     if (!m) return;
@@ -44,7 +46,8 @@ function findItemStarts(lines: string[]): { at: number; nameAt: number; name: st
       out.push({ at: i, nameAt: i, name: cleanName(before) });
       return;
     }
-    for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+    for (let j = i - 1; j >= Math.max(0, i - 4); j--) {
+      if (IMG_RE.test(lines[j])) continue;
       const cand = cleanName(lines[j]);
       if (cand && slotFromName(cand) !== "unknown") {
         out.push({ at: i, nameAt: j, name: cand });
@@ -53,6 +56,14 @@ function findItemStarts(lines: string[]): { at: number; nameAt: number; name: st
     }
   });
   return out;
+}
+
+function iconBefore(lines: string[], nameAt: number): string | undefined {
+  for (let j = nameAt - 1; j >= Math.max(0, nameAt - 4); j--) {
+    const m = lines[j].match(IMG_RE);
+    if (m) return m[1].startsWith("//") ? `https:${m[1]}` : m[1];
+  }
+  return undefined;
 }
 
 function parseItemBlock(name: string, block: string[], header: string): Item {
@@ -72,10 +83,19 @@ function parseItemBlock(name: string, block: string[], header: string): Item {
   if (enh) item.enhance = num(enh[1]);
 
   let inIdeal = false;
+  const ideal: IdealLine[] = [];
   for (let i = 0; i < block.length; i++) {
     const line = block[i];
-    if (/^ideal\b|^best in slot\b/i.test(line)) inIdeal = true;
-    if (inIdeal) continue;
+    if (IMG_RE.test(line)) continue;
+    if (/^ideal\b|^best in slot\b/i.test(line)) { inIdeal = true; continue; }
+    if (/^yours has\b/i.test(line)) { inIdeal = false; continue; }
+    if (inIdeal) {
+      let used = 0;
+      while (used < 2 && i + used + 1 < block.length && /^[+\-\d.,%]+$/.test(block[i + used + 1])) used++;
+      const st = parseStat(block.slice(i, i + used + 1).join(" ").replace(/^[✓✔✗×]\s*/, ""));
+      if (st) { ideal.push({ name: st.name, value: st.value }); i += used; }
+      continue;
+    }
     if (/^unscored$/i.test(line)) { item.scored = false; continue; }
     if (STOP_RE.test(line)) continue;
 
@@ -107,6 +127,7 @@ function parseItemBlock(name: string, block: string[], header: string): Item {
       i += used;
     }
   }
+  if (ideal.length) item.ideal = ideal;
   if (item.grade === "?" && item.score !== undefined) item.grade = gradeFromScore(item.score);
   if (item.score === undefined && item.grade === "?" && item.lines.length === 0) item.scored = false;
   if (item.slot === "bracelet" && item.lines.every((l) => !l.max)) item.fixedLines = true;
@@ -136,7 +157,9 @@ export function parseKiskGear(lines: string[], opts: ParseOptions): Character {
   const items: Item[] = starts.map((s, idx) => {
     const end = idx + 1 < starts.length ? starts[idx + 1].nameAt : lines.length;
     const header = lines.slice(s.nameAt, s.at + 1).join(" ");
-    return parseItemBlock(s.name, lines.slice(s.at + 1, end), header);
+    const item = parseItemBlock(s.name, lines.slice(s.at + 1, end), header);
+    item.icon = iconBefore(lines, s.nameAt);
+    return item;
   });
 
   if (items.length === 0) warnings.push("Keine Ausrüstung erkannt. Ist das die /gear-Seite von kisk.app?");

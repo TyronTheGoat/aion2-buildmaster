@@ -24,10 +24,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Link href="/" className="font-semibold tracking-tight">
               <span className="text-amber-400">Aion 2</span> BuildMaster
             </Link>
-            <nav className="flex gap-4 text-sm text-zinc-400">
-              <Link href="/import" className="hover:text-white">Einfügen</Link>
-              <Link href="/demo" className="hover:text-white">Demo</Link>
-            </nav>
           </div>
         </header>
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">

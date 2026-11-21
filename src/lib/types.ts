@@ -15,8 +15,16 @@ export interface StatLine {
   share?: number;
 }
 
+export interface IdealLine {
+  name: string;
+  /** Target value, e.g. "9.6%", "32" or "+4" for skill levels */
+  value: string;
+}
+
 export interface Item {
   slot: SlotKind;
+  /** Item / card icon (assets.playnccdn.com via kisk.app) */
+  icon?: string;
   name: string;
   level?: number;
   rarity?: string;
@@ -28,6 +36,8 @@ export interface Item {
   /** true if lines cannot be rerolled (e.g. bracelets with fixed lines) */
   fixedLines?: boolean;
   scored: boolean;
+  /** kisk.app's best-in-slot target lines for this slot and class */
+  ideal?: IdealLine[];
 }
 
 export interface Character {

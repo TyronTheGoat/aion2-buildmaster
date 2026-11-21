@@ -21,8 +21,10 @@ Attack 51/51 76%
 Weapon Damage Boost 9.6%/9.6% 100%
 Critical Attack 102/102 0%
 Ideal
-Weapon Damage Boost
-Combat Speed
+✓ Combat Speed 13.0%
+Damage Boost
+7.3%
+Spirit Strike +1
 Yours has 4 of these 6
 Nuakum Breastplate
 Lv 86 Unique
@@ -72,6 +74,11 @@ describe("parseKiskGear", () => {
     expect(w).toMatchObject({ level: 102, rarity: "Unique", exceed: 3, enhance: 15, grade: "S+", score: 79 });
     expect(w.lines.map((l) => l.name)).toEqual(["Might", "Attack", "Weapon Damage Boost", "Critical Attack"]);
     expect(w.lines[1]).toMatchObject({ value: "51", max: "51", share: 76 });
+    expect(w.ideal).toEqual([
+      { name: "Combat Speed", value: "13.0%" },
+      { name: "Damage Boost", value: "7.3%" },
+      { name: "Spirit Strike", value: "+1" },
+    ]);
   });
 
   it("joins stats split across lines", () => {
@@ -88,14 +95,15 @@ describe("parseKiskGear", () => {
 
   it("parses arcana", () => {
     expect(c.arcana[0]).toMatchObject({ grade: "S+", score: 57, enhance: 5 });
-    expect(c.arcana[0].lines[0]).toMatchObject({ name: "Spirit Protection", value: "2", max: "4", share: 9 });
+    expect(c.arcana[0].lines[0]).toMatchObject({ name: "Spirit Protection", value: "+2", max: "+4", share: 9 });
   });
 
   it("works on HTML too", () => {
-    const html = `<html><body><script>x()</script><div><h3>Nuakum Guard</h3><span>Lv 86 Unique</span><span>+13</span><b>S</b><b>47</b>
+    const html = `<html><body><script>x()</script><div><img src="https://assets.playnccdn.com/static-aion2-gamedata/resources/Icon_Weapon_Guarder_L_012.png" alt=""><h3>Nuakum Guard</h3><span>Lv 86 Unique</span><span>+13</span><b>S</b><b>47</b>
       <ul><li><span>Damage Boost</span> <span>5.5%/5.5%</span> <span>100%</span></li></ul></div></body></html>`;
     const h = parseKiskGear(htmlToLines(html), opts);
     expect(h.gear[0]).toMatchObject({ slot: "offhand", grade: "S", score: 47, enhance: 13 });
     expect(h.gear[0].lines[0]).toMatchObject({ name: "Damage Boost", value: "5.5%", share: 100 });
+    expect(h.gear[0].icon).toContain("Icon_Weapon_Guarder_L_012.png");
   });
 });

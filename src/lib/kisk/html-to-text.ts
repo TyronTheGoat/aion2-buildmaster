@@ -7,7 +7,9 @@ export function htmlToLines(html: string): string[] {
   const text = html
     .replace(/<(script|style|noscript|svg|template)[\s\S]*?<\/\1>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<img[^>]*alt="([^"]*)"[^>]*>/gi, " ")
+    // Keep game icons as marker lines so the parser can attach them to items.
+    .replace(/<img\b[^>]*?src="([^"]*static-aion2-gamedata[^"]*)"[^>]*>/gi, "\n[img:$1]\n")
+    .replace(/<img\b[^>]*>/gi, " ")
     .replace(/<(br|hr)\b[^>]*>/gi, "\n")
     .replace(/<\/?(p|div|li|ul|ol|tr|td|th|table|section|article|header|footer|h[1-6]|dt|dd|dl|span|a|small|strong|b|em|button|label)\b[^>]*>/gi, "\n")
     .replace(/<[^>]+>/g, " ")

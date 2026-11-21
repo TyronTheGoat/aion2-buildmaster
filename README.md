@@ -4,13 +4,14 @@ Mobile-first Web-App (PWA), die deinen Aion-2-Charakter von [kisk.app](https://k
 jeden Slot bewertet, die BiS-Linien pro Slot zeigt und einen priorisierten Upgrade-Pfad ausgibt
 (was neu rollen, was ersetzen, wo Arcana farmen).
 
-## Funktionen (MVP)
-- Charakter über Region/Server/Name oder kisk-Link laden, Favoriten auf dem Gerät speichern
-- Übersicht: Gear-Note, Ø-Score, Notenverteilung
+## Funktionen
+- Startseite mit Charakterauswahl, neue Charaktere über **+** und kisk.app-Link
+- Ausrüstung & Arcana im Ist-Stand mit Icons, ✓/✗ je Linie und Fortschritt „X/Y BiS“
+- Tippen auf ein Teil öffnet das BiS-Ziel von kisk.app: Ist vs. Ziel je Linie,
+  bei Arcana mit Ziel-Stufe je Fähigkeit (✓ erreicht, ◐ zu niedrig, ✗ fehlt)
 - Upgrade-Pfad: sortiert nach Gewinn bis zur nächsten Note × Slot-Gewicht ÷ Aufwand
-- Ausrüstung & Arcana: jede Linie mit Wert/Max und Anteil der Top-Spieler (✓ ≥ 50 %)
-- Fallback „Einfügen“: kisk-Seite kopieren und einfügen, falls das Laden nicht klappt
-- `/demo`: Schnappschuss von Florentina (Spiritmaster, Odar)
+- Seiteninhalt einfügen als Fallback (und in der Offline-Version)
+- Florentina (Spiritmaster, Odar) ist als Schnappschuss vorinstalliert
 
 ## Datenquellen
 - Charakterdaten: kisk.app (max. ein Abruf pro Charakter alle 30 Minuten, Quelle wird angezeigt)
