@@ -47,7 +47,7 @@ export function BuildMasterApp() {
       <AetherBackground />
       <div className="flex items-end justify-between pt-6">
         <div>
-          <h1 className="text-3xl font-bold drop-shadow-[0_2px_12px_rgba(251,191,36,0.35)]">Charaktere</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Charaktere</h1>
           <p className="text-sm text-zinc-300">Wähle einen Charakter oder füge einen neuen hinzu.</p>
         </div>
         <button onClick={() => setAdding(true)} aria-label="Charakter hinzufügen"
@@ -61,7 +61,7 @@ export function BuildMasterApp() {
           return (
             <li key={charKey(c)}>
               <button onClick={() => go(charKey(c))}
-                className="flex w-full items-center gap-4 rounded-2xl border border-white/15 bg-black/40 p-4 text-left shadow-lg shadow-black/40 backdrop-blur-md active:scale-[0.99] hover:border-amber-300/40">
+                className="flex w-full items-center gap-4 rounded-2xl border border-white/10 bg-zinc-900/75 p-4 text-left shadow-xl shadow-black/50 backdrop-blur-xl transition active:scale-[0.99] hover:border-white/25 hover:bg-zinc-900/85">
                 <ItemIcon src={weapon?.icon} name={c.name} grade={s?.gearGrade ?? "?"} size={56} />
                 <div className="min-w-0 flex-1">
                   <div className="text-lg font-semibold">{c.name}</div>
