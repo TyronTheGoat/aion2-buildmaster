@@ -35,7 +35,7 @@ const css = readdirSync(cssDir, { recursive: true }).filter((f) => String(f).end
   .map((f) => readFileSync(path.join(cssDir, String(f)), "utf8")).join("\n");
 const icon = readFileSync(path.join(root, "public/icon.svg"), "utf8");
 const html = `<!DOCTYPE html><html lang="de" class="h-full antialiased"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b0b12">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#03070f">
 <title>Aion 2 BuildMaster (offline)</title><link rel="icon" href="data:image/svg+xml,${encodeURIComponent(icon)}">
 <style>${css}</style></head><body class="min-h-full"><div id="root" class="min-h-full"></div>
 <script>${js.outputFiles[0].text.replace(/<\/script/g, "<\\/script")}</script></body></html>`;

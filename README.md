@@ -6,6 +6,9 @@ jeden Slot bewertet, die BiS-Linien pro Slot zeigt und einen priorisierten Upgra
 
 ## Funktionen
 - Startseite mit Charakterauswahl, neue Charaktere über **+** und kisk.app-Link
+- 3D-Hologramm je Charakter (eigenes Basismodell weiblich/männlich, three.js): Idle-Animation, drehen/zoomen,
+  Aura je Ausrüstungsteil in der Notenfarbe (BiS = gold), Tippen fliegt die Kamera zum Teil und zeigt Ist vs. BiS.
+  Die Waffe (Orb, Schwert, Stab, Bogen …) wird aus dem Waffennamen bzw. der Klasse abgeleitet. Keine Spiel-Assets.
 - Ausrüstung & Arcana im Ist-Stand mit Icons, ✓/✗ je Linie und Fortschritt „X/Y BiS“
 - Tippen auf ein Teil öffnet das BiS-Ziel von kisk.app: Ist vs. Ziel je Linie,
   bei Arcana mit Ziel-Stufe je Fähigkeit (✓ erreicht, ◐ zu niedrig, ✗ fehlt)

@@ -9,6 +9,7 @@ import { ItemIcon, Sheet } from "./ui";
 import { AetherBackground } from "./AetherBackground";
 import { iconFor } from "@/lib/knowledge/item-catalog";
 import { ItemCatalog } from "./ItemCatalog";
+import { HoloCharacter, GenderPicker } from "./holo/HoloCharacter";
 import { charKey, parseKiskLink, useCharacters, type SavedChar } from "./store";
 
 function useHashRoute(): [string | undefined, (k?: string) => void] {
@@ -55,11 +56,12 @@ export function BuildMasterApp() {
       <AetherBackground />
       <div className="flex items-end justify-between pt-6">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Charaktere</h1>
-          <p className="text-sm text-zinc-300">Wähle einen Charakter oder füge einen neuen hinzu.</p>
+          <div className="text-[11px] uppercase tracking-[0.3em] text-sky-300/70">Hologramm-Archiv</div>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight">Charaktere</h1>
+          <p className="text-sm text-sky-100/60">Wähle einen Charakter oder füge einen neuen hinzu.</p>
         </div>
         <button onClick={() => setAdding(true)} aria-label="Charakter hinzufügen"
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-400 text-3xl font-light leading-none text-black shadow-lg shadow-amber-400/20 active:scale-95">+</button>
+          className="flex h-12 w-12 items-center justify-center rounded-full border border-sky-200/40 bg-gradient-to-b from-sky-300 to-blue-500 text-3xl font-light leading-none text-white shadow-[0_0_24px_rgba(56,152,255,0.55)] transition hover:shadow-[0_0_32px_rgba(90,180,255,0.8)] active:scale-95">+</button>
       </div>
 
       <ul className="space-y-3">
@@ -69,30 +71,30 @@ export function BuildMasterApp() {
           return (
             <li key={charKey(c)}>
               <button onClick={() => go(charKey(c))}
-                className="flex w-full items-center gap-4 rounded-2xl border border-white/10 bg-zinc-900/75 p-4 text-left shadow-xl shadow-black/50 backdrop-blur-xl transition active:scale-[0.99] hover:border-white/25 hover:bg-zinc-900/85">
+                className="group flex w-full items-center gap-4 rounded-2xl border border-sky-300/15 bg-[#07101f]/70 p-4 text-left shadow-xl shadow-black/50 backdrop-blur-xl transition active:scale-[0.99] hover:border-sky-300/40 hover:bg-[#0a1730]/80 hover:shadow-[0_0_30px_rgba(40,130,255,0.18)]">
                 <ItemIcon src={weapon ? iconFor(weapon) : undefined} name={c.name} grade={s?.gearGrade ?? "?"} size={56} />
                 <div className="min-w-0 flex-1">
                   <div className="text-lg font-semibold">{c.name}</div>
-                  <div className="truncate text-sm text-zinc-400">
+                  <div className="truncate text-sm text-sky-100/55">
                     {[s?.className, `${c.server} · ${c.region.toUpperCase()}`].filter(Boolean).join(" · ")}
                   </div>
-                  {s?.combatPower && <div className="text-xs text-zinc-500">{s.combatPower.toLocaleString("de-DE")} Kampfkraft</div>}
+                  {s?.combatPower && <div className="text-xs text-sky-200/40">{s.combatPower.toLocaleString("de-DE")} Kampfkraft</div>}
                 </div>
                 {s?.gearGrade && <GradeBadge grade={s.gearGrade} size="lg" />}
-                <span className="text-zinc-500">›</span>
+                <span className="text-sky-300/50 transition group-hover:translate-x-0.5 group-hover:text-sky-200">›</span>
               </button>
             </li>
           );
         })}
         {chars.length === 0 && (
-          <li className="rounded-2xl border border-dashed border-white/15 p-6 text-center text-sm text-zinc-400">
+          <li className="rounded-2xl border border-dashed border-sky-300/20 p-6 text-center text-sm text-sky-100/60">
             Noch keine Charaktere. Tippe auf <b>+</b> und füge deinen kisk.app-Link ein.
           </li>
         )}
       </ul>
 
       <button onClick={() => go("katalog")}
-        className="w-full rounded-xl border border-white/10 bg-zinc-900/60 py-2.5 text-sm text-zinc-300 backdrop-blur-xl hover:text-white">
+        className="w-full rounded-xl border border-sky-300/15 bg-[#07101f]/60 py-2.5 text-sm text-sky-100/70 backdrop-blur-xl hover:border-sky-300/30 hover:text-white">
         Item-Katalog: Feuertempel, Grimmhornhöhle, Ludra, Crafted Gear
       </button>
 
@@ -143,6 +145,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
   const [error, setError] = useState<string>();
   const [pasting, setPasting] = useState(false);
   const [text, setText] = useState("");
+  const [view, setView] = useState<"holo" | "list">("holo");
 
   const refresh = useCallback(async () => {
     if (isOffline()) { setPasting(true); return; }
@@ -205,8 +208,19 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
     );
   }
 
+  if (!saved.gender) {
+    return <GenderPicker name={saved.name} onBack={onBack} onPick={(gender) => upsert({ ...saved, gender })} />;
+  }
+  if (view === "holo") {
+    return <HoloCharacter char={saved.snapshot} gender={saved.gender} onBack={onBack}
+      onDetails={() => setView("list")} onGender={(gender) => upsert({ ...saved, gender })} />;
+  }
+
   return (
     <>
+      <button onClick={() => setView("holo")} className="mb-3 w-full rounded-xl border border-sky-300/20 bg-sky-400/[0.06] py-2.5 text-sm text-sky-100 hover:bg-sky-400/10">
+        ◇ Zurück zum 3D-Hologramm
+      </button>
       {status === "loading" && <p className="mb-2 animate-pulse text-center text-xs text-zinc-400">Aktualisiere von kisk.app…</p>}
       {status === "error" && <p className="mb-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">Aktualisieren hat nicht geklappt ({error}). Du siehst den letzten Stand.</p>}
       {isOffline() && saved.snapshot && (

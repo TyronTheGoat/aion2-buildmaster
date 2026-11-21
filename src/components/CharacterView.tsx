@@ -55,7 +55,7 @@ export function CharacterView({ char, onBack, onRefresh, onRemove }: {
         )}
       </section>
 
-      <div className="sticky top-[57px] z-[5] -mx-4 flex gap-1 bg-[#0b0b12]/95 px-4 py-2 backdrop-blur">
+      <div className="sticky top-[57px] z-[5] -mx-4 flex gap-1 bg-[#03070f]/95 px-4 py-2 backdrop-blur">
         {([["gear", "Ausrüstung"], ["arcana", "Arcana"], ["plan", `Upgrade-Pfad (${plan.steps.length})`]] as [Tab, string][]).map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)}
             className={`flex-1 rounded-lg py-2 text-sm font-medium ${tab === t ? "bg-amber-400 text-black" : "bg-white/5 text-zinc-300"}`}>

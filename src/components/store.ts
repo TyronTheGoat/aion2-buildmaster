@@ -9,6 +9,8 @@ export interface SavedChar {
   name: string;
   /** Last known data (from kisk or pasted), so the app also works offline */
   snapshot?: Character;
+  /** Base body of the 3D hologram, asked on first open */
+  gender?: "f" | "m";
 }
 
 const KEY = "bm:chars";
