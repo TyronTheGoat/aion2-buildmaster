@@ -125,7 +125,8 @@ export function AetherBackground() {
         // ambient gains elsewhere on screen
         if (Math.random() < 0.6) {
           const amt = AMOUNTS[Math.floor(Math.random() * AMOUNTS.length)];
-          let px = rand(20, w - 60), py = rand(h * 0.3, h);
+          const px = rand(20, w - 60);
+          let py = rand(h * 0.3, h);
           // keep ambient gains off the CP box so its numbers stay readable
           if (px > bx - 70 && px < bx + bw + 10 && py > by - 10 && py < by + bh + 60) py = by + bh + rand(70, 180);
           pops.push({ x: px, y: py, vy: rand(25, 45), born: t, life: 2.4,
