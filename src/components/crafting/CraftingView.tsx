@@ -560,12 +560,13 @@ function PriceInput({ item, state, update, server }: { item: ItemRef; state: Cra
     setText(undefined);
     if (n === null) { update((s) => ({ ...s, prices: s.prices.filter((x) => !(sameItem(x, item) && (x.server ?? "").toLowerCase() === server.toLowerCase())) })); return; }
     if (!Number.isFinite(n) || n < 0) return;
-    update((s) => savePrice(s, item, { low: n, high: n, ref: null, tradeable: true, note: cur?.note }, { kind: "global", server }));
+    update((s) => savePrice(s, item, { low: n, high: n, ref: null, tradeable: true, note: cur?.suggested ? undefined : cur?.note }, { kind: "global", server }));
   };
   return (
     <label className="flex shrink-0 items-center gap-1 text-zinc-500">
       <input className={`${INPUT} w-28 text-right text-xs`} inputMode="numeric" aria-label={`${item.name}: ${t("Preis", "price")}`} placeholder={t("Kinah", "Kinah")}
         value={text ?? (value === null ? "" : value.toLocaleString(numberLocale(lang)))} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} />
+      {cur && <SuggestedTag p={cur} />}
     </label>
   );
 }
@@ -785,7 +786,7 @@ function PriceCell({ item, ctxProject, server, stepKey, state, onEdit, hide, com
   const scope = p?.scope === "step" ? t("nur dieser Schritt", "this step only") : p?.scope === "project" ? t("nur dieses Projekt", "this project only") : null;
   return (
     <span className="inline-flex items-center gap-2">
-      {p ? <span className="text-[#efe6cc]/90">{range(p.low, p.high) ?? range(p.ref, p.ref)}{scope && <span className="text-zinc-500"> · {scope}</span>}</span>
+      {p ? <span className="text-[#efe6cc]/90">{range(p.low, p.high) ?? range(p.ref, p.ref)}{scope && <span className="text-zinc-500"> · {scope}</span>}<SuggestedTag p={p} /></span>
         : <span className={MISSING}>{compact ? t("kein Preis", "no price") : t("Kein Preis hinterlegt", "No price saved")}</span>}
       {item.bound === true && <span className="text-zinc-500">· {t("gebunden", "bound")}</span>}
       {compact
@@ -822,6 +823,18 @@ function logAttempt(s: CraftState, step: NextStep, outcome: Outcome): CraftState
     ...s, inventory: inv,
     events: [...s.events, { id: uid(), kind: "attempt", projectId: p.id, at: new Date().toISOString(), recipeKey: step.recipe.recipeKey, outcome, ...fx, costLow: cost("low"), costHigh: cost("high") }],
   };
+}
+
+/** Marks a price from the reference list (not typed in by the player), with its source. */
+function SuggestedTag({ p }: { p: { suggested?: "observed" | "rough"; sourceUrl?: string; note?: string; ref?: number | null } }) {
+  const t = useT();
+  if (!p.suggested) return null;
+  const label = p.suggested === "rough" ? t("grobe Schätzung", "rough estimate") : t("Referenz", "reference");
+  return (
+    <span className={`ml-1.5 text-[11px] ${p.suggested === "rough" ? MISSING : "text-zinc-500"}`} title={p.note}>
+      · {p.sourceUrl ? <a href={p.sourceUrl} target="_blank" rel="noreferrer" className="underline hover:text-zinc-300">{label}</a> : label}
+    </span>
+  );
 }
 
 /* ------------------------------------------------------------------ market prices ------------------------------------------------------------------ */
@@ -932,7 +945,7 @@ function CatalogRow({ e, state, server, update, onPrice }: { e: CatalogEntry & {
           </label>
         )}
         {mine ? <>
-          <span className="text-[#efe6cc]/90">{range(mine.low, mine.high) ?? range(mine.ref, mine.ref)}</span>
+          <span className="text-[#efe6cc]/90">{range(mine.low, mine.high) ?? range(mine.ref, mine.ref)}<SuggestedTag p={mine} /></span>
           {mine.updated && <span className="text-zinc-500">{new Date(mine.updated).toLocaleDateString()}</span>}
           <button className={BTN} onClick={() => onPrice({ item: { ...e, catalogKey: e.key }, server })}>{t("Bearbeiten", "Edit")}</button>
           <button className={BTN} onClick={() => update((s) => ({ ...s, prices: s.prices.filter((x) => x !== mine && (!mine.id || x.id !== mine.id)) }))}>{t("Löschen", "Delete")}</button>

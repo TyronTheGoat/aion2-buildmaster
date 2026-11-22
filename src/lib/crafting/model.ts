@@ -105,6 +105,10 @@ export interface Price extends ItemRef {
   tradeable: boolean | null;
   note?: string;
   updated?: string;
+  /** a reference price from a price list (not entered by the player): "observed" = lowest listing + markup, "rough" = rough tier estimate */
+  suggested?: "observed" | "rough";
+  /** where the reference price comes from */
+  sourceUrl?: string;
 }
 
 /** Something a price can be entered for: built from recipes, ingredients, transfers and the start catalogue. */
@@ -229,7 +233,7 @@ export const emptyState = (): CraftState => ({
 /* ------------------------------------------------------------------ import ------------------------------------------------------------------ */
 
 export interface ImportError { row: number; message: string }
-export type FileKind = "recipes" | "chances" | "materials" | "transfers" | "keymap" | "chain" | "catalog" | "prices" | "gaps" | "coverage" | "sources" | "unknown";
+export type FileKind = "recipes" | "chances" | "materials" | "transfers" | "keymap" | "chain" | "catalog" | "prices" | "gaps" | "coverage" | "sources" | "suggestions" | "unknown";
 
 /** Which input a file is, from its columns (file names change between packages). */
 export function detectKind(header: string[]): FileKind {
@@ -237,6 +241,7 @@ export function detectKind(header: string[]): FileKind {
   if (h.has("v3_recipe_key") && h.has("new_recipe_key")) return "keymap";
   if (h.has("ingredient_coverage") || h.has("full_ingredient_set_confirmed")) return "coverage";
   if (h.has("url_status")) return "sources";
+  if (h.has("price_min_manual") && h.has("import_advice")) return "suggestions";
   if (h.has("item_or_material_id")) return "catalog";
   if (h.has("sequence_position")) return "chain";
   if (h.has("catalog_key")) return "catalog";
@@ -540,6 +545,41 @@ export function importPrices(text: string, existing: Price[] = []) {
   return { prices: out, errors, rows: rows.length };
 }
 
+/**
+ * Reference price list (Odar V2): only rows the list itself marks as importable and that carry an item ID
+ * ("suggested_prefill_with_review" = observed lowest listing, "review_only" = rough tier estimate). Rows to skip, unknown
+ * rows and rows without an ID (name only) are left out. A price the player entered himself is never replaced.
+ */
+export function importPriceSuggestions(text: string, existing: Price[] = []) {
+  const { rows } = parseCsv(text);
+  const errors: ImportError[] = [];
+  const out = [...existing];
+  let used = 0;
+  rows.forEach((r, i) => {
+    const row = i + 2, errs: string[] = [];
+    const advice = str(r, "import_advice") ?? "";
+    const id = str(r, "item_or_material_id") ?? "";
+    if (!/^\d+$/.test(id) || (advice !== "suggested_prefill_with_review" && advice !== "review_only")) return;
+    const low = num(r, errs, "price_min_manual"), high = num(r, errs, "price_max_manual"), ref = num(r, errs, "market_price_observed_kinah");
+    if (errs.length) { errors.push({ row, message: errs.join("; ") }); return; }
+    if (low === null && high === null) return;
+    const server = (str(r, "server") ?? "").split("/")[1]?.trim().toLowerCase() || undefined;
+    const rough = (str(r, "estimate_type") ?? "") !== "odar_observed";
+    const p: Price = {
+      name: str(r, "label") ?? id, itemId: id, server, low, high, ref, tradeable: true,
+      note: rough ? "Grobe Schätzung (Preisliste V2)" : `Referenz: niedrigstes Inserat ${str(r, "snapshot_date") ?? ""}, Spanne +15/+20 %`.trim(),
+      updated: str(r, "snapshot_date"), suggested: rough ? "rough" : "observed", sourceUrl: str(r, "market_source_url"),
+    };
+    const v = validatePrice(p);
+    if (v) { errors.push({ row, message: v }); return; }
+    const at = out.findIndex((x) => sameItem(x, p) && (x.server ?? "").toLowerCase() === (server ?? ""));
+    if (at >= 0 && !out[at].suggested) return; // the player's own price stays
+    if (at >= 0) out[at] = { ...p, id: out[at].id }; else out.push({ ...p, id: uid() });
+    used++;
+  });
+  return { prices: out, errors, rows: used };
+}
+
 /** Problem with a price entry, or undefined when it is fine. */
 export function validatePrice(p: Pick<Price, "low" | "high" | "ref">): string | undefined {
   for (const v of [p.low, p.high, p.ref]) if (v !== null && (!Number.isFinite(v) || v < 0)) return "Preise müssen 0 oder größer sein";
@@ -561,6 +601,7 @@ export function importFile(state: CraftState, fileName: string, text: string): {
   else if (kind === "keymap") { const r = importKeyMap(text, state); next = r.state; errors = r.errors; rows = r.rows; }
   else if (kind === "chain") { const r = importChain(text, state); next = r.state; errors = r.errors; rows = r.rows; }
   else if (kind === "catalog") { const r = importCatalog(text, state.catalogExtra); next = { ...state, catalogExtra: r.catalog }; rows = r.rows; }
+  else if (kind === "suggestions") { const r = importPriceSuggestions(text, state.prices); next = { ...state, prices: r.prices }; errors = r.errors; rows = r.rows; }
   else if (kind === "prices") { const r = importPrices(text, state.prices); next = { ...state, prices: r.prices }; errors = r.errors; rows = r.rows; }
   else if (kind === "coverage") { const r = importCoverage(text, state); next = r.state; errors = r.errors; rows = r.rows; }
   else if (kind === "sources") { const r = importSources(text, state); next = r.state; rows = r.rows; }

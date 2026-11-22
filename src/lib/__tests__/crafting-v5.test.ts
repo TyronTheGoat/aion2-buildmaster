@@ -26,7 +26,7 @@ const attempt = (projectId: string, r: Recipe, outcome: AttemptEvent["outcome"])
 describe("V4/V5 + V7 import", () => {
   it("every file is recognised and imports without errors", () => {
     expect(log.map((l) => l.kind)).toEqual(["recipes", "materials", "transfers", "keymap", "chain", "gaps", "catalog",
-      "recipes", "keymap", "materials", "transfers", "chain", "coverage", "coverage", "gaps", "sources", "catalog"]);
+      "recipes", "keymap", "materials", "transfers", "chain", "coverage", "coverage", "gaps", "sources", "catalog", "suggestions"]);
     expect(log.every((l) => l.errors === 0)).toBe(true);
   });
   it("409 V7 rows give 391 recipes: the 18 placeholder spellbook keys merge into their real recipe", () => {
@@ -171,9 +171,11 @@ describe("progress in %", () => {
 describe("prices (manual only)", () => {
   const bow = "recipe:211046001";
   const wood = R(bow).ingredients.find((i) => i.name === "Yggdrasil Wood")!;
-  it("the data package brings no prices", () => {
-    expect(data.prices).toEqual([]);
-    expect(priceOf(ctxOf(data, proj(bow)), wood, "low")).toBeNull();
+  it("the data package brings only marked reference prices (Tyron's Odar list), no others", () => {
+    expect(data.prices.length).toBeGreaterThan(0);
+    expect(data.prices.every((p) => p.suggested && p.itemId && p.server === "odar")).toBe(true);
+    const noRef = { ...data, prices: [] };
+    expect(priceOf(ctxOf(noRef, proj(bow)), wood, "low")).toBeNull();
   });
   it("wood 10k–12k is used right away; a project-only 15k–18k wins only in that project", () => {
     const s: CraftState = { ...data, prices: [{ ...wood, id: "w", server: "odar", low: 10000, high: 12000, ref: null, tradeable: true }] };
@@ -241,7 +243,7 @@ describe("stored data from Phase 1 (version 1)", () => {
     expect(s.version).toBe(2);
     expect(s.recipes).toHaveLength(391);
     expect(s.projects).toEqual([p]);
-    expect(s.prices).toEqual(old.prices);
+    expect(s.prices.filter((x) => !x.suggested)).toEqual(old.prices);
     expect(s.inventory).toEqual(old.inventory);
     expect(migrate(s)).toEqual(s);
   });
@@ -336,5 +338,20 @@ describe("craft plan (top-down calculator) and routes", () => {
     const opts = routeOptions(p, priced);
     expect(opts.find((o) => o.recommended)?.key).toBe("final");
     expect(opts.find((o) => o.key === "all")!.conf.cost).toBeNull();
+  });
+});
+
+describe("Odar reference prices (V2 list)", () => {
+  it("imports only marked rows with an item ID and never replaces the player's own price", async () => {
+    const { findPrice, importPriceSuggestions, savePrice } = await import("../crafting/model");
+    const radiant = findPrice({ prices: data.prices, server: "odar" }, { name: "Radiant Odyle", itemId: "610610016" });
+    expect(radiant?.suggested).toBe("observed");
+    expect(radiant?.low).toBeGreaterThan(0);
+    expect(findPrice({ prices: data.prices, server: "odar" }, { name: "Sandpaper (Bound)", itemId: "630542005" })).toBeUndefined();
+    const own = savePrice(data, { name: "Radiant Odyle", itemId: "610610016" }, { low: 1, high: 2, ref: null, tradeable: true }, { kind: "global", server: "odar" });
+    const text = BUILTIN_FILES.find(([f]) => f.startsWith("odar/"))![1];
+    const again = importPriceSuggestions(text, own.prices);
+    const p = findPrice({ prices: again.prices, server: "odar" }, { name: "Radiant Odyle", itemId: "610610016" })!;
+    expect([p.low, p.high, p.suggested]).toEqual([1, 2, undefined]);
   });
 });
