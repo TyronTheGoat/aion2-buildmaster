@@ -1,5 +1,5 @@
 import { col, parseCsv, readBool, readNumber, readProb } from "./csv";
-import { attemptsFor, effectiveChance, planFor, type ChanceGoal, type Prob, type RecipeChances } from "./prob";
+import { attemptsFor, attemptsForK, effectiveChance, planFor, type ChanceGoal, type Prob, type RecipeChances } from "./prob";
 
 /* ------------------------------------------------------------------ items ------------------------------------------------------------------ */
 
@@ -146,6 +146,8 @@ export interface Project {
   server: string;
   className?: string;
   slot: CraftSlot;
+  /** gear slot of the recipe data the project is for (weapon type, "ring", "helm" …) */
+  gearSlot?: string;
   /** manual order within the same slot (lower first); creation time breaks ties */
   order?: number;
   profession?: string;
@@ -1004,4 +1006,117 @@ export function savePrice(state: CraftState, item: ItemRef & { catalogKey?: stri
       return { ...p, priceOverrides: old ? list.map((x) => (x === old ? next : x)) : [...list, next] };
     }),
   };
+}
+
+/* ------------------------------------------------------------------ gear ladders (V6 design) ------------------------------------------------------------------ */
+
+/** Crafted gear slots a project can be made for, in priority order (gear_slot values of the recipe data). */
+export const GEAR_SLOTS = ["weapon", "offhand", "ring", "earrings", "necklace", "gloves", "chest", "legs", "helm", "shoulders", "boots", "cape"] as const;
+export type GearSlotChoice = (typeof GEAR_SLOTS)[number];
+
+const WEAPON_WORDS: [string, RegExp][] = [
+  ["greatsword", /greatsword/i], ["bow", /\bbow\b|longbow/i], ["spellbook", /spellbook/i], ["orb", /\borb\b/i],
+  ["dagger", /dagger/i], ["mace", /\bmace\b/i], ["staff", /\bstaff\b/i], ["sword", /sword/i], ["guard", /\bguard\b|shield/i],
+];
+/** Weapon type of an equipped item, read from its name (null when the name does not say). */
+export function weaponTypeOf(name?: string): string | null {
+  if (!name) return null;
+  return WEAPON_WORDS.find(([, re]) => re.test(name))?.[0] ?? null;
+}
+
+/** Project slot (priority group) of a recipe gear slot. */
+export const prioritySlot = (gearSlot: string): CraftSlot => craftSlotOf(gearSlot) ?? "armor";
+
+/** Tier words of the crafted gear lines, lowest first, as in every confirmed chain (09, V7 05). */
+const TIERS = [/^(?!expert|artisan|true|star|splendent|white|dark|wise|ebony)/, /^expert's /, /^artisan's /, /^(true|star) dragon lord /, /^splendent (true|star) dragon lord /,
+  /^(white|dark) dragon lord /, /^splendent (white|dark) dragon lord /, /^(wise|ebony) dragon lord /, /^splendent (wise|ebony) dragon lord /];
+
+/** A guaranteed alternative recipe makes the same item as the normal recipe of that stage; it is an alternative, not a stage. */
+const isAlternative = (r: Recipe) => r.recipeType === "guaranteed" && r.transfer !== true;
+
+/**
+ * Stages of one gear line, lowest first: the confirmed chain when there is one, otherwise the recipes of that gear slot by item level.
+ * Guaranteed alternatives are left out (they make the same item as their stage).
+ */
+export function ladderFor(state: Pick<CraftState, "recipes" | "chains">, faction: string, gearSlot: string): Recipe[] {
+  const f = (r: { faction: string }) => factionOk(r as Recipe, faction);
+  const chain = state.chains.filter((c) => c.slot === gearSlot && f(c)).sort((a, b) => a.position - b.position);
+  const byKey = new Map(state.recipes.map((r) => [r.recipeKey, r] as const));
+  if (chain.length) {
+    const out: Recipe[] = [];
+    for (const c of chain) { const r = byKey.get(c.recipeKey); if (r && !isAlternative(r) && !out.includes(r)) out.push(r); }
+    return out;
+  }
+  const list = state.recipes.filter((r) => r.slot === gearSlot && f(r) && !isAlternative(r) && !/\(guaranteed alternative\)/i.test(r.name));
+  // without a chain: the tier word of the name gives the order (it is the same in every confirmed chain); only for ordering, no level is made up
+  const rank = list.map((r) => TIERS.findIndex((re) => re.test(normName(r.name))));
+  if (rank.some((x) => x < 0) || new Set(rank).size !== rank.length) return [];
+  return list.map((r, i) => [r, rank[i]] as const).sort((a, b) => a[1] - b[1]).map(([r]) => r);
+}
+
+/** The project target of a gear line: always its highest stage. */
+export const topOf = (state: Pick<CraftState, "recipes" | "chains">, faction: string, gearSlot: string) => ladderFor(state, faction, gearSlot).at(-1);
+
+/** Level of a stage: from the recipe data or the chain. */
+export function levelOf(state: Pick<CraftState, "chains">, r: Recipe): number | null {
+  return r.level ?? state.chains.find((c) => c.recipeKey === r.recipeKey)?.normalLevel ?? null;
+}
+
+/** Items of a gear line the player can hold: every stage result and its confirmed combo result, lowest first. */
+export function ladderItems(state: Pick<CraftState, "recipes" | "chains">, faction: string, gearSlot: string) {
+  const out: { item: ItemRef; recipe: Recipe; combo: boolean; level: number | null }[] = [];
+  for (const r of ladderFor(state, faction, gearSlot)) {
+    out.push({ item: { ...r.output, faction: r.output.faction ?? r.faction }, recipe: r, combo: false, level: levelOf(state, r) });
+    if (r.comboOutput && !r.comboOutput.unverified && !out.some((x) => sameItem(x.item, r.comboOutput!)))
+      out.push({ item: { ...r.comboOutput, faction: r.comboOutput.faction ?? r.faction }, recipe: r, combo: true, level: r.comboLevel ?? null });
+  }
+  // a combo result that is also the normal result of a later stage is listed once, at that stage
+  return out.filter((x, i) => out.findIndex((y) => sameItem(y.item, x.item)) === i);
+}
+
+/** How many of an item the project holds as starting stock (owned). */
+export const ownedCount = (p: Project, item: ItemRef) => p.owned.filter((o) => sameItem(o, item)).length;
+/** Sets the starting stock of one item. */
+export const withOwnedCount = (p: Project, item: ItemRef, n: number): Project =>
+  ({ ...p, owned: [...p.owned.filter((o) => !sameItem(o, item)), ...Array.from({ length: Math.max(0, Math.floor(n)) }, () => item)] });
+
+/** One line of the bottom-up need list: how many of an item still have to be crafted and what that takes. */
+export interface NeedLine {
+  item: ItemRef;
+  recipe: Recipe;
+  goal: ChanceGoal;
+  /** successful crafts still needed */
+  count: number;
+  /** chance per attempt and where it comes from */
+  p: Prob;
+  basis: "character" | "required" | "fixed" | "best" | "none";
+  expected: number | null;
+  n80: number | null;
+  /** materials per attempt are known and confirmed */
+  ingredientsKnown: boolean;
+}
+
+/**
+ * Everything still to craft for a project, lowest stage first, grouped by item: count, chance, Ø attempts (count / p)
+ * and the attempts that reach all `count` successes with 80 % (binomial). Uses the character's chance when known,
+ * otherwise the documented chance (combo results: best documented level, marked as such).
+ */
+export function needList(p: Project, state: CraftState): NeedLine[] {
+  const out: NeedLine[] = [];
+  for (const m of remainingPath(p, state)) {
+    const hit = out.find((x) => x.recipe.recipeKey === m.recipe.recipeKey && x.goal === m.goal);
+    if (hit) { hit.count++; continue; }
+    const c = chancesFor(m.recipe, state.overrides, p.character, p.mastery);
+    let prob: Prob = c.actual ? effectiveChance(c.actual, m.goal) : null;
+    let basis: NeedLine["basis"] = c.actual ? (c.basis === "none" ? "required" : c.basis) : "none";
+    if (prob === null) { prob = effectiveChance(c.documented, m.goal); basis = prob === null ? "none" : "required"; }
+    if (prob === null && c.best) { prob = effectiveChance(c.best, m.goal); basis = prob === null ? "none" : "best"; }
+    out.push({ item: m.item, recipe: m.recipe, goal: m.goal, count: 1, p: prob, basis, expected: null, n80: null,
+      ingredientsKnown: m.recipe.ingredients.length > 0 && (m.recipe.ingredientsStatus === undefined || m.recipe.ingredientsStatus === "complete") });
+  }
+  for (const l of out) {
+    l.expected = l.p === null || l.p === 0 ? null : l.count / l.p;
+    l.n80 = attemptsForK(l.p, l.count);
+  }
+  return out;
 }

@@ -145,3 +145,21 @@ export function simulateBudget(steps: SimStep[], opts: { runs?: number; seed?: n
   const hi = sorted[Math.min(runs - 1, Math.ceil(runs * PLAN_TARGET + half) - 1)];
   return { budget80: q(costs, PLAN_TARGET), attempts80: q(tries, PLAN_TARGET), expectedCost: mean, ci95: [lo, hi] as [number, number], runs, seed: opts.seed ?? 80, capped };
 }
+
+/**
+ * Attempts needed to get k successes with at least `target` probability (binomial), one success per attempt at chance p.
+ * k = 1 is the usual 80 % planning value.
+ */
+export function attemptsForK(p: Prob, k: number, target = PLAN_TARGET): number | null {
+  if (!valid(p)) return null;
+  if (k <= 0) return 0;
+  if (p === 0) return Infinity;
+  if (p === 1) return k;
+  // P(X >= k) for X ~ Bin(n, p), grown n by n (k is small in practice)
+  for (let n = k; n < 100000; n++) {
+    let term = Math.pow(1 - p, n), below = 0;
+    for (let i = 0; i < k; i++) { below += term; term *= ((n - i) / (i + 1)) * (p / (1 - p)); }
+    if (1 - below >= target - 1e-12) return n;
+  }
+  return Infinity;
+}

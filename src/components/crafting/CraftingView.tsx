@@ -1,19 +1,19 @@
 "use client";
-import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Character } from "@/lib/types";
 import { numberLocale, useLang, useT, type T } from "@/lib/i18n";
 import { craftIcon } from "@/lib/crafting/craft-icons";
-import { GEAR_GROUPS, GROUP_COLOR, MATERIAL_GROUPS, entriesFor, type GearGroup, type MaterialGroup, type PriceArea, type PriceGroup } from "@/lib/crafting/catalog-groups";
+import { GEAR_GROUPS, MATERIAL_GROUPS, entriesFor, type GearGroup, type MaterialGroup, type PriceArea, type PriceGroup } from "@/lib/crafting/catalog-groups";
 import { charKey } from "../store";
 import { useCraft } from "../craft-store";
 import { Card, CardArt, Filler, SHOW_ITEM_ICONS } from "../deck/Card";
 import {
-  SLOT_PRIORITY, activeAttempts, attemptCost, attemptEffects, buildCatalog, canCraft, craftSlotOf, craftsItself, ctxOf, findPrice, importFile,
-  itemKey, nextStep, nextSteps, normName, openCost, pathSimInput, producerOf, progress, projectTarget, remainingPath, savePrice, sortProjects,
-  spent, stageLevel, stepBudget, uid, validatePrice,
-  type CatalogEntry, type CraftSlot, type CraftState, type ImportError, type ItemRef, type NextStep, type Outcome, type Project, type Scenario,
+  activeAttempts, attemptCost, attemptEffects, buildCatalog, canCraft, craftSlotOf, craftsItself, ctxOf, findPrice, importFile,
+  GEAR_SLOTS, itemKey, ladderItems, levelOf, needList, nextStep, normName, ownedCount, prioritySlot, topOf, weaponTypeOf, withOwnedCount, openCost, pathSimInput, producerOf, progress, projectTarget, remainingPath, savePrice, sortProjects,
+  spent, stageLevel, uid, validatePrice,
+  type CatalogEntry, type CraftSlot, type CraftState, type ImportError, type ItemRef, type NeedLine, type NextStep, type Outcome, type Project, type Scenario,
 } from "@/lib/crafting/model";
-import { effectiveChance, simulateBudget, type ChanceGoal } from "@/lib/crafting/prob";
+import { effectiveChance, simulateBudget } from "@/lib/crafting/prob";
 
 const BTN = "rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-xs text-[#efe6cc] hover:border-[#d9c58f]/45 disabled:opacity-40";
 const INPUT = "min-w-0 rounded-lg border border-[#d9c58f]/20 bg-white/[0.03] px-2.5 py-1.5 text-sm text-[#f4eed7] outline-none focus:border-[#d9c58f]/50";
@@ -21,7 +21,7 @@ const LABEL = "text-[10px] uppercase tracking-[0.22em] text-zinc-500";
 const MISSING = "text-[#ffa31a]";
 
 /** What the crafting page shows; kept by the parent so it survives switching to Equipment / Arcana and back. */
-export interface CraftUi { sub: "projects" | "next" | "prices"; open?: string; adding?: boolean }
+export interface CraftUi { sub: "projects" | "prices"; open?: string; adding?: boolean }
 
 const slotName = (s: CraftSlot, t: T) => ({
   weapon: t("Waffe", "Weapon"), ring: t("Ring", "Ring"), guard: t("Schützer / Nebenhand", "Guard / off-hand"),
@@ -52,7 +52,7 @@ type Update = (fn: (s: CraftState) => CraftState) => void;
 /** What the price dialog is open for. */
 interface PriceTarget { item: ItemRef & { catalogKey?: string; bound?: boolean | null }; server: string; project?: Project; stepKey?: string }
 
-/** Crafting page of one character: projects as cards, next steps, market prices. */
+/** Crafting page of one character: project cards (with current craft, stock and next steps inside) and market prices. */
 export function CraftingView({ char, ui, setUi }: { char: Character; ui: CraftUi; setUi: Dispatch<SetStateAction<CraftUi>> }) {
   const t = useT();
   const { state, update, exportJson, importJson } = useCraft();
@@ -85,21 +85,19 @@ export function CraftingView({ char, ui, setUi }: { char: Character; ui: CraftUi
   const gaps = state.recipes.filter((r) => !r.ingredients.length).length;
   const complete = state.recipes.filter((r) => r.ingredientsStatus === "complete").length;
   const unconfirmed = state.recipes.filter((r) => r.ingredients.length && r.ingredientsStatus !== "complete").length;
-  const subs = [["projects", t("Crafting-Projekte", "Crafting projects")], ["next", "Crafting Next Steps"]] as const;
   const onPrices = ui.sub === "prices";
+  const views = [["projects", t("Crafting-Projekte", "Crafting projects")], ["prices", t("Materialien & Preise", "Materials & prices")]] as const;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <div role="tablist" aria-label="Crafting" className="relative grid w-full grid-cols-2 rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-xs sm:text-sm lg:w-auto lg:flex-1">
-          {subs.map(([k, l]) => (
-            <button key={k} role="tab" aria-selected={ui.sub === k} onClick={() => setUi((u) => ({ ...u, sub: k, open: k === "projects" ? u.open : undefined }))}
-              className={`rounded-lg px-2 py-1.5 transition-colors sm:px-3 ${ui.sub === k ? "bg-white/[0.09] text-[#f4eed7] ring-1 ring-[#d9c58f]/40" : "text-zinc-500 hover:text-zinc-300"}`}>{l}</button>
+          {views.map(([k, l]) => (
+            <button key={k} role="tab" aria-selected={(k === "prices") === onPrices} onClick={() => setUi((u) => ({ ...u, sub: k }))}
+              className={`rounded-lg px-2 py-1.5 transition-colors sm:px-3 ${(k === "prices") === onPrices ? "bg-white/[0.09] text-[#f4eed7] ring-1 ring-[#d9c58f]/40" : "text-zinc-500 hover:text-zinc-300"}`}>{l}</button>
           ))}
         </div>
         <div className="flex min-w-0 flex-wrap gap-1.5">
-          <button className={`${BTN} ${onPrices ? "bg-white/[0.09] text-[#f4eed7] ring-1 ring-[#d9c58f]/40" : ""}`} aria-pressed={onPrices}
-            onClick={() => setUi((u) => ({ ...u, sub: u.sub === "prices" ? "projects" : "prices", open: undefined }))}>{t("Materialien & Preise", "Materials & prices")}</button>
           <button className={BTN} onClick={() => fileRef.current?.click()}>{t("Daten importieren (CSV)", "Import data (CSV)")}</button>
           <button className={BTN} onClick={download}>{t("Export", "Export")}</button>
           <button className={BTN} onClick={() => backupRef.current?.click()}>{t("Sicherung laden", "Load backup")}</button>
@@ -123,11 +121,10 @@ export function CraftingView({ char, ui, setUi }: { char: Character; ui: CraftUi
 
       {report && <ImportReport report={report} onClose={() => setReport(undefined)} />}
 
-      {ui.sub === "projects" && (open
-        ? <ProjectDetail p={open} state={state} update={update} onBack={() => setUi((u) => ({ ...u, open: undefined }))} onPrice={setPriceFor} />
+      {!onPrices && (open
+        ? <ProjectDetail key={open.id} p={open} state={state} update={update} char={char} onBack={() => setUi((u) => ({ ...u, open: undefined }))} onPrice={setPriceFor} />
         : <ProjectsTab state={state} update={update} char={char} charKey={key} ui={ui} setUi={setUi} />)}
-      {ui.sub === "next" && <NextStepsTab state={state} update={update} charKey={key} onPrice={setPriceFor} />}
-      {ui.sub === "prices" && <PricesTab state={state} update={update} char={char} onPrice={setPriceFor} />}
+      {onPrices && <PricesTab state={state} update={update} char={char} onPrice={setPriceFor} />}
 
       {priceFor && <PriceDialog target={priceFor} state={state} onClose={() => setPriceFor(undefined)} onSave={(fn) => { update(fn); setPriceFor(undefined); }} />}
     </div>
@@ -156,6 +153,52 @@ function ImportReport({ report, onClose }: { report: { file: string; rows: numbe
 
 /* ------------------------------------------------------------------ projects ------------------------------------------------------------------ */
 
+/** Gear slot names for the project choice. */
+const gearSlotName = (g: string, t: T) => ({
+  weapon: t("Hauptwaffe", "Main weapon"), offhand: t("Nebenhand", "Off-hand"), ring: t("Ring", "Ring"), earrings: t("Ohrringe", "Earrings"),
+  necklace: t("Halskette", "Necklace"), gloves: t("Handschuhe", "Gloves"), chest: t("Brust", "Chest"), legs: t("Beine", "Legs"), helm: t("Helm", "Helm"),
+  shoulders: t("Schultern", "Shoulders"), boots: t("Stiefel", "Boots"), cape: t("Umhang", "Cape"),
+} as Record<string, string>)[g] ?? g;
+
+/** Deletes a project with its logged attempts. */
+const deleteProject = (s: CraftState, id: string): CraftState => {
+  const mine = new Set(s.events.filter((e) => e.kind === "attempt" && e.projectId === id).map((e) => e.id));
+  return { ...s, projects: s.projects.filter((p) => p.id !== id), events: s.events.filter((e) => (e.kind === "attempt" ? !mine.has(e.id) : !mine.has(e.target))) };
+};
+
+/** The "⋯" menu of a project: open, pause / resume, delete (asks once). */
+function ProjectMenu({ p, update, onOpen, className = "" }: { p: Project; update: Update; onOpen?: () => void; className?: string }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const set = (patch: Partial<Project>) => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
+  const item = "block w-full rounded-md px-3 py-1.5 text-left text-xs text-[#efe6cc] hover:bg-white/[0.07]";
+  return (
+    <div className={`relative ${className}`} onKeyDown={(e) => e.key === "Escape" && (setOpen(false), setConfirm(false))}>
+      <button type="button" aria-label={t("Projekt-Menü", "Project menu")} aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); setConfirm(false); }}
+        className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#d9c58f]/20 bg-[#0b0e14]/80 text-lg leading-none text-[#efe6cc] hover:border-[#d9c58f]/50">⋯</button>
+      {open && (
+        <div role="menu" onClick={(e) => e.stopPropagation()} className="absolute right-0 top-9 z-20 w-44 rounded-xl border border-[#d9c58f]/25 bg-[#0d1119] p-1 shadow-[0_12px_30px_-8px_#000]">
+          {onOpen && <button role="menuitem" className={item} onClick={() => { setOpen(false); onOpen(); }}>{t("Öffnen", "Open")}</button>}
+          {p.status === "active"
+            ? <button role="menuitem" className={item} onClick={() => { set({ status: "paused" }); setOpen(false); }}>{t("Pausieren", "Pause")}</button>
+            : <button role="menuitem" className={item} onClick={() => { set({ status: "active" }); setOpen(false); }}>{p.status === "done" ? t("Wieder öffnen", "Reopen") : t("Fortsetzen", "Resume")}</button>}
+          {p.status !== "done" && <button role="menuitem" className={item} onClick={() => { set({ status: "done" }); setOpen(false); }}>{t("Als fertig markieren", "Mark as finished")}</button>}
+          {!confirm
+            ? <button role="menuitem" className={`${item} text-[#ff6b6b]`} onClick={() => setConfirm(true)}>{t("Löschen …", "Delete …")}</button>
+            : <div className="space-y-1 px-2 py-1.5 text-xs text-zinc-300">
+              <div>{t("Projekt und sein Protokoll löschen?", "Delete project and its log?")}</div>
+              <div className="flex gap-1.5">
+                <button className={`${BTN} border-[#ff6b6b]/50 text-[#ff9b9b]`} onClick={() => update((s) => deleteProject(s, p.id))}>{t("Löschen", "Delete")}</button>
+                <button className={BTN} onClick={() => setConfirm(false)}>{t("Abbrechen", "Cancel")}</button>
+              </div>
+            </div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProjectsTab({ state, update, char, charKey: key, ui, setUi }: {
   state: CraftState; update: Update; char: Character; charKey: string; ui: CraftUi; setUi: Dispatch<SetStateAction<CraftUi>>;
 }) {
@@ -164,16 +207,22 @@ function ProjectsTab({ state, update, char, charKey: key, ui, setUi }: {
   const current = mine.filter((p) => p.status !== "done");
   const done = mine.filter((p) => p.status === "done");
   const grid = "grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-10 lg:grid-cols-3";
+  const card = (p: Project) => (
+    <li key={p.id} className="relative">
+      <ProjectCard p={p} state={state} onOpen={() => setUi((u) => ({ ...u, open: p.id }))} />
+      <ProjectMenu p={p} update={update} onOpen={() => setUi((u) => ({ ...u, open: p.id }))} className="!absolute right-3 top-3 z-10" />
+    </li>
+  );
   return (
     <div className="space-y-5">
       <button className={BTN} onClick={() => setUi((u) => ({ ...u, adding: !u.adding }))} disabled={!state.recipes.length}>{ui.adding ? t("Abbrechen", "Cancel") : t("+ Neues Projekt", "+ New project")}</button>
       {ui.adding && <NewProject state={state} char={char} charKey={key} onDone={(p) => { if (p) update((s) => ({ ...s, projects: [...s.projects, p] })); setUi((u) => ({ ...u, adding: false, open: p?.id ?? u.open })); }} />}
       {!mine.length && !ui.adding && <p className="text-sm text-zinc-500">{t("Noch keine Projekte für diesen Charakter.", "No projects for this character yet.")}</p>}
-      {current.length > 0 && <ul className={grid}>{current.map((p) => <li key={p.id}><ProjectCard p={p} state={state} onOpen={() => setUi((u) => ({ ...u, open: p.id }))} /></li>)}</ul>}
+      {current.length > 0 && <ul className={grid}>{current.map(card)}</ul>}
       {done.length > 0 && (
         <section className="space-y-3">
-          <h2 className={LABEL}>{t("Abgeschlossen (Historie)", "Finished (history)")}</h2>
-          <ul className={grid}>{done.map((p) => <li key={p.id}><ProjectCard p={p} state={state} onOpen={() => setUi((u) => ({ ...u, open: p.id }))} /></li>)}</ul>
+          <h2 className={LABEL}>{t("Fertig (Historie)", "Finished (history)")}</h2>
+          <ul className={grid}>{done.map(card)}</ul>
         </section>
       )}
     </div>
@@ -196,32 +245,35 @@ function Progress({ percent, done, total }: { percent: number | null; done: numb
   );
 }
 
+/** Icon of an item, the faction of the project filled in for the lookup. */
+const iconOf = (item: ItemRef | undefined, faction?: string) => (SHOW_ITEM_ICONS && item ? craftIcon({ ...item, faction: item.faction ?? factionOfName(item.name) ?? faction }) : undefined);
+const factionOfName = (n: string) => n.match(/\((elyos|asmodian)\)\s*$/i)?.[1];
+
 function ProjectCard({ p, state, onOpen }: { p: Project; state: CraftState; onOpen: () => void }) {
   const t = useT();
   const range = useRange();
   const target = projectTarget(p, state.recipes);
+  const root = state.recipes.find((r) => r.recipeKey === p.targetRecipeKey);
   const pr = progress(p, state);
   const step = p.status === "done" ? null : nextStep(p, state);
   const cost = { low: openCost(p, state, "low"), high: openCost(p, state, "high") };
   const last = [...pr.milestones].reverse().find((m) => m.done);
   const from = last ? stageLevel(last) : null;
-  const to = pr.milestones.length ? stageLevel(pr.milestones[pr.milestones.length - 1]) : null;
-  const icon = SHOW_ITEM_ICONS && target ? craftIcon({ ...target, faction: target.faction ?? p.faction }) : undefined;
+  const to = root ? levelOf(state, root) : null;
+  const icon = iconOf(target, p.faction);
   return (
     <Card as="button" onClick={onOpen} label={`${target?.name ?? "?"}: ${pr.percent ?? "–"} %`} className={`flex h-full w-full flex-col gap-3 p-3 ${p.status !== "active" ? "opacity-70" : ""}`}>
-      <div className="relative flex w-full items-center gap-3">
+      <div className="relative flex w-full items-center gap-3 pr-10">
         <div className="relative w-16 shrink-0">{icon ? <CardArt src={icon} alt={target!.name} /> : <Filler className="aspect-square w-full" />}</div>
         <div className="relative min-w-0">
           <div className="truncate text-sm font-semibold text-[#f4eed7]">{target?.name ?? t("Rezept fehlt", "Recipe missing")}</div>
-          <div className="truncate text-xs text-zinc-400">{slotName(p.slot, t)}{p.className ? ` · ${p.className}` : ""} · {statusName(p.status, t)}</div>
-          <div className="truncate text-[11px] text-zinc-500">
-            {from !== null ? `Lv ${from}` : t("Start", "Start")} → {to !== null ? `Lv ${to}` : t("Ziel", "Goal")}
-          </div>
+          <div className="truncate text-xs text-zinc-400">{p.gearSlot ? gearSlotName(p.gearSlot === p.gearSlot.toLowerCase() && ["ring", "earrings", "necklace", "gloves", "chest", "legs", "helm", "shoulders", "boots", "cape"].includes(p.gearSlot) ? p.gearSlot : "weapon", t) : slotName(p.slot, t)} · {statusName(p.status, t)}</div>
+          <div className="truncate text-[11px] text-zinc-500">{from !== null ? `Lv ${from}` : t("Start", "Start")} → {to !== null ? `Lv ${to}` : t("Ziel", "Goal")}</div>
         </div>
       </div>
       <div className="relative w-full space-y-1 text-[11px]">
-        <div className="truncate text-zinc-400">{t("Nächster Schritt", "Next step")}: <span className="text-[#efe6cc]/85">
-          {p.status === "done" ? t("keiner (abgeschlossen)", "none (done)") : step ? (step.goal === "combo" && step.recipe.comboOutput ? step.recipe.comboOutput.name : step.recipe.output.name) : pr.percent === 100 ? t("fertig", "done") : t("unbekannt", "unknown")}
+        <div className="truncate text-zinc-400">{t("Aktueller Craft", "Current craft")}: <span className="text-[#efe6cc]/85">
+          {p.status === "done" ? t("keiner (fertig)", "none (finished)") : step ? (step.goal === "combo" && step.recipe.comboOutput ? step.recipe.comboOutput.name : step.recipe.output.name) : pr.percent === 100 ? t("fertig", "done") : t("unbekannt", "unknown")}
         </span></div>
         {p.status !== "done" && (
           <div className="truncate text-zinc-500">{t("Offene Materialkosten", "Open material cost")}: {cost.low.cost !== null
@@ -234,203 +286,333 @@ function ProjectCard({ p, state, onOpen }: { p: Project; state: CraftState; onOp
   );
 }
 
+/** Recipe gear slot for a project choice: weapon and off-hand follow what the character has equipped. */
+function gearSlotFor(choice: string, char: Character): string | null {
+  if (choice === "weapon") return weaponTypeOf(char.gear.find((i) => i.slot === "weapon")?.name);
+  if (choice === "offhand") return weaponTypeOf(char.gear.find((i) => i.slot === "offhand")?.name);
+  return choice;
+}
+
+/** New project: only what to craft. The target is always the highest stage of that line; the stock is entered in the project. */
 function NewProject({ state, char, charKey: key, onDone }: { state: CraftState; char: Character; charKey: string; onDone: (p?: Project) => void }) {
   const t = useT();
   const faction = char.race ?? "";
-  const recipes = useMemo(() => state.recipes.filter((r) => r.ingredients.length && craftSlotOf(r.slot) !== null && (!r.faction || !faction || ["beide", "both", "all"].includes(r.faction.toLowerCase()) || r.faction.toLowerCase().startsWith(faction.toLowerCase().slice(0, 4)))), [state.recipes, faction]);
-  const [slot, setSlot] = useState<CraftSlot>("weapon");
-  const inSlot = recipes.filter((r) => craftSlotOf(r.slot) === slot).sort((a, b) => (a.level ?? 0) - (b.level ?? 0) || a.name.localeCompare(b.name));
-  const [recipeKey, setRecipeKey] = useState("");
-  const recipe = inSlot.find((r) => r.recipeKey === recipeKey) ?? inSlot[inSlot.length - 1];
-  const [goal, setGoal] = useState<ChanceGoal>("normal");
+  const [weaponPick, setWeaponPick] = useState("");
+  const options = GEAR_SLOTS.map((choice) => {
+    const gearSlot = (choice === "weapon" && weaponPick) || gearSlotFor(choice, char);
+    const top = gearSlot ? topOf(state, faction, gearSlot) : undefined;
+    return { choice, gearSlot, top };
+  }).filter((o) => o.choice === "weapon" || o.top);
+  const [pick, setPick] = useState<string>();
   const [mastery, setMastery] = useState("");
-  const [profession, setProfession] = useState("");
-  const [owned, setOwned] = useState<Set<string>>(new Set());
-  const draft: Project | undefined = recipe && {
-    id: "draft", charKey: key, character: char.name, faction, server: char.server, className: char.className, slot, mastery: null,
-    targetRecipeKey: recipe.recipeKey, goal: recipe.comboOutput ? goal : "normal", status: "active", createdAt: "", owned: [],
-  };
-  const steps = draft ? remainingPath(draft, state) : [];
-  // each intermediate once, in path order
-  const offer = steps.slice(0, -1).filter((s, i, a) => a.findIndex((x) => itemKey(x.item) === itemKey(s.item)) === i);
+  const chosen = options.find((o) => o.choice === pick);
   const m = mastery.trim() === "" ? null : Number(mastery);
-  const hidden = state.recipes.filter((r) => !r.ingredients.length && craftSlotOf(r.slot) === slot).length;
+  const weaponTypes = [...new Set(state.recipes.filter((r) => craftSlotOf(r.slot) === "weapon").map((r) => r.slot!))].filter((g) => topOf(state, faction, g));
   return (
-    <div className="card-face relative grid gap-3 rounded-2xl px-4 py-3 text-sm sm:grid-cols-2">
-      <label className="grid gap-1"><span className={LABEL}>{t("Gear-Slot", "Gear slot")}</span>
-        <select className={INPUT} value={slot} onChange={(e) => { setSlot(e.target.value as CraftSlot); setRecipeKey(""); setOwned(new Set()); }}>{SLOT_PRIORITY.map((s) => <option key={s} value={s}>{slotName(s, t)}</option>)}</select></label>
-      <label className="grid gap-1"><span className={LABEL}>{t("Zielgegenstand (Rezept)", "Target item (recipe)")}</span>
-        <select className={INPUT} value={recipe?.recipeKey ?? ""} onChange={(e) => { setRecipeKey(e.target.value); setOwned(new Set()); }}>
-          {inSlot.map((r) => <option key={r.recipeKey} value={r.recipeKey}>{r.output.name}{r.level ? ` · Lv ${r.level}` : ""}{r.comboOutput ? ` / Combo Lv ${r.comboLevel ?? "?"}` : ""}</option>)}
-        </select>
-        {!inSlot.length && <span className={`text-xs ${MISSING}`}>{t("Für diesen Slot gibt es noch kein Rezept mit Zutatenliste.", "No recipe with an ingredient list for this slot yet.")}</span>}
-        {hidden > 0 && <span className="text-xs text-zinc-500">{hidden} {t("weitere Rezepte ohne Zutatenliste ausgeblendet (Datenlücke).", "more recipes without ingredient list hidden (data gap).")}</span>}
-      </label>
-      {recipe?.comboOutput && (
-        <label className="grid gap-1"><span className={LABEL}>{t("Ziel", "Goal")}</span>
-          <select className={INPUT} value={goal} onChange={(e) => setGoal(e.target.value as ChanceGoal)}>
-            <option value="normal">{recipe.output.name}{recipe.level ? ` · Lv ${recipe.level}` : ""}</option>
-            <option value="combo">{recipe.comboOutput.name} (Combo{recipe.comboLevel ? ` · Lv ${recipe.comboLevel}` : ""})</option>
-          </select></label>
+    <div className="card-face relative space-y-3 rounded-2xl px-4 py-3 text-sm">
+      <div className={LABEL}>{t("Was willst du craften?", "What do you want to craft?")}</div>
+      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        {options.map((o) => {
+          const icon = iconOf(o.top?.output, faction);
+          const lv = o.top ? levelOf(state, o.top) : null;
+          return (
+            <li key={o.choice}>
+              <button onClick={() => setPick(o.choice)} aria-pressed={pick === o.choice} disabled={!o.top}
+                className={`flex w-full items-center gap-2 rounded-xl border px-2 py-2 text-left transition-colors disabled:opacity-50 ${pick === o.choice ? "border-[#d9c58f]/60 bg-white/[0.08]" : "border-white/10 bg-white/[0.02] hover:border-[#d9c58f]/35"}`}>
+                <ItemIcon src={icon} />
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold text-[#f4eed7]">{gearSlotName(o.choice, t)}</span>
+                  <span className="block truncate text-[11px] text-zinc-400">{o.top ? `${o.top.output.name}${lv ? ` · Lv ${lv}` : ""}` : t("Waffentyp wählen", "Pick weapon type")}</span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {(pick === "weapon" || !gearSlotFor("weapon", char)) && (
+        <label className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">{t("Waffentyp", "Weapon type")}
+          <select className={INPUT} value={weaponPick} onChange={(e) => setWeaponPick(e.target.value)}>
+            <option value="">{gearSlotFor("weapon", char) ? `${gearSlotFor("weapon", char)} (${t("ausgerüstet", "equipped")})` : t("bitte wählen", "please pick")}</option>
+            {weaponTypes.map((g) => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </label>
       )}
-      <label className="grid gap-1"><span className={LABEL}>{t("Handwerksberuf", "Profession")}</span>
-        <input className={INPUT} value={profession} onChange={(e) => setProfession(e.target.value)} placeholder={recipe?.profession ?? ""} /></label>
-      <label className="grid gap-1"><span className={LABEL}>{t("Deine Handwerksstufe", "Your crafting level")}</span>
-        <input className={INPUT} inputMode="numeric" value={mastery} onChange={(e) => setMastery(e.target.value)} placeholder={t("unbekannt", "unknown")} /></label>
-      <div className="text-xs text-zinc-500 sm:col-span-2">{[char.race, char.server, char.className].filter(Boolean).join(" · ")}</div>
-      {offer.length > 0 && (
-        <fieldset className="grid gap-1 sm:col-span-2"><legend className={LABEL}>{t("Einstieg: schon vorhanden", "Starting point: already owned")}</legend>
-          {offer.map((s) => {
-            const k = itemKey(s.item);
-            const lv = stageLevel(s);
-            return (
-              <label key={k} className="flex items-center gap-2 text-[#efe6cc]/85">
-                <input type="checkbox" checked={owned.has(k)} onChange={(e) => setOwned((o) => { const n = new Set(o); if (e.target.checked) n.add(k); else n.delete(k); return n; })} />
-                {s.item.name}{lv ? <span className="text-zinc-500"> · Lv {lv}</span> : ""}
-              </label>
-            );
-          })}
-          <span className="text-xs text-zinc-500">{t("Ein vorhandenes Zwischenitem überspringt nur seinen eigenen Craft. Weitere Basisitems, die spätere Rezepte brauchen (z. B. die zusätzliche Lv44-Basis), bleiben auf der Liste.",
-            "An owned intermediate only skips its own craft. Other base items later recipes need (e.g. the extra Lv44 base) stay on the list.")}</span>
-        </fieldset>
+      {chosen?.top && (
+        <div className="flex flex-wrap items-end gap-3 border-t border-white/5 pt-3">
+          <div className="min-w-0 flex-1">
+            <div className={LABEL}>{t("Ziel (immer die höchste Stufe)", "Goal (always the highest stage)")}</div>
+            <div className="text-[#f4eed7]">{chosen.top.output.name}{levelOf(state, chosen.top) ? <span className="text-zinc-500"> · Lv {levelOf(state, chosen.top)}</span> : ""}</div>
+          </div>
+          <label className="grid gap-1"><span className={LABEL}>{t("Deine Handwerksstufe", "Your crafting level")}</span>
+            <input className={`${INPUT} w-32`} inputMode="numeric" value={mastery} onChange={(e) => setMastery(e.target.value)} placeholder={t("unbekannt", "unknown")} /></label>
+          <button className={BTN} disabled={m !== null && !Number.isFinite(m)} onClick={() => onDone({
+            id: uid(), charKey: key, character: char.name, faction, server: char.server, className: char.className,
+            slot: prioritySlot(chosen.gearSlot!), gearSlot: chosen.gearSlot!, mastery: m, profession: chosen.top!.profession,
+            targetRecipeKey: chosen.top!.recipeKey, goal: "normal", status: "active", createdAt: new Date().toISOString(), owned: [],
+          })}>{t("Projekt starten", "Start project")}</button>
+        </div>
       )}
-      <div className="flex gap-2 sm:col-span-2">
-        <button className={BTN} disabled={!recipe || (m !== null && !Number.isFinite(m))} onClick={() => recipe && onDone({
-          ...draft!, id: uid(), mastery: m, profession: profession || recipe.profession, createdAt: new Date().toISOString(),
-          owned: offer.map((s) => s.item).filter((o) => owned.has(itemKey(o))),
-        })}>{t("Projekt anlegen", "Create project")}</button>
-      </div>
     </div>
   );
 }
 
-function ProjectDetail({ p, state, update, onBack, onPrice }: { p: Project; state: CraftState; update: Update; onBack: () => void; onPrice: (x: PriceTarget) => void }) {
+type DetailTab = "next" | "stock" | "log";
+
+function ProjectDetail({ p, state, update, char, onBack, onPrice }: { p: Project; state: CraftState; update: Update; char: Character; onBack: () => void; onPrice: (x: PriceTarget) => void }) {
   const t = useT();
-  const kinah = useKinah();
   const range = useRange();
   const target = projectTarget(p, state.recipes);
   const pr = progress(p, state);
   const money = spent(p, state.events);
   const step = p.status === "active" ? nextStep(p, state) : null;
-  const history = activeAttempts(state.events).filter((e) => e.projectId === p.id).reverse();
+  const [tab, setTab] = useState<DetailTab>("next");
   const set = (patch: Partial<Project>) => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
-  // materials still to get for the whole open path, with their price for this project
-  const mats = useMemo(() => {
-    const out = new Map<string, { item: ItemRef & { bound?: boolean | null }; qty: number | null; craftable: boolean; crafted: boolean; transfer: boolean }>();
-    for (const { recipe } of remainingPath(p, state)) for (const i of recipe.ingredients) {
-      const crafted = !!craftsItself(p, i, state.recipes);
-      if (crafted && !canCraft(p, i, state.recipes)) continue;
-      const k = itemKey(i);
-      const hit = out.get(k);
-      if (hit) hit.qty = hit.qty === null || i.qty === null ? null : hit.qty + i.qty;
-      else out.set(k, { item: i, qty: i.qty, craftable: canCraft(p, i, state.recipes), crafted, transfer: i.kind === "transfer" });
-    }
-    return [...out.values()];
-  }, [p, state]);
-  const toggleBuy = (item: ItemRef, craft: boolean) => {
-    const k = itemKey(item);
-    set({ buy: (p.buy ?? []).filter((x) => x !== k).concat(craft ? [] : [k]), craft: (p.craft ?? []).filter((x) => x !== k).concat(craft ? [k] : []) });
-  };
-  const ownedHas = (i: ItemRef) => p.owned.some((o) => itemKey(o) === itemKey(i));
+  const tabs = [["next", "Next Steps"], ["stock", t("Ist-Stand & Inventar", "Stock & inventory")], ["log", t("Protokoll", "Log")]] as const;
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="shrink-0 rounded-full border border-[#d9c58f]/20 bg-white/[0.03] px-3.5 py-1.5 text-sm text-[#efe6cc]/85 hover:border-[#d9c58f]/40">‹ {t("Projekte", "Projects")}</button>
-        <h2 className="truncate text-lg font-semibold tracking-tight text-[#f4eed7] sm:text-xl">{target?.name ?? t("Rezept fehlt", "Recipe missing")}</h2>
+        <h2 className="min-w-0 flex-1 text-base font-semibold leading-tight tracking-tight text-[#f4eed7] sm:truncate sm:text-xl">{target?.name ?? t("Rezept fehlt", "Recipe missing")}</h2>
+        <input className={`${INPUT} w-28 text-xs`} inputMode="numeric" title={t("Deine Handwerksstufe", "Your crafting level")} aria-label={t("Deine Handwerksstufe", "Your crafting level")}
+          placeholder={t("Stufe ?", "Level ?")} value={p.mastery ?? ""} onChange={(e) => set({ mastery: e.target.value === "" ? null : Number(e.target.value) })} />
+        <ProjectMenu p={p} update={(fn) => { update(fn); }} />
       </div>
 
-      <Card className="space-y-3 p-4 text-sm">
-        <div className="relative flex flex-wrap items-center gap-2">
-          <span className="rounded-md border border-[#d9c58f]/25 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-[#beac80]">{slotName(p.slot, t)}</span>
-          <span className="text-xs text-zinc-400">{statusName(p.status, t)} · {p.server}{p.faction ? ` · ${p.faction}` : ""}</span>
-          <div className="ml-auto flex flex-wrap gap-1.5">
-            <input className={`${INPUT} w-16 text-xs`} inputMode="numeric" title={t("Reihenfolge im Slot", "Order within slot")} placeholder="#" value={p.order ?? ""}
-              onChange={(e) => set({ order: e.target.value === "" ? undefined : Number(e.target.value) })} />
-            <input className={`${INPUT} w-24 text-xs`} inputMode="numeric" title={t("Handwerksstufe", "Crafting level")} placeholder={t("Stufe ?", "Level ?")} value={p.mastery ?? ""}
-              onChange={(e) => set({ mastery: e.target.value === "" ? null : Number(e.target.value) })} />
-            {p.status === "active" && <button className={BTN} onClick={() => set({ status: "paused" })}>{t("Pausieren", "Pause")}</button>}
-            {p.status !== "active" && <button className={BTN} onClick={() => set({ status: "active" })}>{p.status === "done" ? t("Wieder öffnen", "Reopen") : t("Fortsetzen", "Resume")}</button>}
-            {p.status !== "done" && <button className={BTN} onClick={() => set({ status: "done" })}>{t("Abschließen", "Finish")}</button>}
-          </div>
-        </div>
-        <div className="relative"><Progress percent={pr.percent} done={pr.done} total={pr.total} /></div>
-        <div className="relative text-xs text-zinc-400">
-          {t("Bisher ausgegeben", "Spent so far")}: {range(money.low, money.high) ?? kinah(0)}
-          {money.unknown > 0 && <span className={MISSING}> · {money.unknown} {t("Versuche ohne Preis", "attempts without price")}</span>}
-          <span className="text-zinc-500"> · {t("Historie bleibt bei Preisänderungen unverändert.", "History stays as it was when prices change.")}</span>
-        </div>
-      </Card>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-400">
+        <span>{statusName(p.status, t)} · {p.server}{p.faction ? ` · ${p.faction}` : ""}{p.className ? ` · ${p.className}` : ""}</span>
+        <span>{t("Bisher ausgegeben", "Spent so far")}: {range(money.low, money.high) ?? "0 Kinah"}{money.unknown > 0 && <span className={MISSING}> · {money.unknown} {t("Versuche ohne Preis", "attempts without price")}</span>}</span>
+        <span className="min-w-[12rem] flex-1"><Progress percent={pr.percent} done={pr.done} total={pr.total} /></span>
+      </div>
 
-      {/* milestones of the chosen path */}
-      <section className="card-face relative space-y-2 rounded-2xl px-4 py-3 text-sm">
-        <div className={LABEL}>{t("Rezeptstufen", "Recipe stages")}</div>
-        <ol className="space-y-1 text-xs">
-          {pr.milestones.map((m, i) => {
-            const lv = stageLevel(m);
-            const isOwned = ownedHas(m.item);
-            return (
-              <li key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] px-2 py-1">
-                <span className={m.done ? "text-[#5fbf8a]" : "text-zinc-600"}>{m.done ? "✓" : "○"}</span>
-                <span className="text-[#efe6cc]/85">{m.item.name}</span>
-                {lv !== null && <span className="text-zinc-500">Lv {lv}</span>}
-                {m.goal === "combo" && <span className="text-zinc-500">Combo</span>}
-                {m.recipe.ingredientsStatus !== undefined && m.recipe.ingredientsStatus !== "complete" && <span className={MISSING}>{m.recipe.ingredients.length ? t("Zutaten unbestätigt", "ingredients unconfirmed") : t("Zutaten fehlen", "ingredients missing")}</span>}
-                {!m.done && p.status !== "done" && <button className="ml-auto text-zinc-500 underline hover:text-zinc-300" onClick={() => set({ owned: [...p.owned, m.item] })}>{t("als vorhanden markieren", "mark as owned")}</button>}
-                {m.done && isOwned && <button className="ml-auto text-zinc-500 underline hover:text-zinc-300" onClick={() => set({ owned: p.owned.filter((o) => itemKey(o) !== itemKey(m.item)) })}>{t("Markierung entfernen", "unmark")}</button>}
-              </li>
-            );
-          })}
-          {!pr.milestones.length && <li className={MISSING}>{t("Pfad unbekannt: Rezeptdaten fehlen.", "Path unknown: recipe data missing.")}</li>}
-        </ol>
-      </section>
+      {p.status === "paused" && <p className="text-xs text-zinc-500">{t("Pausiert. Über ⋯ fortsetzen.", "Paused. Resume via ⋯.")}</p>}
+      {step ? <CurrentCraft s={step} state={state} onLog={(o) => update((st) => logAttempt(st, step, o))} onPrice={onPrice} />
+        : p.status === "active" && pr.percent !== 100 && <p className={`text-sm ${MISSING}`}>{t("Kein nächster Craft bestimmbar: Zutaten dieser Linie fehlen noch in den Daten.", "No next craft: the ingredients of this line are still missing in the data.")}</p>}
 
-      {step && <StepCard s={step} state={state} onLog={(o) => update((st) => logAttempt(st, step, o))} onPrice={onPrice} />}
-
-      {/* whole open material list with prices */}
-      {p.status !== "done" && mats.length > 0 && (
-        <section className="card-face relative space-y-2 rounded-2xl px-4 py-3 text-sm">
-          <div className={LABEL}>{t("Materialien für alle offenen Stufen", "Materials for all open stages")}</div>
-          <ul className="grid gap-1 text-xs lg:grid-cols-2">
-            {mats.map((m) => (
-              <li key={itemKey(m.item)} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-white/[0.03] px-2 py-1">
-                <span className="text-[#efe6cc]/85">{m.item.name}</span>
-                <span className="text-zinc-500">× {m.qty ?? "?"}</span>
-                {m.transfer && <span className="text-zinc-500">· Transfer</span>}
-                {m.craftable && !m.transfer && (
-                  <span className="text-zinc-500">· {m.crafted ? t("selbst craften", "craft myself") : t("kaufen", "buy")}{" "}
-                    <button className="underline hover:text-zinc-300" onClick={() => toggleBuy(m.item, !m.crafted)}>({m.crafted ? t("stattdessen kaufen", "buy instead") : t("selbst craften", "craft myself")})</button></span>
-                )}
-                <span className="ml-auto"><PriceCell item={m.item} ctxProject={p} state={state} onEdit={() => onPrice({ item: m.item, server: p.server, project: p })} hide={m.crafted || m.transfer} /></span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {p.status !== "done" && <ProjectBudget p={p} state={state} />}
-
-      <section className="card-face relative space-y-2 rounded-2xl px-4 py-3 text-sm">
-        <div className={LABEL}>{t("Craft-Ergebnisprotokoll", "Craft result log")}</div>
-        {!history.length && <p className="text-xs text-zinc-500">{t("Noch keine Versuche eingetragen.", "No attempts logged yet.")}</p>}
-        <ul className="space-y-1 text-xs text-zinc-400">
-          {history.map((e) => (
-            <li key={e.id} className="flex flex-wrap items-center gap-2">
-              <span className="text-zinc-500">{new Date(e.at).toLocaleString()}</span>
-              <span className="text-[#efe6cc]/85">{state.recipes.find((r) => r.recipeKey === e.recipeKey)?.name ?? e.recipeKey}</span>
-              <span>{outcomeName(e.outcome, t)}</span>
-              <span className="text-zinc-500">{e.costLow === null ? t("Kosten unbekannt", "cost unknown") : range(e.costLow, e.costHigh)}</span>
-              <button className="ml-auto text-zinc-500 underline hover:text-zinc-300" onClick={() => update((s) => undoAttempt(s, e.id))}>{t("Rückgängig", "Undo")}</button>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <div role="tablist" className="grid grid-cols-3 rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-xs sm:text-sm">
+        {tabs.map(([k, l]) => (
+          <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+            className={`rounded-lg px-2 py-1.5 transition-colors ${tab === k ? "bg-white/[0.09] text-[#f4eed7] ring-1 ring-[#d9c58f]/40" : "text-zinc-500 hover:text-zinc-300"}`}>{l}</button>
+        ))}
+      </div>
+      {tab === "next" && <NextStepsPanel p={p} state={state} />}
+      {tab === "stock" && <StockPanel p={p} state={state} update={update} char={char} onPrice={onPrice} />}
+      {tab === "log" && <LogPanel p={p} state={state} update={update} />}
     </div>
   );
 }
 
+/** One material tile of the current craft: icon, name, have / need, price. */
+function MaterialTile({ i, p, state, stepKey, onPrice }: { i: NextStep["ingredients"][number]; p: Project; state: CraftState; stepKey: string; onPrice: (x: PriceTarget) => void }) {
+  const t = useT();
+  const ok = i.qty !== null && i.have >= i.qty;
+  const own = i.crafted || (i.kind === "transfer" && canCraft(p, i, state.recipes));
+  return (
+    <li className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-2 py-1.5 ring-1 ring-white/5">
+      <ItemIcon src={iconOf(i, p.faction)} rarity={rarityOf(i.name)} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-xs text-[#efe6cc]/90">{i.name}</div>
+        <div className="text-[11px]">
+          <span className={ok ? "text-[#5fbf8a]" : "text-[#ff6b6b]"}>{i.have} / {i.qty ?? "?"}</span>
+          {i.crafted && <span className="text-zinc-500"> · {t("Zwischenstufe", "intermediate")}</span>}
+          {i.kind === "transfer" && <span className="text-zinc-500"> · Transfer</span>}
+          {i.alternatives?.map((a) => <span key={a.itemId ?? a.name} className="text-zinc-500"> · {t("oder", "or")} {a.name}{a.unverified ? ` (${t("unbestätigt", "unconfirmed")})` : ""}</span>)}
+        </div>
+        {!own && <div className="mt-0.5"><PriceCell item={i} ctxProject={p} stepKey={stepKey} state={state} compact onEdit={() => onPrice({ item: i, server: p.server, project: p, stepKey })} /></div>}
+      </div>
+    </li>
+  );
+}
+
+/** The craft to do now: big item picture in the middle, materials left and right, chances and the result buttons. */
+function CurrentCraft({ s, state, onLog, onPrice }: { s: NextStep; state: CraftState; onLog: (o: Outcome) => void; onPrice: (x: PriceTarget) => void }) {
+  const t = useT();
+  const range = useRange();
+  const want = s.goal === "combo" && s.recipe.comboOutput ? s.recipe.comboOutput : s.recipe.output;
+  const icon = iconOf(want, s.project.faction);
+  const free = (i: ItemRef) => !!craftsItself(s.project, i, state.recipes) || ((i as { kind?: string }).kind === "transfer" && !!producerOf(i, state.recipes, s.project.faction));
+  const ctx = ctxOf(state, s.project, s.recipe.recipeKey);
+  const next = { low: attemptCost(s.recipe, ctx, "low", free), high: attemptCost(s.recipe, ctx, "high", free) };
+  const pActual = s.chance.actual ? effectiveChance(s.chance.actual, s.goal) : null;
+  const plan = s.plan.p !== null ? s.plan : s.documentedPlan.p !== null ? s.documentedPlan : s.bestPlan;
+  const planBasis = s.plan.p !== null ? t("bei deiner Stufe", "at your level") : s.documentedPlan.p !== null ? `${t("bei Mindeststufe", "at required level")} ${s.chance.documentedMastery ?? "?"}` : t("bei bester dok. Stufe", "at best documented level");
+  const half = Math.ceil(s.ingredients.length / 2);
+  const lv = stageLevel(s);
+  const unconfirmed = s.ingredients.length > 0 && s.recipe.ingredientsStatus !== undefined && s.recipe.ingredientsStatus !== "complete";
+  return (
+    <Card className="p-4 text-sm">
+      <div className="relative mb-3 flex flex-wrap items-baseline gap-2">
+        <span className={LABEL}>{t("Aktueller Craft", "Current craft")}</span>
+        {unconfirmed && <span className={`text-[11px] ${MISSING}`}>{t("Zutatenliste unbestätigt, Kosten vorläufig", "ingredient list unconfirmed, cost provisional")}</span>}
+        {s.recipe.liveUnconfirmed && <span className="text-[11px] text-zinc-500">{t("Global-Clientdaten, nicht live bestätigt", "Global client data, not confirmed live")}{s.recipe.source && <> · <a className="underline hover:text-zinc-300" href={s.recipe.source} target="_blank" rel="noreferrer">{t("Quelle", "Source")}</a></>}</span>}
+      </div>
+      <div className="relative grid gap-3 md:grid-cols-[1fr_minmax(0,14rem)_1fr] md:items-center">
+        <ul className="order-2 space-y-1.5 md:order-1">{s.ingredients.slice(0, half).map((i) => <MaterialTile key={`${i.kind}:${itemKey(i)}`} i={i} p={s.project} state={state} stepKey={s.recipe.recipeKey} onPrice={onPrice} />)}</ul>
+        <div className="order-1 text-center md:order-2">
+          <div className="mx-auto w-28 sm:w-36">{icon ? <CardArt src={icon} alt={want.name} /> : <Filler className="aspect-square w-full" />}</div>
+          <div className="mt-2 font-semibold text-[#f4eed7]">{want.name}</div>
+          <div className="text-xs text-zinc-400">{lv ? `Lv ${lv}` : ""}{s.goal === "combo" ? " · Combo" : ""}</div>
+          <div className="mt-1 text-xs text-zinc-300">
+            {t("Chance", "Chance")}: {pct(plan.p) ?? <span className={MISSING}>{t("unbekannt", "unknown")}</span>} <span className="text-zinc-500">({planBasis})</span>
+          </div>
+          {plan.p !== null && <div className="text-xs text-zinc-400">Ø {plan.expected !== null && Number.isFinite(plan.expected) ? plan.expected.toFixed(1) : "∞"} · 80 %: <b className="text-[#f4eed7]">{plan.n80 !== null && Number.isFinite(plan.n80) ? plan.n80 : "∞"}</b> {t("Versuche", "attempts")}</div>}
+          {pActual === null && <div className="text-[11px] text-zinc-500">{t("Trag deine Handwerksstufe ein, wenn du die Chance im Spiel siehst.", "Enter your crafting level once you see the chance in game.")}</div>}
+          <div className="mt-1 text-xs text-zinc-400">{t("Ein Versuch", "One attempt")}: {next.low.cost !== null ? range(next.low.cost, next.high.cost) : <span className={MISSING}>{t("Preise fehlen", "prices missing")}</span>}</div>
+        </div>
+        <ul className="order-3 space-y-1.5">{s.ingredients.slice(half).map((i) => <MaterialTile key={`${i.kind}:${itemKey(i)}`} i={i} p={s.project} state={state} stepKey={s.recipe.recipeKey} onPrice={onPrice} />)}</ul>
+        {!s.ingredients.length && <p className={`order-3 md:col-span-3 ${MISSING}`}>{t("Zutaten nicht dokumentiert (Datenlücke)", "Ingredients not documented (data gap)")}</p>}
+      </div>
+      <div className="relative mt-3 flex flex-wrap justify-center gap-1.5">
+        <span className={`${LABEL} self-center`}>{t("Ergebnis im Spiel", "Result in game")}:</span>
+        {s.outcomes.map((o) => <button key={o} className={BTN} onClick={() => onLog(o)}>{outcomeName(o, t)}</button>)}
+      </div>
+    </Card>
+  );
+}
+
+/** What is still to craft, lowest stage first, with Ø and 80 % attempts; then the recommendation and the whole-goal budget. */
+function NextStepsPanel({ p, state }: { p: Project; state: CraftState }) {
+  const t = useT();
+  const lines = needList(p, state);
+  const basisName = (b: NeedLine["basis"]) => ({ character: t("deine Stufe", "your level"), required: t("Mindeststufe", "required level"), fixed: t("garantiert", "guaranteed"), best: t("beste dok. Stufe", "best documented level"), none: "" })[b];
+  const fmt = (n: number | null) => (n === null ? "?" : !Number.isFinite(n) ? "∞" : Number.isInteger(n) ? String(n) : n.toFixed(1));
+  const first = lines[0];
+  return (
+    <div className="space-y-3">
+      {first && (
+        <p className="text-sm text-[#efe6cc]/90">
+          {t("Als Nächstes", "Next")}: <b className="text-[#f4eed7]">{first.item.name}</b>{first.count > 1 ? ` (${t("noch", "still")} ${first.count}×)` : ""}.
+          {" "}{t("Von unten nach oben brauchst du noch:", "From the bottom up you still need:")}
+        </p>
+      )}
+      <ol className="space-y-1.5">
+        {lines.map((l) => {
+          const lv = stageLevel(l);
+          return (
+            <li key={`${l.recipe.recipeKey}:${l.goal}`} className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-3 py-2 text-xs">
+              <ItemIcon src={iconOf(l.item, p.faction)} />
+              <span className="min-w-0 text-sm text-[#efe6cc]/90">{l.item.name}</span>
+              <span className="text-zinc-500">{lv ? `Lv ${lv}` : ""}{l.goal === "combo" ? " · Combo" : ""}</span>
+              {!l.ingredientsKnown && <span className={MISSING}>{l.recipe.ingredients.length ? t("Zutaten unbestätigt", "ingredients unconfirmed") : t("Zutaten fehlen", "ingredients missing")}</span>}
+              <span className="ml-auto flex flex-wrap items-center gap-3 text-zinc-300">
+                <span>{t("noch", "still")} <b className="text-[#f4eed7]">{l.count}×</b></span>
+                <span>{t("Chance", "Chance")} {pct(l.p) ?? <span className={MISSING}>?</span>}{l.basis !== "none" && <span className="text-zinc-500"> ({basisName(l.basis)})</span>}</span>
+                <span>Ø <b className="text-[#f4eed7]">{fmt(l.expected)}</b></span>
+                <span>80 %: <b className="text-[#f4eed7]">{fmt(l.n80)}</b> {t("Versuche", "attempts")}</span>
+              </span>
+            </li>
+          );
+        })}
+        {!lines.length && <li className="text-sm text-zinc-500">{progress(p, state).percent === 100 ? t("Alles da, Projekt fertig.", "Everything there, project finished.") : t("Pfad unbekannt: Zutaten fehlen in den Daten.", "Path unknown: ingredients missing in the data.")}</li>}
+      </ol>
+      <p className="text-[11px] text-zinc-500">{t("Ø = Mittelwert der Versuche. 80 % = so viele Versuche reichen in 8 von 10 Fällen für alle benötigten Erfolge dieser Stufe. Gilt pro Stufe, nicht als Garantie für die ganze Kette.",
+        "Ø = average attempts. 80 % = this many attempts are enough for all needed successes of this stage in 8 of 10 cases. Per stage, not a guarantee for the whole chain.")}</p>
+      {p.status !== "done" && <ProjectBudget p={p} state={state} />}
+    </div>
+  );
+}
+
+/** Starting stock of the gear line (how many of each stage you already have) and the materials with stock and price. */
+function StockPanel({ p, state, update, char, onPrice }: { p: Project; state: CraftState; update: Update; char: Character; onPrice: (x: PriceTarget) => void }) {
+  const t = useT();
+  const gearSlot = p.gearSlot ?? state.recipes.find((r) => r.recipeKey === p.targetRecipeKey)?.slot ?? "";
+  const items = ladderItems(state, p.faction, gearSlot);
+  const setCount = (item: ItemRef, n: number) => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? withOwnedCount(x, item, n) : x)) }));
+  const mats = useMemo(() => {
+    const out = new Map<string, { item: ItemRef & { bound?: boolean | null }; crafted: boolean; craftable: boolean }>();
+    for (const { recipe } of remainingPath(p, state)) for (const i of recipe.ingredients) {
+      if (i.kind === "transfer") continue;
+      const k = itemKey(i);
+      if (!out.has(k)) out.set(k, { item: i, crafted: !!craftsItself(p, i, state.recipes), craftable: canCraft(p, i, state.recipes) });
+    }
+    return [...out.values()].filter((m) => !m.crafted || !items.some((x) => sameItemRef(x.item, m.item)));
+  }, [p, state, items]);
+  const toggleBuy = (item: ItemRef, craft: boolean) => {
+    const k = itemKey(item);
+    update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...x, buy: (x.buy ?? []).filter((y) => y !== k).concat(craft ? [] : [k]), craft: (x.craft ?? []).filter((y) => y !== k).concat(craft ? [k] : []) } : x)) }));
+  };
+  const setStock = (item: ItemRef, v: string) => update((s) => { const inv = { ...s.inventory }; if (v === "") delete inv[itemKey(item)]; else inv[itemKey(item)] = Number(v); return { ...s, inventory: inv }; });
+  return (
+    <div className="space-y-4">
+      <section className="space-y-2">
+        <div className={LABEL}>{t("Was hast du von dieser Linie schon?", "What do you already have of this line?")}</div>
+        <ul className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((x) => (
+            <li key={itemKey(x.item)} className="card-face relative flex items-center gap-2 rounded-xl px-2 py-1.5 text-xs">
+              <ItemIcon src={iconOf(x.item, p.faction)} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[#efe6cc]/90">{x.item.name}</div>
+                <div className="text-[11px] text-zinc-500">{x.level ? `Lv ${x.level}` : ""}{x.combo ? " · Combo" : ""}</div>
+              </div>
+              <Stepper value={ownedCount(p, x.item)} onChange={(n) => setCount(x.item, n)} label={x.item.name} />
+            </li>
+          ))}
+          {!items.length && <li className="text-sm text-zinc-500">{t("Für diese Linie gibt es noch keine Stufenliste.", "No stage list for this line yet.")}</li>}
+        </ul>
+        <p className="text-[11px] text-zinc-500">{t("Gecraftete und hier eingetragene Teile zählen beide. Was später noch zusätzlich gebraucht wird (z. B. Lv44-Basen), bleibt im Bedarf.", "Crafted items and items entered here both count. What later stages need on top (e.g. Lv44 bases) stays in the need list.")}</p>
+      </section>
+      <section className="space-y-2">
+        <div className={LABEL}>{t("Materialien (Bestand gilt für alle Projekte)", "Materials (stock is shared by all projects)")}</div>
+        <ul className="grid gap-1.5 lg:grid-cols-2">
+          {mats.map((m) => (
+            <li key={itemKey(m.item)} className="card-face relative flex flex-wrap items-center gap-2 rounded-xl px-2 py-1.5 text-xs" style={rarityEdge(m.item.name)}>
+              <ItemIcon src={iconOf(m.item, p.faction)} rarity={rarityOf(m.item.name)} />
+              <span className="min-w-0 flex-1 truncate text-[#efe6cc]/90">{m.item.name}
+                {m.craftable && <button className="ml-2 text-[11px] text-zinc-500 underline hover:text-zinc-300" onClick={() => toggleBuy(m.item, !m.crafted)}>{m.crafted ? t("selbst craften · lieber kaufen", "craft myself · buy instead") : t("kaufen · selbst craften", "buy · craft myself")}</button>}
+              </span>
+              {!m.crafted && <label className="flex items-center gap-1 text-zinc-500">{t("Bestand", "Stock")}
+                <input className={`${INPUT} w-16 text-right text-xs`} inputMode="numeric" value={state.inventory[itemKey(m.item)] ?? ""} placeholder="–" onChange={(e) => setStock(m.item, e.target.value.replace(/\D/g, ""))} /></label>}
+              {!m.crafted && <PriceCell item={m.item} ctxProject={p} state={state} compact onEdit={() => onPrice({ item: m.item, server: p.server, project: p })} />}
+            </li>
+          ))}
+          {!mats.length && <li className="text-sm text-zinc-500">{t("Keine Materialliste: Zutaten fehlen in den Daten.", "No material list: ingredients missing in the data.")}</li>}
+        </ul>
+      </section>
+      <p className="text-[11px] text-zinc-500">{char.server} · {t("Preise und Bestand sind für deinen Server.", "Prices and stock are for your server.")}</p>
+    </div>
+  );
+}
+
+const sameItemRef = (a: ItemRef, b: ItemRef) => itemKey(a) === itemKey(b) || (normName(a.name) === normName(b.name));
+
+/** − n + stepper for a count. */
+function Stepper({ value, onChange, label }: { value: number; onChange: (n: number) => void; label: string }) {
+  const b = "h-7 w-7 rounded-md border border-[#d9c58f]/20 bg-white/[0.04] text-[#efe6cc] hover:border-[#d9c58f]/45 disabled:opacity-40";
+  return (
+    <span className="flex items-center gap-1">
+      <button className={b} aria-label={`${label} −1`} disabled={value <= 0} onClick={() => onChange(value - 1)}>−</button>
+      <input className={`${INPUT} w-12 px-1 text-center text-xs`} inputMode="numeric" aria-label={label} value={value} onChange={(e) => onChange(Number(e.target.value.replace(/\D/g, "") || 0))} />
+      <button className={b} aria-label={`${label} +1`} onClick={() => onChange(value + 1)}>+</button>
+    </span>
+  );
+}
+
+function LogPanel({ p, state, update }: { p: Project; state: CraftState; update: Update }) {
+  const t = useT();
+  const range = useRange();
+  const history = activeAttempts(state.events).filter((e) => e.projectId === p.id).reverse();
+  return (
+    <section className="card-face relative space-y-2 rounded-2xl px-4 py-3 text-sm">
+      {!history.length && <p className="text-xs text-zinc-500">{t("Noch keine Versuche eingetragen.", "No attempts logged yet.")}</p>}
+      <ul className="space-y-1 text-xs text-zinc-400">
+        {history.map((e) => (
+          <li key={e.id} className="flex flex-wrap items-center gap-2">
+            <span className="text-zinc-500">{new Date(e.at).toLocaleString()}</span>
+            <span className="text-[#efe6cc]/85">{state.recipes.find((r) => r.recipeKey === e.recipeKey)?.name ?? e.recipeKey}</span>
+            <span>{outcomeName(e.outcome, t)}</span>
+            <span className="text-zinc-500">{e.costLow === null ? t("Kosten unbekannt", "cost unknown") : range(e.costLow, e.costHigh)}</span>
+            <button className="ml-auto text-zinc-500 underline hover:text-zinc-300" onClick={() => update((s) => undoAttempt(s, e.id))}>{t("Rückgängig", "Undo")}</button>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[11px] text-zinc-500">{t("Die Kosten stehen so, wie die Preise beim Eintragen waren. Spätere Preisänderungen ändern sie nicht.", "Costs stay as the prices were when logged. Later price changes do not change them.")}</p>
+    </section>
+  );
+}
+
+
 /** Price of an item as used in a project (or for a server), with the edit button. */
-function PriceCell({ item, ctxProject, server, stepKey, state, onEdit, hide }: {
-  item: ItemRef & { bound?: boolean | null }; ctxProject?: Project; server?: string; stepKey?: string; state: CraftState; onEdit: () => void; hide?: boolean;
+function PriceCell({ item, ctxProject, server, stepKey, state, onEdit, hide, compact }: {
+  item: ItemRef & { bound?: boolean | null }; ctxProject?: Project; server?: string; stepKey?: string; state: CraftState; onEdit: () => void; hide?: boolean; compact?: boolean;
 }) {
   const t = useT();
   const range = useRange();
@@ -441,9 +623,11 @@ function PriceCell({ item, ctxProject, server, stepKey, state, onEdit, hide }: {
   return (
     <span className="inline-flex items-center gap-2">
       {p ? <span className="text-[#efe6cc]/90">{range(p.low, p.high) ?? range(p.ref, p.ref)}{scope && <span className="text-zinc-500"> · {scope}</span>}</span>
-        : <span className={MISSING}>{t("Kein Preis hinterlegt", "No price saved")}</span>}
+        : <span className={MISSING}>{compact ? t("kein Preis", "no price") : t("Kein Preis hinterlegt", "No price saved")}</span>}
       {item.bound === true && <span className="text-zinc-500">· {t("gebunden", "bound")}</span>}
-      <button className={BTN} onClick={onEdit}>{p ? t("Bearbeiten", "Edit") : t("Preis eingeben", "Enter price")}</button>
+      {compact
+        ? <button className="text-[11px] text-zinc-400 underline hover:text-zinc-200" onClick={onEdit}>{p ? t("ändern", "edit") : t("eingeben", "enter")}</button>
+        : <button className={BTN} onClick={onEdit}>{p ? t("Bearbeiten", "Edit") : t("Preis eingeben", "Enter price")}</button>}
     </span>
   );
 }
@@ -493,7 +677,7 @@ function ProjectBudget({ p, state }: { p: Project; state: CraftState }) {
   );
 }
 
-/* ------------------------------------------------------------------ next steps ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ attempts ------------------------------------------------------------------ */
 
 function undoAttempt(s: CraftState, id: string): CraftState {
   const e = activeAttempts(s.events).find((x) => x.id === id);
@@ -520,76 +704,6 @@ function logAttempt(s: CraftState, step: NextStep, outcome: Outcome): CraftState
     ...s, inventory: inv,
     events: [...s.events, { id: uid(), kind: "attempt", projectId: p.id, at: new Date().toISOString(), recipeKey: step.recipe.recipeKey, outcome, ...fx, costLow: cost("low"), costHigh: cost("high") }],
   };
-}
-
-function NextStepsTab({ state, update, charKey: key, onPrice }: { state: CraftState; update: Update; charKey: string; onPrice: (x: PriceTarget) => void }) {
-  const t = useT();
-  const steps = nextSteps(state, key);
-  if (!steps.length) return <p className="text-sm text-zinc-500">{t("Keine offenen Schritte. Lege unter „Crafting-Projekte“ ein Projekt an.", "No open steps. Create a project under “Crafting projects”.")}</p>;
-  return <div className="space-y-4">{steps.map((s) => <StepCard key={s.project.id} s={s} state={state} onLog={(o) => update((st) => logAttempt(st, s, o))} onPrice={onPrice} showProject />)}</div>;
-}
-
-function StepCard({ s, state, onLog, onPrice, showProject }: { s: NextStep; state: CraftState; onLog: (o: Outcome) => void; onPrice: (x: PriceTarget) => void; showProject?: boolean }) {
-  const t = useT();
-  const range = useRange();
-  const target = projectTarget(s.project, state.recipes);
-  const want = s.goal === "combo" && s.recipe.comboOutput ? s.recipe.comboOutput.name : s.recipe.output.name;
-  const free = (i: ItemRef) => !!craftsItself(s.project, i, state.recipes) || (i as { kind?: string }).kind === "transfer" && !!producerOf(i, state.recipes, s.project.faction);
-  const ctx = ctxOf(state, s.project, s.recipe.recipeKey);
-  const next = { low: attemptCost(s.recipe, ctx, "low", free), high: attemptCost(s.recipe, ctx, "high", free) };
-  const pActual = s.chance.actual ? effectiveChance(s.chance.actual, s.goal) : null;
-  const budget = { low: stepBudget(s.recipe, pActual, ctx, "low", free), high: stepBudget(s.recipe, pActual, ctx, "high", free) };
-  const dataMissing = (partial?: number, partialHigh?: number): ReactNode => <span className={MISSING}>{t("Daten fehlen", "Data missing")}{partial ? ` (${t("bekannt", "known")} ${range(partial, partialHigh ?? partial)})` : ""}</span>;
-  const lv = stageLevel(s);
-  return (
-    <Card className="space-y-3 p-4 text-sm">
-      <div className="relative flex flex-wrap items-baseline gap-2">
-        <span className="rounded-md border border-[#d9c58f]/25 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-[#beac80]">{slotName(s.project.slot, t)}</span>
-        {showProject && <span className="font-semibold text-[#f4eed7]">{target?.name}</span>}
-        <span className="text-xs text-zinc-400">{t("Nächster Schritt", "Next step")}: <span className="text-[#efe6cc]/90">{want}</span>{lv ? ` · Lv ${lv}` : ""}{s.goal === "combo" ? " · Combo" : ""}</span>
-      </div>
-      <ul className="relative grid gap-1 text-xs lg:grid-cols-2">
-        {s.ingredients.map((i) => {
-          const ok = i.qty !== null && i.have >= i.qty;
-          const own = i.crafted || (i.kind === "transfer" && canCraft(s.project, i, state.recipes));
-          return (
-            <li key={`${i.kind}:${itemKey(i)}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-white/[0.03] px-2 py-1">
-              <span className="text-[#efe6cc]/85">{i.name}{i.crafted ? <span className="text-zinc-500"> · {t("Zwischenitem", "intermediate")}</span> : i.kind === "transfer" ? <span className="text-zinc-500"> · Transfer</span> : ""}
-                {i.alternatives?.map((a) => <span key={a.itemId ?? a.name} className="text-zinc-500"> · {t("oder", "or")} {a.name}{a.unverified ? ` (${t("unbestätigt", "unconfirmed")})` : ""}</span>)}</span>
-              <span className={ok ? "text-[#5fbf8a]" : "text-[#ff3344]"}>{i.have} / {i.qty ?? "?"}</span>
-              <span className="ml-auto"><PriceCell item={i} ctxProject={s.project} stepKey={s.recipe.recipeKey} state={state} hide={own}
-                onEdit={() => onPrice({ item: i, server: s.project.server, project: s.project, stepKey: s.recipe.recipeKey })} /></span>
-            </li>
-          );
-        })}
-        {!s.ingredients.length && <li className={MISSING}>{t("Zutaten nicht dokumentiert (Datenlücke)", "Ingredients not documented (data gap)")}</li>}
-      </ul>
-      {(s.ingredients.length > 0 && s.recipe.ingredientsStatus !== undefined && s.recipe.ingredientsStatus !== "complete" || s.recipe.liveUnconfirmed) && (
-        <p className="relative text-[11px] text-zinc-500">
-          {s.ingredients.length > 0 && s.recipe.ingredientsStatus !== undefined && s.recipe.ingredientsStatus !== "complete" && <span className={MISSING}>{t("Zutatenliste nicht auf der Rezeptseite bestätigt, Kosten vorläufig. ", "Ingredient list not confirmed on the recipe page, cost provisional. ")}</span>}
-          {s.recipe.liveUnconfirmed && t("Global-Clientdaten, nicht live bestätigt.", "Global client data, not confirmed live.")}
-          {s.recipe.source && <> · <a className="underline hover:text-zinc-300" href={s.recipe.source} target="_blank" rel="noreferrer">{t("Quelle", "Source")}</a></>}
-        </p>
-      )}
-      <div className="relative grid gap-1 text-xs text-zinc-300 sm:grid-cols-2">
-        <div>{t("Chance bei deiner Stufe", "Chance at your level")} {s.project.mastery ?? "?"}: {pct(pActual) ?? <span className={MISSING}>{t("unbekannt", "unknown")}</span>}
-          {s.chance.basis === "character" && s.chance.override?.source && <span className="text-zinc-500"> · {s.chance.override.source}{s.chance.override.date ? `, ${s.chance.override.date}` : ""}</span>}
-          {s.chance.basis === "fixed" && <span className="text-zinc-500"> · {t("garantiert", "guaranteed")}</span>}</div>
-        <div className="text-zinc-500">{t("Dokumentiert bei Stufe", "Documented at level")} {s.chance.documentedMastery ?? "?"}: {pct(s.documentedPlan.p) ?? t("unbekannt", "unknown")}
-          {s.documentedPlan.n80 !== null && Number.isFinite(s.documentedPlan.n80) ? ` · ${s.documentedPlan.n80} ${t("Versuche (80 %)", "attempts (80 %)")}` : ""}
-          {s.bestPlan.p !== null && <> · {t("beste dok. Stufe", "best documented level")}: {pct(s.bestPlan.p)}{s.bestPlan.n80 !== null && Number.isFinite(s.bestPlan.n80) ? ` · ${s.bestPlan.n80}` : ""}</>}</div>
-        <div>{t("80 %-Planungswert", "80 % planning value")}: {s.plan.n80 === null ? <span className={MISSING}>{t("unbekannt", "unknown")}</span> : !Number.isFinite(s.plan.n80) ? t("nie (0 %)", "never (0 %)") : <b className="text-[#f4eed7]">{s.plan.n80} {t("Versuche", "attempts")}</b>}
-          {s.plan.reached !== null && <span className="text-zinc-500"> ({pct(s.plan.reached)})</span>}</div>
-        <div className="text-zinc-500">{t("Erwartungswert", "Expected value")}: {s.plan.expected === null ? "?" : Number.isFinite(s.plan.expected) ? s.plan.expected.toFixed(1) : "∞"}</div>
-        <div>{t("Nächster Versuch", "Next attempt")}: {next.low.cost === null ? dataMissing(next.low.partial, next.high.partial) : range(next.low.cost, next.high.cost)}</div>
-        <div>{t("Diese Stufe bis 80 %", "This stage up to 80 %")}: {budget.low.budget === null ? dataMissing() : range(budget.low.budget, budget.high.budget)}</div>
-      </div>
-      <div className="relative flex flex-wrap gap-1.5 pt-1">
-        <span className={`${LABEL} self-center`}>{t("Ergebnis eintragen", "Log result")}:</span>
-        {s.outcomes.map((o) => <button key={o} className={BTN} onClick={() => onLog(o)}>{outcomeName(o, t)}</button>)}
-      </div>
-    </Card>
-  );
 }
 
 /* ------------------------------------------------------------------ market prices ------------------------------------------------------------------ */
@@ -625,7 +739,7 @@ function PricesTab({ state, update, char, onPrice }: { state: CraftState; update
   const chip = (k: PriceGroup | "", label: string, n: number) => (
     <button key={k || "all"} onClick={() => setGroup(k)} aria-pressed={group === k} disabled={!n && k !== ""}
       className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-colors disabled:opacity-35 ${group === k ? "border-[#d9c58f]/50 bg-white/[0.09] text-[#f4eed7]" : "border-white/10 text-zinc-400 hover:text-zinc-200"}`}>
-      {k && <span className="h-2 w-2 rounded-full" style={{ background: GROUP_COLOR[k] }} />}{label} <span className="text-zinc-500">{n}</span>
+      {label} <span className="text-zinc-500">{n}</span>
     </button>
   );
   return (
@@ -652,7 +766,7 @@ function PricesTab({ state, update, char, onPrice }: { state: CraftState; update
         {list.map((e, i) => {
           const head = !group && (i === 0 || list[i - 1].group !== e.group) ? e.group : undefined;
           return [
-            head && <li key={`h-${head}`} className={`${LABEL} flex items-center gap-2 pt-2`}><span className="h-2 w-2 rounded-full" style={{ background: GROUP_COLOR[e.group] }} />{names[head]}</li>,
+            head && <li key={`h-${head}`} className={`${LABEL} pt-2`}>{names[head]}</li>,
             <CatalogRow key={e.key} e={e} state={state} server={server} update={update} onPrice={onPrice} />,
           ];
         })}
@@ -687,8 +801,8 @@ function CatalogRow({ e, state, server, update, onPrice }: { e: CatalogEntry & {
   const icon = SHOW_ITEM_ICONS ? craftIcon(e) : undefined;
   const isTarget = e.key.startsWith("recipe:") || e.key.startsWith("combo:");
   return (
-    <li className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl py-1.5 pl-2 pr-3 text-xs" style={{ boxShadow: `inset 3px 0 0 ${GROUP_COLOR[e.group]}` }}>
-      <ItemIcon src={icon} color={GROUP_COLOR[e.group]} />
+    <li className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl py-1.5 pl-2 pr-3 text-xs" style={e.area === "materials" ? rarityEdge(e.name) : undefined}>
+      <ItemIcon src={icon} rarity={e.area === "materials" ? rarityOf(e.name) : undefined} />
       <span className="min-w-0 text-sm text-[#efe6cc]/90">{e.name}</span>
       <span className="text-zinc-500">{e.itemId ? `#${e.itemId}` : t("ohne Item-ID", "no item ID")}{e.bound === true ? ` · ${t("gebunden", "bound")}` : ""}
         {e.area === "gear" ? ` · ${isTarget ? t("Rezeptziel", "recipe target") : t("Zwischenstufe", "intermediate")}` : ""}{e.custom ? ` · ${t("eigener Eintrag", "own entry")}` : ""}</span>
@@ -713,15 +827,27 @@ function CatalogRow({ e, state, server, update, onPrice }: { e: CatalogEntry & {
   );
 }
 
-/** Small item icon; a tinted empty frame in the group colour while the original icon is missing. */
-function ItemIcon({ src, color }: { src?: string; color: string }) {
+/** Market rarity by name prefix, as in the Aion 2 market: plain grey, Fine green, Pure blue, Radiant gold. */
+export type Rarity = "normal" | "fine" | "pure" | "radiant";
+const RARITY_COLOR: Record<Rarity, string> = { normal: "#9aa0a8", fine: "#5fc46a", pure: "#4f9dff", radiant: "#e9b949" };
+function rarityOf(name: string): Rarity {
+  const m = name.trim().match(/^(fine|pure|radiant)\b/i);
+  return m ? (m[1].toLowerCase() as Rarity) : "normal";
+}
+/** Left edge in the rarity colour. */
+const rarityEdge = (name: string) => ({ boxShadow: `inset 3px 0 0 ${RARITY_COLOR[rarityOf(name)]}` });
+
+/** Small item icon; with a rarity the frame takes its colour. An empty frame while the original icon is missing. */
+function ItemIcon({ src, color, rarity, size = "h-8 w-8" }: { src?: string; color?: string; rarity?: Rarity; size?: string }) {
   const [failed, setFailed] = useState<string>();
+  const tint = rarity ? RARITY_COLOR[rarity] : color;
   return (
-    <span aria-hidden className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md bg-[radial-gradient(circle_at_50%_40%,#1f3a66_0%,#111a2b_60%,#0a0d14_100%)] ring-1 ring-white/10">
+    <span aria-hidden className={`relative ${size} shrink-0 overflow-hidden rounded-md bg-[radial-gradient(circle_at_50%_40%,#1f3a66_0%,#111a2b_60%,#0a0d14_100%)] ring-1 ring-white/10`}
+      style={rarity ? { boxShadow: `0 0 0 1px ${tint}88` } : undefined}>
       {src && failed !== src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-contain p-[2px]" onError={() => setFailed(src)} />
-      ) : <span className="absolute inset-[30%] rounded-full opacity-60" style={{ background: color }} />}
+      ) : <span className="absolute inset-[30%] rounded-full opacity-50" style={{ background: tint ?? "#d9c58f55" }} />}
     </span>
   );
 }

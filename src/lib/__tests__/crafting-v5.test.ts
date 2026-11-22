@@ -266,3 +266,31 @@ describe("price page groups", () => {
     expect(e.some((x) => /guaranteed alternative/i.test(x.name))).toBe(false);
   });
 });
+
+describe("gear lines and the bottom-up need list", () => {
+  it("every crafted slot has a line with its top stage; guaranteed alternatives are not stages", async () => {
+    const { ladderFor, topOf } = await import("../crafting/model");
+    expect(topOf(data, "Asmodian", "orb")!.name).toBe("Splendent Ebony Dragon Lord Orb");
+    expect(topOf(data, "Elyos", "sword")!.name).toBe("Splendent Wise Dragon Lord Longsword");
+    expect(topOf(data, "Elyos", "ring")!.name).toBe("Splendent Wise Dragon Lord Ring");
+    expect(ladderFor(data, "Elyos", "ring")).toHaveLength(9);
+    for (const slot of ["sword", "greatsword", "dagger", "mace", "orb", "spellbook", "bow", "staff", "guard", "ring", "earrings", "necklace", "gloves", "chest", "legs", "helm", "shoulders", "boots", "cape"])
+      for (const f of ["Elyos", "Asmodian"]) expect(ladderFor(data, f, slot).length, `${f} ${slot}`).toBeGreaterThanOrEqual(9);
+  });
+  it("k successes with 80 %: one success is the usual value, more successes need more attempts", async () => {
+    const { attemptsForK } = await import("../crafting/prob");
+    expect(attemptsForK(0.25, 1)).toBe(6);
+    expect(attemptsForK(1, 3)).toBe(3);
+    expect(attemptsForK(0.5, 2)).toBe(5);
+    expect(attemptsForK(null, 2)).toBeNull();
+  });
+  it("Orb to 102 needs three Lv44 combo bases, counted on one line", async () => {
+    const { needList } = await import("../crafting/model");
+    const l = needList(proj("recipe:321093015", { faction: "Asmodian" }), data);
+    const lv44 = l.find((x) => x.recipe.name === "Artisan's Truth Orb")!;
+    expect(lv44.count).toBe(3);
+    expect(lv44.basis).toBe("best");
+    expect(lv44.expected).toBeCloseTo(3 / 0.2344, 5);
+    expect(l.at(-1)!.recipe.name).toBe("Splendent Ebony Dragon Lord Orb");
+  });
+});
