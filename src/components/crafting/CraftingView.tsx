@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, ty
 import type { Character } from "@/lib/types";
 import { numberLocale, useLang, useT, type T } from "@/lib/i18n";
 import { iconFor } from "@/lib/knowledge/item-catalog";
+import { craftIcon } from "@/lib/crafting/craft-icons";
+import { GEAR_GROUPS, GROUP_COLOR, MATERIAL_GROUPS, entriesFor, type GearGroup, type MaterialGroup, type PriceArea, type PriceGroup } from "@/lib/crafting/catalog-groups";
 import { charKey } from "../store";
 import { useCraft } from "../craft-store";
 import { Card, CardArt, Filler, SHOW_ITEM_ICONS } from "../deck/Card";
@@ -10,7 +12,7 @@ import {
   SLOT_PRIORITY, activeAttempts, attemptCost, attemptEffects, buildCatalog, canCraft, craftSlotOf, craftsItself, ctxOf, findPrice, importFile,
   itemKey, nextStep, nextSteps, normName, openCost, pathSimInput, producerOf, progress, projectTarget, remainingPath, savePrice, sortProjects,
   spent, stageLevel, stepBudget, uid, validatePrice,
-  type CatalogCategory, type CatalogEntry, type CraftSlot, type CraftState, type ImportError, type ItemRef, type NextStep, type Outcome, type Project, type Scenario,
+  type CatalogEntry, type CraftSlot, type CraftState, type ImportError, type ItemRef, type NextStep, type Outcome, type Project, type Scenario,
 } from "@/lib/crafting/model";
 import { effectiveChance, simulateBudget, type ChanceGoal } from "@/lib/crafting/prob";
 
@@ -26,12 +28,6 @@ const slotName = (s: CraftSlot, t: T) => ({
   weapon: t("Waffe", "Weapon"), ring: t("Ring", "Ring"), guard: t("Schützer / Nebenhand", "Guard / off-hand"),
   gloves: t("Handschuhe", "Gloves"), jewelry: t("Schmuck", "Jewellery"), armor: t("Rüstung", "Armour"),
 })[s];
-
-const categoryName = (c: CatalogCategory, t: T) => ({
-  raw: t("Rohmaterial", "Raw material"), processed: t("Verarbeitetes Material", "Processed material"), intermediate: t("Zwischenitem", "Intermediate"),
-  weapon: t("Waffe", "Weapon"), guard: t("Schützer", "Guard"), gloves: t("Handschuhe", "Gloves"), ring: t("Ring", "Ring"),
-  jewelry: t("Schmuck", "Jewellery"), armor: t("Rüstung", "Armour"), transfer: t("Transfer-Gegenstand", "Transfer item"), other: t("Sonstiges", "Other"),
-})[c];
 
 const outcomeName = (o: Outcome, t: T) => ({
   base_fail: t("Fehlgeschlagen", "Failed"), success: t("Erfolg", "Success"), combo_success: t("Combo erfolgreich", "Combo success"),
@@ -88,18 +84,21 @@ export function CraftingView({ char, ui, setUi }: { char: Character; ui: CraftUi
     URL.revokeObjectURL(a.href);
   };
   const gaps = state.recipes.filter((r) => !r.ingredients.length).length;
-  const subs = [["projects", t("Crafting-Projekte", "Crafting projects")], ["next", "Crafting Next Steps"], ["prices", t("Marktpreise", "Market prices")]] as const;
+  const subs = [["projects", t("Crafting-Projekte", "Crafting projects")], ["next", "Crafting Next Steps"]] as const;
+  const onPrices = ui.sub === "prices";
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <div role="tablist" aria-label="Crafting" className="relative grid w-full grid-cols-3 rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-xs sm:text-sm lg:w-auto lg:flex-1">
+        <div role="tablist" aria-label="Crafting" className="relative grid w-full grid-cols-2 rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-xs sm:text-sm lg:w-auto lg:flex-1">
           {subs.map(([k, l]) => (
             <button key={k} role="tab" aria-selected={ui.sub === k} onClick={() => setUi((u) => ({ ...u, sub: k, open: k === "projects" ? u.open : undefined }))}
               className={`rounded-lg px-2 py-1.5 transition-colors sm:px-3 ${ui.sub === k ? "bg-white/[0.09] text-[#f4eed7] ring-1 ring-[#d9c58f]/40" : "text-zinc-500 hover:text-zinc-300"}`}>{l}</button>
           ))}
         </div>
-        <div className="flex shrink-0 flex-wrap gap-1.5">
+        <div className="flex min-w-0 flex-wrap gap-1.5">
+          <button className={`${BTN} ${onPrices ? "bg-white/[0.09] text-[#f4eed7] ring-1 ring-[#d9c58f]/40" : ""}`} aria-pressed={onPrices}
+            onClick={() => setUi((u) => ({ ...u, sub: u.sub === "prices" ? "projects" : "prices", open: undefined }))}>{t("Materialien & Preise", "Materials & prices")}</button>
           <button className={BTN} onClick={() => fileRef.current?.click()}>{t("Daten importieren (CSV)", "Import data (CSV)")}</button>
           <button className={BTN} onClick={download}>{t("Export", "Export")}</button>
           <button className={BTN} onClick={() => backupRef.current?.click()}>{t("Sicherung laden", "Load backup")}</button>
@@ -580,96 +579,111 @@ function StepCard({ s, state, onLog, onPrice, showProject }: { s: NextStep; stat
 
 /* ------------------------------------------------------------------ market prices ------------------------------------------------------------------ */
 
-const CATEGORIES: CatalogCategory[] = ["raw", "processed", "intermediate", "transfer", "weapon", "guard", "gloves", "ring", "jewelry", "armor", "other"];
+const MATERIAL_NAMES = (t: T): Record<MaterialGroup, string> => ({
+  ore: t("Erz", "Ore"), gem: t("Edelsteine", "Gemstones"), wood: t("Holz", "Wood"), herb: t("Kräuter", "Herbs"), cooking: t("Kochzutaten", "Cooking"),
+  odyle: "Odyle", balaur: t("Balaur-Material", "Balaur material"), refine: t("Veredelung & Hilfsmittel", "Refining & tools"), other: t("Sonstiges", "Other"),
+});
+const GEAR_NAMES = (t: T): Record<GearGroup, string> => ({
+  weapon: t("Waffen", "Weapons"), guard: t("Schützer", "Guards"), jewelry: t("Ringe & Schmuck", "Rings & jewellery"), armor: t("Rüstung & Handschuhe", "Armour & gloves"),
+});
 
+/** Market prices of the character's server: raw materials and gear in two areas, grouped, with icons. */
 function PricesTab({ state, update, char, onPrice }: { state: CraftState; update: Update; char: Character; onPrice: (x: PriceTarget) => void }) {
   const t = useT();
-  const catalog = useMemo(() => buildCatalog(state), [state]);
-  const servers = useMemo(() => [...new Set([char.server, ...state.projects.map((p) => p.server), ...state.prices.map((p) => p.server ?? "")].filter(Boolean))], [char.server, state.projects, state.prices]);
-  const [server, setServer] = useState(char.server);
+  const server = char.server;
+  const all = useMemo(() => entriesFor(buildCatalog(state), char.race), [state, char.race]);
+  const [area, setArea] = useState<PriceArea>("materials");
+  const [group, setGroup] = useState<PriceGroup | "">("");
   const [q, setQ] = useState("");
-  const [cat, setCat] = useState<CatalogCategory | "">("");
-  const [faction, setFaction] = useState("");
-  const [prof, setProf] = useState("");
   const [onlyPriced, setOnlyPriced] = useState(false);
-  // how many rows are shown; starts again at 60 whenever the filter changes
-  const sig = JSON.stringify([q, cat, faction, prof, onlyPriced, server]);
-  const [shown, setShown] = useState({ sig, n: 60 });
-  const limit = shown.sig === sig ? shown.n : 60;
-  const setLimit = (f: (n: number) => number) => setShown({ sig, n: f(limit) });
-  const professions = useMemo(() => [...new Set(catalog.map((c) => c.profession).filter(Boolean) as string[])].sort(), [catalog]);
-  const priceFor = (e: ItemRef) => findPrice({ prices: state.prices.filter((x) => (x.server ?? "").toLowerCase() === server.toLowerCase()), server }, e);
-  const list = catalog.filter((e) => {
-    if (cat && e.category !== cat) return false;
-    if (faction && e.faction && e.faction.toLowerCase() !== faction) return false;
-    if (prof && e.profession !== prof) return false;
-    if (onlyPriced && !priceFor(e)) return false;
-    const s = normName(q);
-    return !s || normName(e.name).includes(s) || (e.itemId ?? "").includes(q.trim());
-  });
+  const names: Record<string, string> = { ...MATERIAL_NAMES(t), ...GEAR_NAMES(t) };
+  const groups: readonly PriceGroup[] = area === "materials" ? MATERIAL_GROUPS : GEAR_GROUPS;
+  const onServer = useMemo(() => state.prices.filter((x) => (x.server ?? "").toLowerCase() === server.toLowerCase()), [state.prices, server]);
+  const priceOfEntry = (e: ItemRef) => findPrice({ prices: onServer, server }, e);
+  const inArea = all.filter((e) => e.area === area);
+  const s = normName(q);
+  const list = inArea.filter((e) => (!group || e.group === group) && (!onlyPriced || priceOfEntry(e)) && (!s || normName(e.name).includes(s) || (e.itemId ?? "").includes(q.trim())))
+    .sort((a, b) => groups.indexOf(a.group) - groups.indexOf(b.group) || a.name.localeCompare(b.name));
   const [newName, setNewName] = useState("");
   const [newId, setNewId] = useState("");
-  const [newCat, setNewCat] = useState<CatalogCategory>("raw");
-  const priced = state.prices.filter((x) => (x.server ?? "").toLowerCase() === server.toLowerCase()).length;
+  const [newGroup, setNewGroup] = useState<PriceGroup>("other");
+  const chip = (k: PriceGroup | "", label: string, n: number) => (
+    <button key={k || "all"} onClick={() => setGroup(k)} aria-pressed={group === k} disabled={!n && k !== ""}
+      className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-colors disabled:opacity-35 ${group === k ? "border-[#d9c58f]/50 bg-white/[0.09] text-[#f4eed7]" : "border-white/10 text-zinc-400 hover:text-zinc-200"}`}>
+      {k && <span className="h-2 w-2 rounded-full" style={{ background: GROUP_COLOR[k] }} />}{label} <span className="text-zinc-500">{n}</span>
+    </button>
+  );
   return (
     <div className="space-y-3">
-      <div className="card-face relative grid gap-2 rounded-2xl px-4 py-3 text-sm sm:grid-cols-2 lg:grid-cols-6">
-        <input className={`${INPUT} lg:col-span-2`} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Suche: Name oder Item-ID …", "Search: name or item ID …")} aria-label={t("Suche", "Search")} />
-        <select className={INPUT} value={cat} onChange={(e) => setCat(e.target.value as CatalogCategory | "")} aria-label={t("Kategorie", "Category")}>
-          <option value="">{t("Alle Kategorien", "All categories")}</option>
-          {CATEGORIES.filter((c) => catalog.some((e) => e.category === c)).map((c) => <option key={c} value={c}>{categoryName(c, t)}</option>)}
-        </select>
-        <select className={INPUT} value={faction} onChange={(e) => setFaction(e.target.value)} aria-label={t("Fraktion", "Faction")}>
-          <option value="">{t("Alle Fraktionen", "All factions")}</option><option value="elyos">Elyos</option><option value="asmodian">Asmodian</option>
-        </select>
-        <select className={INPUT} value={prof} onChange={(e) => setProf(e.target.value)} aria-label={t("Beruf", "Profession")}>
-          <option value="">{t("Alle Berufe", "All professions")}</option>{professions.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <select className={INPUT} value={server} onChange={(e) => setServer(e.target.value)} aria-label="Server">
-          {servers.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <label className="flex items-center gap-2 text-xs text-zinc-400 lg:col-span-6">
-          <input type="checkbox" checked={onlyPriced} onChange={(e) => setOnlyPriced(e.target.checked)} /> {t("nur mit Preis", "only with price")}
-          <span className="ml-auto text-zinc-500">{list.length} {t("von", "of")} {catalog.length} {t("Artikeln", "items")} · {t("Preise auf", "Prices on")} {server}: {priced}</span>
-        </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <div role="tablist" className="grid grid-cols-2 rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-sm">
+          {([["materials", t("Rohmaterialien", "Raw materials")], ["gear", t("Waffen & Ausrüstung", "Weapons & gear")]] as const).map(([k, l]) => (
+            <button key={k} role="tab" aria-selected={area === k} onClick={() => { setArea(k); setGroup(""); }}
+              className={`rounded-lg px-3 py-1.5 transition-colors ${area === k ? "bg-white/[0.09] text-[#f4eed7] ring-1 ring-[#d9c58f]/40" : "text-zinc-500 hover:text-zinc-300"}`}>
+              {l} <span className="text-xs text-zinc-500">{all.filter((e) => e.area === k).length}</span>
+            </button>
+          ))}
+        </div>
+        <input className={`${INPUT} min-w-[12rem] flex-1`} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Suche: Name oder Item-ID …", "Search: name or item ID …")} aria-label={t("Suche", "Search")} />
+        <span className="text-xs text-zinc-500">{t("Preise für", "Prices for")} {server}: {onServer.length}</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {chip("", t("Alle", "All"), inArea.length)}
+        {groups.map((g) => chip(g, names[g], inArea.filter((e) => e.group === g).length))}
+        <label className="ml-auto flex items-center gap-2 text-xs text-zinc-400"><input type="checkbox" checked={onlyPriced} onChange={(e) => setOnlyPriced(e.target.checked)} /> {t("nur mit Preis", "only with price")}</label>
       </div>
 
       <ul className="space-y-1.5">
-        {list.slice(0, limit).map((e) => <CatalogRow key={e.key} e={e} state={state} server={server} update={update} onPrice={onPrice} />)}
+        {list.map((e, i) => {
+          const head = !group && (i === 0 || list[i - 1].group !== e.group) ? e.group : undefined;
+          return [
+            head && <li key={`h-${head}`} className={`${LABEL} flex items-center gap-2 pt-2`}><span className="h-2 w-2 rounded-full" style={{ background: GROUP_COLOR[e.group] }} />{names[head]}</li>,
+            <CatalogRow key={e.key} e={e} state={state} server={server} update={update} onPrice={onPrice} />,
+          ];
+        })}
         {!list.length && <li className="text-sm text-zinc-500">{t("Nichts gefunden.", "Nothing found.")}</li>}
       </ul>
-      {list.length > limit && <button className={BTN} onClick={() => setLimit((l) => l + 120)}>{t("Mehr anzeigen", "Show more")} ({list.length - limit})</button>}
 
-      <div className="card-face relative grid gap-2 rounded-2xl px-4 py-3 text-sm sm:grid-cols-[1fr_10rem_12rem_auto]">
+      <div className="card-face relative grid gap-2 rounded-2xl px-4 py-3 text-sm sm:grid-cols-[1fr_10rem_14rem_auto]">
         <input className={INPUT} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t("Eigenes Material / Item …", "Own material / item …")} />
         <input className={INPUT} value={newId} onChange={(e) => setNewId(e.target.value.replace(/\D/g, ""))} placeholder={t("Item-ID (optional)", "Item ID (optional)")} inputMode="numeric" />
-        <select className={INPUT} value={newCat} onChange={(e) => setNewCat(e.target.value as CatalogCategory)}>{CATEGORIES.map((c) => <option key={c} value={c}>{categoryName(c, t)}</option>)}</select>
-        <button className={BTN} disabled={!newName.trim() || catalog.some((c) => normName(c.name) === normName(newName) && (!newId || c.itemId === newId))} onClick={() => {
-          const e: CatalogEntry = { key: `custom:${uid()}`, name: newName.trim(), itemId: newId || undefined, category: newCat, recipeKeys: [], bound: null, custom: true };
-          update((s) => ({ ...s, catalogExtra: [...s.catalogExtra, e] }));
-          setNewName(""); setNewId(""); setQ(e.name);
+        <select className={INPUT} value={newGroup} onChange={(e) => setNewGroup(e.target.value as PriceGroup)}>
+          <optgroup label={t("Rohmaterialien", "Raw materials")}>{MATERIAL_GROUPS.map((g) => <option key={g} value={g}>{names[g]}</option>)}</optgroup>
+          <optgroup label={t("Waffen & Ausrüstung", "Weapons & gear")}>{GEAR_GROUPS.map((g) => <option key={g} value={g}>{names[g]}</option>)}</optgroup>
+        </select>
+        <button className={BTN} disabled={!newName.trim() || all.some((c) => normName(c.name) === normName(newName) && (!newId || c.itemId === newId))} onClick={() => {
+          const gear = (GEAR_GROUPS as readonly string[]).includes(newGroup);
+          const e: CatalogEntry = { key: `custom:${uid()}`, name: newName.trim(), itemId: newId || undefined, category: gear ? "other" : "raw", group: newGroup, recipeKeys: [], bound: null, custom: true };
+          update((st) => ({ ...st, catalogExtra: [...st.catalogExtra, e] }));
+          setArea(gear ? "gear" : "materials"); setGroup(""); setNewName(""); setNewId(""); setQ(e.name);
         }}>{t("Zum Katalog hinzufügen", "Add to catalogue")}</button>
       </div>
-      <p className="text-xs text-zinc-500">{t("Der Katalog wird aus allen Rezepten, Zutaten und Transfer-Gegenständen gebaut und wächst mit jedem Import. Ein Preis entsteht nur, wenn du „Preis hinzufügen“ klickst. Bestand ist getrennt von den Preisen.",
-        "The catalogue is built from all recipes, ingredients and transfer items and grows with every import. A price is only created when you click “Add price”. Stock is kept apart from prices.")}</p>
+      <p className="text-xs text-zinc-500">{t("Der Katalog wird aus allen Rezepten, Zutaten und Transfer-Gegenständen gebaut und wächst mit jedem Import. Ein Preis entsteht nur, wenn du „Preis hinzufügen“ klickst. Preise gelten für deinen Server. Bestand ist getrennt von den Preisen.",
+        "The catalogue is built from all recipes, ingredients and transfer items and grows with every import. A price is only created when you click “Add price”. Prices apply to your server. Stock is kept apart from prices.")}</p>
     </div>
   );
 }
 
-function CatalogRow({ e, state, server, update, onPrice }: { e: CatalogEntry; state: CraftState; server: string; update: Update; onPrice: (x: PriceTarget) => void }) {
+function CatalogRow({ e, state, server, update, onPrice }: { e: CatalogEntry & { area: PriceArea; group: PriceGroup }; state: CraftState; server: string; update: Update; onPrice: (x: PriceTarget) => void }) {
   const t = useT();
   const range = useRange();
   const mine = state.prices.find((x) => (x.server ?? "").toLowerCase() === server.toLowerCase() && findPrice({ prices: [x] }, e));
   const stock = state.inventory[itemKey(e)];
+  const icon = SHOW_ITEM_ICONS ? craftIcon(e) : undefined;
+  const isTarget = e.key.startsWith("recipe:") || e.key.startsWith("combo:");
   return (
-    <li className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-3 py-2 text-xs">
+    <li className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl py-1.5 pl-2 pr-3 text-xs" style={{ boxShadow: `inset 3px 0 0 ${GROUP_COLOR[e.group]}` }}>
+      <ItemIcon src={icon} color={GROUP_COLOR[e.group]} />
       <span className="min-w-0 text-sm text-[#efe6cc]/90">{e.name}</span>
-      <span className="text-zinc-500">{categoryName(e.category, t)}{e.faction ? ` · ${e.faction}` : ""}{e.itemId ? ` · #${e.itemId}` : ""}{e.bound === true ? ` · ${t("gebunden", "bound")}` : ""}{e.custom ? ` · ${t("eigener Eintrag", "own entry")}` : ""}</span>
+      <span className="text-zinc-500">{e.itemId ? `#${e.itemId}` : t("ohne Item-ID", "no item ID")}{e.bound === true ? ` · ${t("gebunden", "bound")}` : ""}
+        {e.area === "gear" ? ` · ${isTarget ? t("Rezeptziel", "recipe target") : t("Zwischenstufe", "intermediate")}` : ""}{e.custom ? ` · ${t("eigener Eintrag", "own entry")}` : ""}</span>
       <span className="ml-auto flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1 text-zinc-500">{t("Bestand", "Stock")}
-          <input className={`${INPUT} w-16 text-right text-xs`} inputMode="numeric" value={stock ?? ""} placeholder="–"
-            onChange={(ev) => { const v = ev.target.value.replace(/\D/g, ""); update((s) => { const inv = { ...s.inventory }; if (v === "") delete inv[itemKey(e)]; else inv[itemKey(e)] = Number(v); return { ...s, inventory: inv }; }); }} />
-        </label>
+        {e.area === "materials" && (
+          <label className="flex items-center gap-1 text-zinc-500">{t("Bestand", "Stock")}
+            <input className={`${INPUT} w-16 text-right text-xs`} inputMode="numeric" value={stock ?? ""} placeholder="–"
+              onChange={(ev) => { const v = ev.target.value.replace(/\D/g, ""); update((s) => { const inv = { ...s.inventory }; if (v === "") delete inv[itemKey(e)]; else inv[itemKey(e)] = Number(v); return { ...s, inventory: inv }; }); }} />
+          </label>
+        )}
         {mine ? <>
           <span className="text-[#efe6cc]/90">{range(mine.low, mine.high) ?? range(mine.ref, mine.ref)}</span>
           {mine.updated && <span className="text-zinc-500">{new Date(mine.updated).toLocaleDateString()}</span>}
@@ -681,6 +695,19 @@ function CatalogRow({ e, state, server, update, onPrice }: { e: CatalogEntry; st
         </>}
       </span>
     </li>
+  );
+}
+
+/** Small item icon; a tinted empty frame in the group colour while the original icon is missing. */
+function ItemIcon({ src, color }: { src?: string; color: string }) {
+  const [failed, setFailed] = useState<string>();
+  return (
+    <span aria-hidden className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md bg-[radial-gradient(circle_at_50%_40%,#1f3a66_0%,#111a2b_60%,#0a0d14_100%)] ring-1 ring-white/10">
+      {src && failed !== src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-contain p-[2px]" onError={() => setFailed(src)} />
+      ) : <span className="absolute inset-[30%] rounded-full opacity-60" style={{ background: color }} />}
+    </span>
   );
 }
 

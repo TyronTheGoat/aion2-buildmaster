@@ -10,6 +10,8 @@ const root = path.resolve(import.meta.dirname, "..");
 import sharp from "sharp";
 let iconFiles = {};
 try { iconFiles = JSON.parse(readFileSync(path.join(root, "data/icon-files.json"), "utf8")); } catch { /* no download imported */ }
+// crafting icons (item ID → /item-icons/craft/<file>), embedded under their file name
+try { for (const local of Object.values(JSON.parse(readFileSync(path.join(root, "data/craft-icon-files.json"), "utf8")))) iconFiles[local.split("/").pop()] = local; } catch { /* none yet */ }
 const shrunk = new Map();
 const icons = {};
 async function shrink(local) {

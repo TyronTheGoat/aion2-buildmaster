@@ -218,3 +218,23 @@ describe("stored data from Phase 1 (version 1)", () => {
     expect(migrate(s)).toEqual(s);
   });
 });
+
+describe("price page groups", () => {
+  it("materials by kind, gear by slot, one entry per item for the character's faction", async () => {
+    const { entriesFor } = await import("../crafting/catalog-groups");
+    const e = entriesFor(buildCatalog(data), "Asmodian");
+    const g = (n: string) => e.find((x) => x.name === n)!;
+    expect(g("Pure Orichalcum Ore").group).toBe("ore");
+    expect(g("Fine Sapphire Gemstone").group).toBe("gem");
+    expect(g("Yggdrasil Log").group).toBe("wood");
+    expect(g("Odyle").group).toBe("odyle");
+    expect(g("Lesser Dragon Scale Hardener (Bound)").group).toBe("refine");
+    expect(g("Enhanced Thick Balaur Scale").group).toBe("balaur");
+    expect(g("Expert’s Splendent Orichalcum Guard")).toMatchObject({ area: "gear", group: "guard" });
+    expect(g("Artisan's Splendent Sapphire Ring")).toMatchObject({ area: "gear", group: "jewelry" });
+    expect(g("Star Dragon Lord Orb")).toMatchObject({ area: "gear", group: "weapon" });
+    expect(e.filter((x) => x.name === "Magic Crystal")).toHaveLength(1);
+    expect(e.some((x) => /white dragon lord/i.test(x.name))).toBe(false);
+    expect(e.some((x) => /guaranteed alternative/i.test(x.name))).toBe(false);
+  });
+});

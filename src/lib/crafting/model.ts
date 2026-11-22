@@ -110,6 +110,8 @@ export interface CatalogEntry extends ItemRef {
   recipeKeys: string[];
   bound: boolean | null;
   custom?: boolean;
+  /** group on the price page chosen by the player for an own entry */
+  group?: string;
 }
 export type CatalogCategory = "raw" | "processed" | "intermediate" | "weapon" | "guard" | "gloves" | "ring" | "jewelry" | "armor" | "transfer" | "other";
 
