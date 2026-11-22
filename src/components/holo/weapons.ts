@@ -57,8 +57,8 @@ export const LOADOUTS: Record<WeaponKind, Loadout> = {
   bow: { main: "bow", hold: { socket: "hand", side: "L", dir: [0.05, 1, 0.04], face: [0, 0, 1], scale: 1 }, intro: "bow_aim_focus" },
   spellbook: { main: "spellbook", hold: { socket: "float", side: "L", dir: [0, 0.82, 0.57], face: [0, 0.57, 0.82], scale: 0.7, offset: [0.06, 0.16, 0.12] }, intro: "spellbook_awakening" },
   orb: {
-    main: "orb", hold: { socket: "float", side: "R", dir: [0, 1, 0], face: [0, 0, 1], scale: 0.62, offset: [0.05, 0.03, 0.12] },
-    second: { hold: { socket: "float", side: "L", dir: [0, 1, 0], face: [0, 0, 1], scale: 0.62, offset: [0.05, 0.03, 0.12] }, introOnly: true },
+    main: "orb", hold: { socket: "float", side: "R", dir: [0, 1, 0], face: [0, 0, 1], scale: 1, offset: [0.07, -0.09, 0.1] },
+    second: { hold: { socket: "float", side: "L", dir: [0, 1, 0], face: [0, 0, 1], scale: 1, offset: [0.07, -0.09, 0.1] }, introOnly: true },
     intro: "orb_dual_summon",
   },
   mace: {
@@ -83,6 +83,9 @@ export const holdOffset = (h: Hold) => new THREE.Vector3((h.offset?.[0] ?? 0) * 
 export interface WeaponPart { geometry: THREE.BufferGeometry; strength: number }
 export interface WeaponModel { id: WeaponModelId; parts: WeaponPart[]; box: THREE.Box3 }
 
+/** models that replace the pack file: the orb is a solid crystal in a claw cradle (scripts/make-orb.mjs) */
+const FILES: Partial<Record<WeaponModelId, string>> = { orb: "bildmaster_orb_solid_v3.glb" };
+
 const cache = new Map<WeaponModelId, Promise<WeaponModel | null>>();
 
 /** Loads one weapon GLB as plain geometry per material group; null when it is not installed. */
@@ -96,7 +99,7 @@ export function loadWeapon(id: WeaponModelId): Promise<WeaponModel | null> {
 }
 
 async function load(id: WeaponModelId): Promise<WeaponModel | null> {
-  const buf = await fetchAsset(`weapons/bildmaster_${id}_hologram_v2.glb`);
+  const buf = await fetchAsset(`weapons/${FILES[id] ?? `bildmaster_${id}_hologram_v2.glb`}`);
   if (!buf) return null;
   const gltf = await new GLTFLoader().parseAsync(buf, "");
   gltf.scene.updateMatrixWorld(true);

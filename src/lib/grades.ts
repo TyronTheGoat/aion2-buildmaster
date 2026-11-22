@@ -27,12 +27,12 @@ export function gradeRank(g: Grade): number {
 }
 
 export const GRADE_COLORS: Record<Grade, string> = {
-  BiS: "bg-amber-400 text-black",
-  "S+": "bg-fuchsia-500 text-white",
-  S: "bg-violet-500 text-white",
-  A: "bg-sky-500 text-white",
-  B: "bg-emerald-500 text-white",
-  C: "bg-zinc-500 text-white",
-  D: "bg-red-600 text-white",
-  "?": "bg-zinc-700 text-zinc-200",
+  BiS: "bg-[#ffd54a] text-black",
+  "S+": "bg-[#7dff4d] text-black",
+  S: "bg-[#21d96b] text-black",
+  A: "bg-[#ff9a2e] text-black",
+  B: "bg-[#ff6a3d] text-white",
+  C: "bg-[#ff3b3b] text-white",
+  D: "bg-[#b81f2d] text-white",
+  "?": "bg-[#7a8594] text-white",
 };

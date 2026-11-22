@@ -104,7 +104,9 @@ export async function loadBackdrop(tall: boolean): Promise<Backdrop | null> {
     },
     update(t, azimuth, polar, zoom, focus) {
       u.uTime.value = t;
-      u.uPan.value.set(-Math.sin(azimuth) * 0.025, (polar - Math.PI / 2) * 0.03);
+      // the painting stays put while the character turns on its platform; only tilting (close-ups) shifts it a little
+      void azimuth;
+      u.uPan.value.set(0, (polar - Math.PI / 2) * 0.03);
       u.uZoom.value = 1.06 + zoom * 0.06;
       dim += ((focus ? 0.55 : 1) - dim) * 0.05;
       u.uDim.value = dim;

@@ -2,7 +2,8 @@
 //   node scripts/import-assets.mjs <pack> [<pack> …]
 //
 // Recognised content (searched anywhere below each folder):
-//   bildmaster_{male,female}_v2_WEB.glb       → public/models/   character models     (git-ignored)
+//   bildmaster_{male,female}_v{2,3}_WEB.glb   → public/models/   character models     (git-ignored)
+//   (raw Meshy exports go through scripts/optimize-character.mjs first)
 //   forest_dungeon_{primary,mobile}.webp     → public/hero/     hero backgrounds     (git-ignored)
 //   hologram_{male,female}_detailed_ref.webp  → public/hero/     texture references   (git-ignored)
 //   bildmaster_*_hologram_v2.glb              → public/weapons/  class weapon models  (committed: original procedural designs)
@@ -18,7 +19,7 @@ const packs = process.argv.slice(2);
 if (!packs.length) { console.error("Bitte Ordner angeben: node scripts/import-assets.mjs <paket-ordner> [...]"); process.exit(1); }
 
 const RULES = [
-  [/^bildmaster_(male|female)_v2_WEB\.glb$/, "public/models"],
+  [/^bildmaster_(male|female)_v[23]_WEB\.glb$/, "public/models"],
   [/^forest_dungeon_(primary|mobile)\.webp$/, "public/hero"],
   [/^hologram_(male|female)_detailed_ref\.webp$/, "public/hero"],
   [/^bildmaster_[a-z_]+_hologram_v2\.glb$/, "public/weapons"],

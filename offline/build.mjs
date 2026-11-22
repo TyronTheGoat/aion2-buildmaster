@@ -40,10 +40,18 @@ const icon = readFileSync(path.join(root, "public/icon.svg"), "utf8");
 // Embed the optional hologram assets (see scripts/import-assets.mjs) that are installed.
 const MIME = { glb: "model/gltf-binary", webp: "image/webp", png: "image/png" };
 const assets = {};
+const installed = (dir, f) => { try { return readdirSync(path.join(root, "public", dir)).includes(f); } catch { return false; } };
+// files the app never loads once their successor is installed (keeps the offline file smaller)
+const superseded = (dir, f) => {
+  const g = f.match(/^bildmaster_(male|female)_v2_WEB\.glb$/)?.[1] ?? f.match(/^hologram_(male|female)_detailed_ref\.webp$/)?.[1];
+  if ((dir === "models" || dir === "hero") && g) return installed("models", `bildmaster_${g}_v3_WEB.glb`);
+  if (dir === "weapons" && f === "bildmaster_orb_hologram_v2.glb") return installed("weapons", "bildmaster_orb_solid_v3.glb");
+  return false;
+};
 for (const dir of ["models", "hero", "weapons", "class-icons"]) {
   let files = [];
   try { files = readdirSync(path.join(root, "public", dir)); } catch { /* not installed */ }
-  for (const f of files) {
+  for (const f of files.filter((x) => !superseded(dir, x))) {
     const mime = MIME[path.extname(f).slice(1)];
     if (mime) assets[`${dir}/${f}`] = `data:${mime};base64,${readFileSync(path.join(root, "public", dir, f)).toString("base64")}`;
   }

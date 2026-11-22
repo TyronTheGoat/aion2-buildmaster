@@ -37,16 +37,16 @@ export const BODY_SLOTS: SlotKind[] = [
 ];
 
 /**
- * Aura per grade: a clearly different hue per tier, and a strength level that drives
- * brightness, rim width, shell thickness and energy flow (BiS strongest, D faint).
- * Unrated items get no aura.
+ * Aura per grade (Bildmaster palette): warm colours and greens, because blue, cyan and violet would
+ * disappear on the cyan hologram body. The level drives intensity (BiS 100 % … D 25 %), rim width,
+ * shell thickness and energy flow; BiS and S+ also pulse and sparkle. Unrated items glow neutral grey.
  */
 export const GRADE_HEX: Record<Grade, number | null> = {
-  BiS: 0xffc23a, "S+": 0xff3ccf, S: 0x9d5cff, A: 0x3cff6e,
-  B: 0xd8f23a, C: 0xa7b0bd, D: 0xff3a24, "?": null,
+  BiS: 0xffd54a, "S+": 0x7dff4d, S: 0x21d96b, A: 0xff9a2e,
+  B: 0xff6a3d, C: 0xff3b3b, D: 0xb81f2d, "?": 0x7a8594,
 };
 export const GRADE_LEVEL: Record<Grade, number> = {
-  BiS: 1, "S+": 0.84, S: 0.7, A: 0.5, B: 0.36, C: 0.24, D: 0.14, "?": 0,
+  BiS: 1, "S+": 0.9, S: 0.75, A: 0.6, B: 0.45, C: 0.35, D: 0.25, "?": 0.12,
 };
 export const LEGEND_GRADES: Grade[] = ["BiS", "S+", "S", "A", "B", "C", "D"];
 export const hexCss = (g: Grade) => `#${(GRADE_HEX[g] ?? 0x5b6b80).toString(16).padStart(6, "0")}`;

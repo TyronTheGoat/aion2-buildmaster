@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 import type { Grade } from "@/lib/types";
 
 export const GRADE_RING: Record<Grade, string> = {
-  BiS: "ring-amber-400", "S+": "ring-fuchsia-500", S: "ring-violet-500", A: "ring-sky-500",
-  B: "ring-emerald-500", C: "ring-zinc-500", D: "ring-red-600", "?": "ring-zinc-700",
+  BiS: "ring-[#ffd54a]", "S+": "ring-[#7dff4d]", S: "ring-[#21d96b]", A: "ring-[#ff9a2e]",
+  B: "ring-[#ff6a3d]", C: "ring-[#ff3b3b]", D: "ring-[#b81f2d]", "?": "ring-[#7a8594]",
 };
 
 /** Game icon from kisk/NC CDN with a text fallback when offline or missing. */

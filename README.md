@@ -40,7 +40,14 @@ jeden Slot bewertet, die BiS-Linien pro Slot zeigt und einen priorisierten Upgra
 - Modelle, Hintergründe und Referenzen sind aus Bildern abgeleitet bzw. Bilder, deren Rechte nicht geklärt sind:
   `public/models/` und `public/hero/` sind per .gitignore nicht im öffentlichen Repo. Die Waffen-GLBs sind eigene prozedurale
   Entwürfe und liegen im Repo. `npm run offline` bettet alles Installierte in die Offline-Datei ein.
-- Die Detail-Referenz wird beim Laden pro Körperteil auf das Modell projiziert (Gelenke werden auf Modell und Bild gemessen);
+- Meshy-Modelle (v3, detailreich, ohne Rig): `node scripts/optimize-character.mjs <male|female> <Meshy_AI_model.glb>`
+  stellt die Füße auf y = 0, skaliert auf Körpergröße, reduziert auf ca. 60k Dreiecke und die Textur auf 1024 px WebP.
+  v3 hat Vorrang vor v2; ihr Hell-Dunkel wird im Shader zum Hologramm (Farbton fällt weg).
+- Der Orb ist ein eigenes, festes Modell (Kristall in Klauenfassung): `node scripts/make-orb.mjs`.
+- Auren: Palette und Stärke je Rang in `src/lib/hologram.ts` (BiS Gold … D Crimson, ungeprüft Grau); Waffe am stärksten,
+  Rüstung dezenter, Schmuck kompakter, BiS/S+ pulsieren und funkeln.
+- Übersicht: der Charakter dreht sich auf der gemalten Plattform (kein Kippen/Zoomen); Nahansichten dürfen beides.
+- Die Detail-Referenz (nur für v2) wird beim Laden pro Körperteil auf das Modell projiziert (Gelenke werden auf Modell und Bild gemessen);
   die Rückseite bekommt einen sauberen Scan statt der gespiegelten Vorderseite.
 - Hintergrund als 2.5D-Ebene nach dem Bloom: Parallaxe, zwei Nebelschichten, Vignette mit Lichtfokus, fallende Blätter.
 - Klassenwaffen und Intros: `src/components/holo/weapons.ts` (Loadout und Halte-Pose je Klasse),

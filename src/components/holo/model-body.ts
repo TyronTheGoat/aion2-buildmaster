@@ -15,12 +15,18 @@ import { fetchAsset, loadImage } from "./assets";
 
 type V = [number, number, number];
 
-const FILE: Record<Gender, string> = { m: "bildmaster_male_v2_WEB.glb", f: "bildmaster_female_v2_WEB.glb" };
+/** newest first: v3 = detailed Meshy models with a natural colour texture, v2 = the earlier hologram-textured models */
+const FILES: Record<Gender, { file: string; natural: boolean }[]> = {
+  m: [{ file: "bildmaster_male_v3_WEB.glb", natural: true }, { file: "bildmaster_male_v2_WEB.glb", natural: false }],
+  f: [{ file: "bildmaster_female_v3_WEB.glb", natural: true }, { file: "bildmaster_female_v2_WEB.glb", natural: false }],
+};
 const REF: Record<Gender, string> = { m: "hologram_male_detailed_ref.webp", f: "hologram_female_detailed_ref.webp" };
 
 export interface ModelBody {
   geometry: THREE.BufferGeometry;
   texture: THREE.Texture | null;
+  /** the texture has natural colours (skin, cloth); the shader turns its light and shade into hologram light */
+  natural: boolean;
   /** detailed front reference projected onto the mesh (uvRef attribute), if installed */
   reference: THREE.Texture | null;
   bones: BoneDef[];
@@ -49,7 +55,11 @@ export function loadModelBody(g: Gender): Promise<ModelBody | null> {
 }
 
 async function load(g: Gender): Promise<ModelBody | null> {
-  const buf = await fetchAsset(`models/${FILE[g]}`);
+  let buf: ArrayBuffer | null = null, natural = false;
+  for (const f of FILES[g]) {
+    buf = await fetchAsset(`models/${f.file}`);
+    if (buf) { natural = f.natural; break; }
+  }
   if (!buf) return null;
   const gltf = await new GLTFLoader().parseAsync(buf, "");
   let mesh: THREE.Mesh | undefined;
@@ -61,6 +71,9 @@ async function load(g: Gender): Promise<ModelBody | null> {
   const mat = mesh.material as THREE.MeshStandardMaterial;
   const texture = mat.map ?? null;
   const body = analyse(geo, texture);
+  body.natural = natural;
+  // the painted reference only adds detail to the simpler v2 meshes; the v3 models carry their own
+  if (natural) return body;
   const img = await loadImage(`hero/${REF[g]}`);
   if (img && projectReference(body, img)) {
     const tex = new THREE.Texture(img);
@@ -107,7 +120,7 @@ function smoothNormals(geo: THREE.BufferGeometry) {
  * or the opaque pixels of a front image (flat: z = 0). Both give the same bone layout, which is what
  * lets a reference image be projected onto the mesh.
  */
-function measure(P: Float32Array, flat = false) {
+export function measure(P: Float32Array, flat = false) {
   const n = P.length / 3;
   let H = 0;
   for (let i = 0; i < n; i++) H = Math.max(H, P[i * 3 + 1]);
@@ -276,7 +289,7 @@ function analyse(geo: THREE.BufferGeometry, texture: THREE.Texture | null): Mode
   }
   geo.setAttribute("aSlot", new THREE.BufferAttribute(slot, 1));
   geo.computeBoundingSphere();
-  return { geometry: geo, texture, reference: null, bones, joint: m.joint, armDir: m.armDir, height: m.H, fit: m.fit, measure: m };
+  return { geometry: geo, texture, natural: false, reference: null, bones, joint: m.joint, armDir: m.armDir, height: m.H, fit: m.fit, measure: m };
 }
 
 // ---- reference projection ----------------------------------------------------------

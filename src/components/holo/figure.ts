@@ -70,7 +70,7 @@ void main() {
 
 const MODEL_FRAG = /* glsl */ `
 uniform vec3 uColor; uniform float uTime; uniform float uReveal; uniform sampler2D uMap; uniform float uTexGain;
-uniform sampler2D uRef; uniform float uRefOn;
+uniform sampler2D uRef; uniform float uRefOn; uniform float uNatural;
 varying vec2 vUv; varying vec2 vUvRef; varying float vFront;
 ${VARY}
 void main() {
@@ -78,6 +78,16 @@ void main() {
   vec3 v = normalize(cameraPosition - vW);
   float fres = pow(1.0 - abs(dot(normalize(vN), v)), 2.6);
   vec3 tex = texture2D(uMap, vUv).rgb;
+  if (uNatural > 0.5) {
+    // natural colours → hologram: keep the light and shade (face, armour seams, cloth folds), drop the hue
+    float l = dot(tex, vec3(0.299, 0.587, 0.114));
+    // the bodysuit is mostly light grey: stretch the upper range so seams, folds and the face read as detail
+    l = smoothstep(0.35, 0.97, l);
+    float k = vW.y * 88.0;
+    float fw = max(fwidth(k), 1e-4);
+    float line = (1.0 - min(abs(fract(k) - 0.5) / fw, 1.0)) * clamp(1.6 - 2.0 * fw, 0.0, 1.0);
+    tex = mix(vec3(0.03, 0.1, 0.2), vec3(0.3, 0.68, 0.95), l) * (0.8 + 0.3 * line);
+  }
   if (uRefOn > 0.5) {
     // detailed reference on the front; the back (a front projection would show the face there) gets a clean scan
     vec4 ref = texture2D(uRef, vUvRef);
@@ -94,6 +104,7 @@ void main() {
   float flicker = 0.97 + 0.03 * sin(uTime * 29.0 + vW.y * 7.0);
   vec3 rimCol = mix(uColor, vAura * (0.6 + 0.5 * vLevel), 0.85 * vLevel * vLevel);
   vec3 c = tex * uTexGain * (1.0 + 0.5 * band) + uColor * (0.03 + 0.1 * band) + rimCol * 0.6 * fres;
+  c += vAura * vLevel * vLevel * 0.1 * (0.5 + 0.5 * fres);
   c += vec3(0.55, 0.85, 1.0) * edge * 1.2;
   gl_FragColor = vec4(c * vFocus * flicker, 1.0);
 }`;
@@ -127,6 +138,8 @@ void main() {
   // the rim of a rated part takes on its status colour, the inside stays hologram blue
   vec3 rimCol = mix(uColor, vAura * (0.6 + 0.5 * vLevel), 0.85 * vLevel * vLevel);
   vec3 c = uColor * (0.1 + 0.32 * line + 0.18 * band) + rimCol * 1.05 * fres;
+  // inner glow: the part itself is lit in its status colour, the outer shell (AURA_FRAG) adds the halo
+  c += vAura * vLevel * (0.1 + 0.1 * line) * (0.4 + 0.6 * vLevel);
   c += vec3(0.55, 0.85, 1.0) * edge * 1.2;
   gl_FragColor = vec4(c * vFocus * uStrength * flicker, 1.0);
 }`;
@@ -144,17 +157,32 @@ void main() {
   float speed = 0.5 + 3.2 * vLevel;
   float flow = 0.5 + 0.5 * sin(vW.y * 34.0 - uTime * speed * 2.5 + sin(vW.x * 18.0 + uTime * 0.7) * 1.3);
   float streak = smoothstep(0.8, 1.0, flow) * smoothstep(0.4, 0.62, vLevel);
-  float breathe = 0.84 + 0.16 * sin(uTime * (1.1 + 1.6 * vLevel));
+  // BiS and S+ pulse noticeably, the others only breathe
+  float amp = 0.12 + 0.2 * smoothstep(0.85, 0.9, vLevel);
+  float breathe = 1.0 - amp + amp * sin(uTime * (1.1 + 1.6 * vLevel));
   float fill = smoothstep(0.92, 1.0, vLevel) * 0.15 + smoothstep(0.62, 0.75, vLevel) * 0.05;
   float strength = 0.5 + 1.4 * vLevel * vLevel;
   float spark = 0.0;
-  if (vLevel > 0.95) spark = step(0.993, hash(floor(vW * 85.0) + floor(uTime * 5.0))) * 2.2;
+  if (vLevel > 0.85) spark = step(vLevel > 0.95 ? 0.993 : 0.997, hash(floor(vW * 85.0) + floor(uTime * 5.0))) * 2.2;
   vec3 c = vAura * (rim * (0.65 + 0.7 * streak) + fill + streak * 0.3 * vLevel) * strength * breathe;
-  c += vec3(1.0, 0.95, 0.8) * spark;
+  // thin bright rim right at the edge keeps warm colours readable against the blue body
+  c += mix(vAura, vec3(1.0), 0.6) * pow(1.0 - ndv, 7.0) * 0.45 * vLevel;
+  c += mix(vec3(1.0, 0.96, 0.76), vAura, 0.3) * spark;
   gl_FragColor = vec4(c * vFocus, 1.0);
 }`;
 
 type V3 = [number, number, number];
+
+/** small pieces get a compact aura shell */
+const SMALL = new Set(["necklace", "earring", "ring", "bracelet", "gloves", "belt"]);
+/** aura strength per kind of piece: the weapon leads, armour stays more subtle */
+const auraWeight = (id: string) => {
+  const slot = id.split(":")[0];
+  if (slot === "weapon") return 1.2;
+  if (slot === "offhand") return 1;
+  if (SMALL.has(slot)) return 0.95;
+  return 0.8;
+};
 
 export interface Figure {
   root: THREE.Group;
@@ -268,6 +296,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
     uBreath: { value: 0 }, uTexGain: { value: 1.0 },
     uMap: { value: model?.texture ?? null },
     uRef: { value: model?.reference ?? null }, uRefOn: { value: model?.reference ? 1 : 0 },
+    uNatural: { value: model?.natural ? 1 : 0 },
     uChest: { value: new THREE.Vector3(...(model ? [model.fit.chest[0], model.fit.chest[1], model.joint.chest[0]] : [0, 0, 0])) },
   };
   const modelMat = (frag: string, inflate: number) => {
@@ -319,7 +348,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
     }
     if (!gearAura[id]) {
       gearAura[id] = new THREE.ShaderMaterial({
-        uniforms: { ...shared, uAuraColor: u.uAuraColor, uLevel: u.uLevel, uFocus: u.uFocus, uInflate: { value: 1 } },
+        uniforms: { ...shared, uAuraColor: u.uAuraColor, uLevel: u.uLevel, uFocus: u.uFocus, uInflate: { value: SMALL.has(id.split(":")[0]) ? 0.5 : 1 } },
         vertexShader: GEAR_VERT, fragmentShader: AURA_FRAG,
         transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       });
@@ -812,8 +841,9 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
     levelTo[id] = hex === null ? 0 : lvl;
     if (hex === null) return;
     const si = (SKIN_SLOTS as readonly string[]).indexOf(id);
-    if (si >= 0) slotUniforms.uSlotColor.value[si].setHex(hex);
-    if (gearU[id]) gearU[id].uAuraColor.value.setHex(hex);
+    const w = auraWeight(id);
+    if (si >= 0) slotUniforms.uSlotColor.value[si].setHex(hex).multiplyScalar(w);
+    if (gearU[id]) gearU[id].uAuraColor.value.setHex(hex).multiplyScalar(w);
     if (id === WID) weaponColor.setHex(hex);
   }
 

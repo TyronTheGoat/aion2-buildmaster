@@ -127,6 +127,15 @@ export default function HoloScene(props: HoloSceneProps) {
     controls.enabled = false;
     const overviewTarget = hero ? HERO_TARGET : OVERVIEW_TARGET;
     const overviewOffset = hero ? HERO_OFFSET : OVERVIEW_OFFSET;
+    // overview: the character stands on the painted platform, so dragging only turns around it
+    // (no tilt, no zoom); close-ups of a part may tilt and zoom freely
+    const overviewPhi = new THREE.Spherical().setFromVector3(overviewOffset).phi;
+    const pinView = (pinned: boolean) => {
+      controls.minPolarAngle = pinned ? overviewPhi : 0;
+      controls.maxPolarAngle = pinned ? overviewPhi : Math.PI * 0.62;
+      controls.enableZoom = !pinned;
+    };
+    pinView(true);
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
@@ -187,10 +196,12 @@ export default function HoloScene(props: HoloSceneProps) {
         // on phones the panel covers the lower half, so step back a little
         const dist = f.dist * (latest.current.panel === "bottom" ? 1.35 : 1);
         startTween(() => marker.getWorldPosition(new THREE.Vector3()), dir.multiplyScalar(dist), 1.5);
+        pinView(false);
         controls.minDistance = Math.min(0.35, f.dist * 0.5);
       } else {
         focusMarker = undefined;
         startTween(() => overviewTarget.clone(), overviewOffset.clone(), 1.3);
+        pinView(true);
         controls.minDistance = 0.35;
       }
       fig.setFocus(id);
