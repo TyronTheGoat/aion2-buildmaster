@@ -4,12 +4,12 @@ import type { Character } from "@/lib/types";
 import { parseKiskGear } from "@/lib/kisk/parse";
 import { textToLines } from "@/lib/kisk/html-to-text";
 import { CharacterView } from "./CharacterView";
-import { GradeBadge } from "./GradeBadge";
 import { GRADE_HEX_CSS } from "@/lib/grades";
 import { Sheet } from "./ui";
-import { ClassIcon } from "./ClassIcon";
 import { ItemCatalog } from "./ItemCatalog";
-import { GearDeck } from "./deck/GearDeck";
+import { GearDeck, deckOf } from "./deck/GearDeck";
+import { Filler, SHOW_ITEM_ICONS } from "./deck/Card";
+import { iconFor } from "@/lib/knowledge/item-catalog";
 import { charKey, parseKiskLink, useCharacters, type SavedChar } from "./store";
 
 function useHashRoute(): [string | undefined, (k?: string) => void] {
@@ -42,6 +42,8 @@ export function BuildMasterApp() {
   const { chars, upsert, remove } = useCharacters();
   const [route, go] = useHashRoute();
   const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useState("");
+  const shown = chars.filter((c) => !query || c.name.toLowerCase().includes(query.trim().toLowerCase()));
   const selected = chars.find((c) => charKey(c) === route);
 
   if (route === "katalog") return <ItemCatalog onBack={() => go()} />;
@@ -54,45 +56,75 @@ export function BuildMasterApp() {
   return (
     <div className="space-y-6">
       <div className="bm-backdrop pointer-events-none fixed inset-0 -z-10" aria-hidden />
-      <div className="flex items-end justify-between pt-8">
+      {/* title, search, new character */}
+      <div className="flex flex-col gap-3 pt-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#beac80]">BuildMaster</div>
-          <h1 className="mt-1 text-4xl font-semibold tracking-tight text-[#f4eed7]">Charaktere</h1>
-          <p className="mt-1 text-sm text-[#efe6cc]/50">Wähle deinen Charakter.</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-[#f4eed7]">Charakterauswahl</h1>
+          <p className="mt-1 text-sm text-[#efe6cc]/50">Charakter öffnen oder neuen Charakter anlegen</p>
         </div>
-        <button onClick={() => setAdding(true)} aria-label="Charakter hinzufügen"
-          className="flex h-12 w-12 items-center justify-center rounded-full border border-[#f4eed7]/30 bg-gradient-to-b from-[#e6d5a3] to-[#a8915e] text-3xl font-light leading-none text-[#15171c] shadow-[0_0_26px_rgba(217,197,143,0.35)] transition hover:shadow-[0_0_34px_rgba(217,197,143,0.55)] active:scale-95">+</button>
+        <div className="flex gap-2 md:w-[520px]">
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Suche: Charaktername …" aria-label="Charakter suchen"
+            className="min-w-0 flex-1 rounded-xl border border-[#d9c58f]/20 bg-white/[0.03] px-3.5 py-2.5 text-base text-[#f4eed7] outline-none placeholder:text-zinc-500 focus:border-[#d9c58f]/50" />
+          <button onClick={() => setAdding(true)}
+            className="shrink-0 rounded-xl border border-[#d9c58f]/30 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-[#efe6cc] hover:border-[#d9c58f]/60">+ Neuer Charakter</button>
+        </div>
       </div>
 
-      <ul className="space-y-4">
-        {chars.map((c) => {
+      {/* character cards + "new character" card */}
+      <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {shown.map((c) => {
           const s = c.snapshot;
           const grade = s?.gearGrade ?? "?";
+          const preview = s ? deckOf(s).slice(0, 6) : [];
           return (
             <li key={charKey(c)}>
               <button onClick={() => go(charKey(c))}
                 style={{ boxShadow: `0 0 0 1px ${GRADE_HEX_CSS[grade]}40, 0 0 28px -6px ${GRADE_HEX_CSS[grade]}55, 0 18px 40px -18px #000` }}
-                className="card-face group relative flex w-full items-center gap-4 overflow-hidden rounded-[20px] p-4 text-left transition hover:-translate-y-0.5 active:scale-[0.99]">
+                className="card-face group relative flex h-full w-full flex-col gap-4 overflow-hidden rounded-[20px] p-4 text-left transition hover:-translate-y-0.5 active:scale-[0.99]">
                 <span aria-hidden className="pointer-events-none absolute inset-[5px] rounded-[15px] border border-[#d9c58f]/20" />
-                <ClassIcon className={s?.className} grade={grade} size={60} />
-                <div className="relative min-w-0 flex-1">
-                  <div className="text-xl font-semibold text-[#f4eed7]">{c.name}</div>
-                  <div className="truncate text-sm text-[#beac80]/80">
-                    {[s?.className, `${c.server} · ${c.region.toUpperCase()}`].filter(Boolean).join(" · ")}
+                <div className="relative flex items-center gap-4">
+                  <Filler className="h-20 w-20" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xl font-semibold text-[#f4eed7]">{c.name}</div>
+                    <div className="truncate text-sm text-[#beac80]/80">
+                      {[s?.className, s?.race, `${c.server} · ${c.region.toUpperCase()}`].filter(Boolean).join(" · ")}
+                    </div>
+                    <div className="mt-0.5 text-xs text-[#99e4e2]/60">
+                      {[s?.combatPower && `CP ${s.combatPower.toLocaleString("de-DE")}`, s?.gearGrade && `Gear-Rang ${s.gearGrade}`].filter(Boolean).join(" · ") || "Noch keine Daten"}
+                    </div>
                   </div>
-                  {s?.combatPower && <div className="text-xs text-[#99e4e2]/60">{s.combatPower.toLocaleString("de-DE")} Kampfkraft</div>}
                 </div>
-                {s?.gearGrade && <GradeBadge grade={s.gearGrade} size="lg" />}
-                <span className="relative text-[#d9c58f]/50 transition group-hover:translate-x-0.5 group-hover:text-[#d9c58f]">›</span>
+                <div className="relative border-t border-white/[0.07] pt-3">
+                  <div className="mb-2 text-[10px] uppercase tracking-[0.2em] text-zinc-500">Gear-Schnellübersicht</div>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {(preview.length ? preview : Array.from({ length: 6 }, () => undefined)).map((d, i) => {
+                      const icon = d && SHOW_ITEM_ICONS ? iconFor(d.item) : undefined;
+                      return icon ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img key={d!.id} src={icon} alt={d!.label} title={`${d!.label}: ${d!.item.name}`} loading="lazy" referrerPolicy="no-referrer"
+                          className="aspect-square w-full rounded-lg bg-[radial-gradient(circle_at_50%_40%,#1f3a66_0%,#111a2b_70%)] object-contain p-0.5"
+                          style={{ boxShadow: `0 0 0 1px ${GRADE_HEX_CSS[d!.item.grade]}55` }} />
+                      ) : <Filler key={d?.id ?? i} className="aspect-square w-full" />;
+                    })}
+                  </div>
+                </div>
               </button>
             </li>
           );
         })}
+        <li>
+          <button onClick={() => setAdding(true)}
+            className="flex h-full min-h-[200px] w-full flex-col items-center justify-center gap-2 rounded-[20px] border border-dashed border-[#d9c58f]/25 bg-white/[0.02] p-6 text-center hover:border-[#d9c58f]/50">
+            <span className="text-3xl font-light text-[#d9c58f]">+</span>
+            <span className="font-semibold text-[#f4eed7]">Neuen Charakter hinzufügen</span>
+            <span className="text-xs text-zinc-500">kisk.app-Link eingeben oder Seiteninhalt einfügen</span>
+          </button>
+        </li>
       </ul>
+      {query && shown.length === 0 && <p className="text-sm text-zinc-400">Kein Charakter mit „{query}“ gefunden.</p>}
 
-      <button onClick={() => go("katalog")}
-        className="w-full rounded-2xl border border-[#d9c58f]/15 bg-white/[0.02] px-4 py-3 text-sm text-[#efe6cc]/70 hover:border-[#d9c58f]/35">
-        Item-Katalog
+      <button onClick={() => go("katalog")} className="text-sm text-[#efe6cc]/50 underline-offset-4 hover:text-[#efe6cc]/80 hover:underline">
+        Item-Katalog öffnen
       </button>
 
       <AddCharacterSheet open={adding} onClose={() => setAdding(false)}

@@ -50,3 +50,18 @@ export function CardArt({ src, alt, grade = "?" }: { src?: string; alt: string; 
     </div>
   );
 }
+
+/**
+ * Layout phase: character pictures and item icons are neutral placeholders for now.
+ * Set to true to show the original item icons again (data and matching stay unchanged).
+ */
+export const SHOW_ITEM_ICONS = true;
+
+/** Neutral placeholder area (no picture, no decoration). */
+export function Filler({ className = "", label }: { className?: string; label?: string }) {
+  return (
+    <div className={`flex shrink-0 items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/[0.03] text-[10px] uppercase tracking-[0.2em] text-zinc-600 ${className}`}>
+      {label}
+    </div>
+  );
+}

@@ -1,17 +1,18 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Character, Grade, Item, StatLine } from "@/lib/types";
 import { compareIdeal, type MatchState } from "@/lib/compare";
 import { buildPlan } from "@/lib/advisor";
 import { iconFor, localIcon, type CatalogItem, ALL_ITEMS } from "@/lib/knowledge/item-catalog";
 import { PUBLIC_ITEMS, REGION_LABEL, regionStatus } from "@/lib/region";
 import { CATALOG_SLOTS, fitsClass } from "@/lib/slot-map";
-import { GradeBadge } from "./GradeBadge";
 import { ItemIcon, SkillIcon, Sheet, isSkillLine } from "./ui";
 import { usePlanned } from "./plan-store";
 import { craftedBis } from "@/lib/crafted-bis";
 import { statLabel } from "@/lib/stat-names";
-import { Card, CardArt } from "./deck/Card";
+import { Card, CardArt, Filler, SHOW_ITEM_ICONS } from "./deck/Card";
+import { SLOT_LABEL_DE } from "@/lib/knowledge/slots";
+import { GRADE_HEX_CSS } from "@/lib/grades";
 
 type Row = { name: string; have?: StatLine; target?: string; state: MatchState | "extra" };
 
@@ -33,9 +34,15 @@ type Side = "ist" | "soll";
  * Ist vs. Soll for one gear piece as two cards side by side. Both cards list the same rows in the same
  * order and height, so a stat sits at the same height on both. "Noch zu tun" follows in full width.
  */
-export function GearCompare({ char, item, slotId, label, onClose }: {
-  char: Character; item: Item; slotId: string; label: string; onClose: () => void;
+export function GearCompare({ char, item, slotId }: {
+  char: Character; item: Item; slotId: string; label?: string;
 }) {
+  // opening: the Ist card appears first, moves to the left, then the BiS card opens on the right
+  const [stage, setStage] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setStage(1), 220);
+    return () => clearTimeout(t);
+  }, []);
   const charKey = `${char.region}/${char.server}/${char.name}`.toLowerCase();
   const { planned, setPlanned } = usePlanned(charKey);
   const plannedItem = planned[slotId] ? ALL_ITEMS.find((i) => i.key === planned[slotId]) : undefined;
@@ -72,44 +79,47 @@ export function GearCompare({ char, item, slotId, label, onClose }: {
   const section = (side: Side) => (
     <>
       {skills.length > 0 && <RowList title="Fähigkeiten" rows={skills} side={side} skill />}
-      <RowList title="Werte" rows={stats} side={side} craftedName={craftedName} />
+      <RowList title="Werte / Stats" rows={stats} side={side} craftedName={craftedName} />
     </>
   );
 
+  const istInfo = [SLOT_LABEL_DE[item.slot], item.level && `IL ${item.level}`].filter(Boolean).join(" · ");
+  const istSub = [item.enhance !== undefined && `+${item.enhance}`, item.exceed && `Überschreitung ${item.exceed}`, item.rarity].filter(Boolean).join(" · ");
+  const sollItem = target ?? bisCraft;
+  const sollInfo = sollItem ? [SLOT_LABEL_DE[item.slot], sollItem.level && `IL ${sollItem.level}`].filter(Boolean).join(" · ") : SLOT_LABEL_DE[item.slot];
+  const sollSub = sollItem ? [sollItem.source, sollItem.rarity].filter(Boolean).join(" · ") : soll?.meta ?? "";
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <button onClick={onClose} className="rounded-full border border-[#d9c58f]/20 bg-white/[0.03] px-3.5 py-1.5 text-sm text-[#efe6cc]/85 hover:border-[#d9c58f]/40">‹ Alle Karten</button>
-        <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#beac80]">{label}</div>
-      </div>
-
       <div className="grid grid-cols-2 gap-3 sm:gap-5">
         {/* Ist-Stand */}
-        <Card grade={item.grade} className="p-2.5 sm:p-4">
-          <SideHeader title="Ist-Stand" tone="text-[#99e4e2]" />
-          <CardArt src={iconFor(item)} alt={item.name} grade={item.grade} />
-          <ItemTitle name={item.name}
-            meta={<><GradeBadge grade={item.grade} size="sm" />{item.enhance !== undefined && <span className="text-[11px] text-[#beac80]">+{item.enhance}</span>}</>} />
-          {section("ist")}
-        </Card>
+        <div className="transition-transform duration-500 ease-out motion-reduce:transition-none"
+          style={{ transform: stage ? "none" : "translateX(calc(50% + 0.625rem))" }}>
+          <Card grade={item.grade} className="flex h-full flex-col p-3 sm:p-5">
+            <CardHead title="Ist-Stand" rank={item.grade} />
+            <ItemBlock icon={SHOW_ITEM_ICONS ? iconFor(item) : undefined} grade={item.grade} name={item.name} info={istInfo} sub={istSub} />
+            {section("ist")}
+            <CardFoot>Aktuell ausgerüstet</CardFoot>
+          </Card>
+        </div>
 
-        {/* Soll-Stand */}
-        <Card grade={soll?.grade ?? "?"} className="p-2.5 sm:p-4">
-          <SideHeader title="Soll-Stand" tone="text-[#ffd54a]" />
-          {soll ? (
-            <>
-              <CardArt src={soll.icon} alt={soll.name} grade={soll.grade} />
-              <ItemTitle name={soll.name} meta={<span className="truncate text-[11px] text-[#beac80]">{soll.meta}</span>}
-                action={<button onClick={() => setPicking(true)} className="text-[11px] text-[#ffd54a]/80 underline-offset-2 hover:underline">anderes Ziel</button>} />
-            </>
-          ) : (
-            <button onClick={() => setPicking(true)} className="block w-full text-left">
-              <CardArt alt="Offen" />
-              <ItemTitle name="Offen" meta={<span className="text-[11px] text-zinc-400">Ziel-Item wählen</span>} />
-            </button>
-          )}
-          {section("soll")}
-        </Card>
+        {/* Soll-Stand / BiS */}
+        <div className="transition-all duration-500 ease-out motion-reduce:transition-none"
+          style={{ opacity: stage ? 1 : 0, transform: stage ? "none" : "translateX(1.5rem)" }}>
+          <Card grade={soll?.grade ?? "?"} className="flex h-full flex-col p-3 sm:p-5">
+            <CardHead title="Soll-Stand / BiS" short="Soll / BiS" rank={soll ? "BiS" : undefined} />
+            {soll ? (
+              <ItemBlock icon={SHOW_ITEM_ICONS ? soll.icon : undefined} grade={soll.grade} name={soll.name} info={sollInfo} sub={sollSub}
+                action={<button onClick={() => setPicking(true)} className="text-[11px] text-[#ffd54a]/80 underline-offset-2 hover:underline">{wearsBisCraft ? "Schon BiS · anderes Ziel" : "anderes Ziel"}</button>} />
+            ) : (
+              <button onClick={() => setPicking(true)} className="block w-full text-left">
+                <ItemBlock name="Offen" info={SLOT_LABEL_DE[item.slot]} sub="Ziel-Item wählen" />
+              </button>
+            )}
+            {section("soll")}
+            <CardFoot>Ziel-Gegenstand (BiS)</CardFoot>
+          </Card>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
@@ -136,19 +146,38 @@ export function GearCompare({ char, item, slotId, label, onClose }: {
   );
 }
 
-function SideHeader({ title, tone }: { title: string; tone: string }) {
-  return <div className={`relative mb-2 text-center text-[11px] font-semibold uppercase tracking-[0.3em] ${tone}`}>{title}</div>;
-}
-
-/** Fixed height so the rows below start at the same height on both cards. */
-function ItemTitle({ name, meta, action }: { name: string; meta: React.ReactNode; action?: React.ReactNode }) {
+function CardHead({ title, short, rank }: { title: string; short?: string; rank?: Grade }) {
   return (
-    <div className="relative mt-2.5 h-[78px]">
-      <div className="line-clamp-2 text-[13px] font-semibold leading-snug text-[#f4eed7] sm:text-sm">{name}</div>
-      <div className="mt-1 flex min-w-0 items-center gap-1.5">{meta}</div>
-      {action && <div className="mt-0.5">{action}</div>}
+    <div className="relative mb-3 flex items-center justify-between gap-2">
+      <div className="truncate text-sm font-semibold text-[#f4eed7] sm:text-lg">{short ? <><span className="sm:hidden">{short}</span><span className="hidden sm:inline">{title}</span></> : title}</div>
+      <span className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-300 sm:px-2.5 sm:text-xs">
+        Rang: <span className="font-semibold" style={{ color: rank ? GRADE_HEX_CSS[rank] : undefined }}>{rank && rank !== "?" ? rank : "–"}</span>
+      </span>
     </div>
   );
+}
+
+/** Icon, name, slot / item level, upgrade / rarity. Fixed height so the stat rows start at the same height on both cards. */
+function ItemBlock({ icon, grade = "?", name, info, sub, action }: {
+  icon?: string; grade?: Grade; name: string; info: string; sub: string; action?: React.ReactNode;
+}) {
+  return (
+    <div className="relative flex h-[200px] flex-col gap-2 sm:h-[124px] sm:flex-row sm:items-start sm:gap-4">
+      <div className="w-16 shrink-0 sm:w-[104px]">
+        {icon ? <CardArt src={icon} alt={name} grade={grade} /> : <Filler className="aspect-square w-full" />}
+      </div>
+      <div className="min-w-0">
+        <div className="line-clamp-2 text-[13px] font-semibold leading-snug text-[#f4eed7] sm:text-base">{name}</div>
+        <div className="mt-0.5 truncate text-[12px] text-zinc-300 sm:text-sm">{info}</div>
+        <div className="truncate text-[11px] text-[#beac80]">{sub}</div>
+        {action && <div className="mt-0.5">{action}</div>}
+      </div>
+    </div>
+  );
+}
+
+function CardFoot({ children }: { children: React.ReactNode }) {
+  return <div className="relative mt-auto border-t border-white/[0.07] pt-2.5 text-[11px] text-zinc-500">{children}</div>;
 }
 
 function RowList({ title, rows, side, skill, craftedName }: { title: string; rows: Row[]; side: Side; skill?: boolean; craftedName?: string }) {
