@@ -252,7 +252,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
     return (
       <>
         <div className="bm-backdrop pointer-events-none fixed inset-0 -z-10" aria-hidden />
-        <GearDeck char={saved.snapshot} onBack={onBack} onRefresh={refresh} onRemove={onRemove} onDetails={() => setView("list")}
+        <GearDeck char={saved.snapshot} onBack={onBack} onRefresh={refresh} onRemove={onRemove}
           note={<>{statusNote}{offlineNote}</>} />
         {pasteSheet}
       </>

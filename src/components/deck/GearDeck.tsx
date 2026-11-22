@@ -34,12 +34,15 @@ export function deckOf(char: Character): DeckEntry[] {
  * Character view: the gear laid out as physical cards (big icon, slot, name, rank glow, no stats yet).
  * Tapping a card opens the Ist / Soll comparison as two cards side by side.
  */
-export function GearDeck({ char, onBack, onRefresh, onRemove, onDetails, note }: {
-  char: Character; onBack: () => void; onRefresh: () => void; onRemove: () => void; onDetails: () => void; note?: React.ReactNode;
+export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
+  char: Character; onBack: () => void; onRefresh: () => void; onRemove: () => void; note?: React.ReactNode;
 }) {
-  const deck = useMemo(() => deckOf(char), [char]);
+  const all = useMemo(() => deckOf(char), [char]);
+  // two pages: equipment and Arcana cards
+  const [tab, setTab] = useState<"gear" | "arcana">("gear");
+  const deck = useMemo(() => all.filter((d) => (tab === "arcana") === (d.item.slot === "arcana")), [all, tab]);
   const [open, setOpen] = useState<string>();
-  const entry = deck.find((d) => d.id === open);
+  const entry = all.find((d) => d.id === open);
 
   useEffect(() => {
     if (!entry) return;
@@ -64,7 +67,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, onDetails, note }:
           <nav aria-label="Slot-Auswahl" className="min-w-0 lg:sticky lg:top-20 lg:self-start">
             <div className="mb-2 hidden text-[10px] uppercase tracking-[0.22em] text-zinc-500 lg:block">Slot-Auswahl</div>
             <ul className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:mx-0 lg:max-h-[calc(100vh-9rem)] lg:flex-col lg:overflow-y-auto lg:px-0">
-              {deck.map((d) => {
+              {all.filter((d) => (d.item.slot === "arcana") === (entry.item.slot === "arcana")).map((d) => {
                 const active = d.id === entry.id;
                 return (
                   <li key={d.id} className="shrink-0">
@@ -84,35 +87,38 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, onDetails, note }:
     );
   }
 
-  // 2 / gear overview
+  // 2 / gear overview: compact character bar, switch, cards
+  const arcanaCount = all.filter((d) => d.item.slot === "arcana").length;
   return (
-    <div className="space-y-5">
-      {header("Ausrüstungsübersicht", onBack)}
-
-      <div className="card-face relative flex flex-col gap-4 overflow-hidden rounded-[20px] p-4 sm:flex-row sm:items-center">
-        <span aria-hidden className="pointer-events-none absolute inset-[5px] rounded-[15px] border border-[#d9c58f]/20" />
-        <div className="relative flex min-w-0 flex-1 items-center gap-4">
-          <Filler className="h-16 w-16" />
-          <div className="min-w-0">
-            <div className="truncate text-2xl font-semibold tracking-tight text-[#f4eed7]">{char.name}</div>
-            <div className="truncate text-sm text-[#beac80]/80">
-              {[char.className, char.race, `${char.server} · ${char.region.toUpperCase()}`].filter(Boolean).join(" · ")}
-            </div>
-            <div className="text-xs text-[#99e4e2]/60">
-              {[char.combatPower && `CP ${char.combatPower.toLocaleString("de-DE")}`, char.gearGrade && `Gear-Rang ${char.gearGrade}`].filter(Boolean).join(" · ")}
-            </div>
+    <div className="space-y-4">
+      <div className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-2 overflow-hidden rounded-2xl px-3 py-2.5">
+        <button onClick={onBack} aria-label="Zurück zur Charakterauswahl"
+          className="relative shrink-0 rounded-full border border-[#d9c58f]/20 bg-white/[0.03] px-3 py-1 text-sm text-[#efe6cc]/85 hover:border-[#d9c58f]/40">‹ Zurück</button>
+        <Filler className="relative h-10 w-10 rounded-lg" />
+        <div className="relative min-w-0 flex-1">
+          <div className="truncate text-base font-semibold leading-tight text-[#f4eed7]">{char.name}</div>
+          <div className="truncate text-[11px] text-[#beac80]/80">
+            {[char.className, char.race, `${char.server} · ${char.region.toUpperCase()}`,
+              char.combatPower && `CP ${char.combatPower.toLocaleString("de-DE")}`, char.gearGrade && `Gear-Rang ${char.gearGrade}`].filter(Boolean).join(" · ")}
           </div>
         </div>
-        <div className="relative flex flex-wrap gap-2 text-sm">
-          <button onClick={onRefresh} className="rounded-xl border border-[#d9c58f]/25 bg-white/[0.04] px-4 py-2 text-[#efe6cc] hover:border-[#d9c58f]/50">Aktualisieren</button>
-          <button onClick={onBack} className="rounded-xl border border-[#d9c58f]/25 bg-white/[0.04] px-4 py-2 text-[#efe6cc] hover:border-[#d9c58f]/50">Charakter wechseln</button>
-          <button onClick={onDetails} className="rounded-xl px-3 py-2 text-xs text-zinc-400 hover:text-zinc-200">Upgrade-Pfad</button>
-          <button onClick={onRemove} className="rounded-xl px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">Entfernen</button>
+        <div className="relative flex shrink-0 gap-1.5 text-xs">
+          <button onClick={onRefresh} className="rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-[#efe6cc] hover:border-[#d9c58f]/45">Aktualisieren</button>
+          <button onClick={onBack} className="rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-[#efe6cc] hover:border-[#d9c58f]/45">Charakter wechseln</button>
+          <button onClick={onRemove} className="rounded-lg px-2 py-1.5 text-zinc-500 hover:text-zinc-300">Entfernen</button>
         </div>
       </div>
       {note}
 
-      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Gear-Slots</div>
+      <div role="tablist" aria-label="Kartenart" className="inline-flex rounded-xl border border-[#d9c58f]/20 bg-white/[0.03] p-1 text-sm">
+        {([["gear", "Ausrüstung", all.length - arcanaCount], ["arcana", "Arcana", arcanaCount]] as const).map(([k, l, n]) => (
+          <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+            className={`rounded-lg px-4 py-1.5 transition ${tab === k ? "bg-white/[0.09] text-[#f4eed7] ring-1 ring-[#d9c58f]/40" : "text-zinc-400 hover:text-zinc-200"}`}>
+            {l} <span className="text-xs text-zinc-500">{n}</span>
+          </button>
+        ))}
+      </div>
+
       <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {deck.map((d) => (
           <li key={d.id}>
