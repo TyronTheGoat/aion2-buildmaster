@@ -165,7 +165,16 @@ export interface Project {
   craft?: string[];
   /** prices used only in this project, or only in one step (stepKey = recipeKey) */
   priceOverrides?: (Price & { stepKey?: string })[];
+  /** guided setup still open at this step (new projects start at "stock"); undefined = set up */
+  setup?: "stock" | "prices" | "route";
+  /** planning confidence per stage (0.75 = 75 %); default PLAN_CONFIDENCE */
+  confidence?: number;
+  /** the route is to buy the final item instead of crafting it */
+  buyFinal?: boolean;
 }
+
+/** Default planning confidence per stage: with this many attempts the needed hits come in 3 of 4 cases. */
+export const PLAN_CONFIDENCE = 0.75;
 
 export type Outcome = "base_fail" | "success" | "combo_success" | "combo_fail" | "guaranteed_success";
 
@@ -778,23 +787,28 @@ export function nextStep(p: Project, state: CraftState, inventory: Map<string, n
       if (r !== "ok") { visiting.delete(recipe.recipeKey); return r; }
     }
     visiting.delete(recipe.recipeKey);
-    const chance = chancesFor(recipe, state.overrides, p.character, p.mastery);
-    const heldNow = holdings(p, state.events);
-    return {
-      project: p, recipe, goal,
-      ingredients: recipe.ingredients.map((i) => {
-        const crafted = !!craftsItself(p, i, state.recipes);
-        return { ...i, crafted, have: crafted || i.kind === "transfer" ? heldNow.get(i) + (crafted ? 0 : inventory.get(itemKey(i)) ?? 0) : inventory.get(itemKey(i)) ?? 0 };
-      }),
-      chance,
-      plan: planFor(chance.actual ? effectiveChance(chance.actual, goal) : null),
-      documentedPlan: planFor(effectiveChance(chance.documented, goal)),
-      bestPlan: planFor(chance.best ? effectiveChance(chance.best, goal) : null),
-      outcomes: outcomesFor(recipe),
-    };
+    return stepFor(p, state, recipe, goal, inventory);
   };
   const r = walk(target, 1, { recipe: root, goal: rootGoal(p, root) });
   return r === "ok" ? null : r;
+}
+
+/** The step card data for one recipe of a project (ingredients with what is there, chances, outcomes). */
+export function stepFor(p: Project, state: CraftState, recipe: Recipe, goal: ChanceGoal, inventory: Map<string, number> = new Map(Object.entries(state.inventory))): NextStep {
+  const chance = chancesFor(recipe, state.overrides, p.character, p.mastery);
+  const heldNow = holdings(p, state.events);
+  return {
+    project: p, recipe, goal,
+    ingredients: recipe.ingredients.map((i) => {
+      const crafted = !!craftsItself(p, i, state.recipes);
+      return { ...i, crafted, have: crafted || i.kind === "transfer" ? heldNow.get(i) + (crafted ? 0 : inventory.get(itemKey(i)) ?? 0) : inventory.get(itemKey(i)) ?? 0 };
+    }),
+    chance,
+    plan: planFor(chance.actual ? effectiveChance(chance.actual, goal) : null),
+    documentedPlan: planFor(effectiveChance(chance.documented, goal)),
+    bestPlan: planFor(chance.best ? effectiveChance(chance.best, goal) : null),
+    outcomes: outcomesFor(recipe),
+  };
 }
 
 const slotRank = (p: Project) => SLOT_PRIORITY.indexOf(p.slot);
@@ -1106,17 +1120,178 @@ export function needList(p: Project, state: CraftState): NeedLine[] {
   for (const m of remainingPath(p, state)) {
     const hit = out.find((x) => x.recipe.recipeKey === m.recipe.recipeKey && x.goal === m.goal);
     if (hit) { hit.count++; continue; }
-    const c = chancesFor(m.recipe, state.overrides, p.character, p.mastery);
-    let prob: Prob = c.actual ? effectiveChance(c.actual, m.goal) : null;
-    let basis: NeedLine["basis"] = c.actual ? (c.basis === "none" ? "required" : c.basis) : "none";
-    if (prob === null) { prob = effectiveChance(c.documented, m.goal); basis = prob === null ? "none" : "required"; }
-    if (prob === null && c.best) { prob = effectiveChance(c.best, m.goal); basis = prob === null ? "none" : "best"; }
-    out.push({ item: m.item, recipe: m.recipe, goal: m.goal, count: 1, p: prob, basis, expected: null, n80: null,
-      ingredientsKnown: m.recipe.ingredients.length > 0 && (m.recipe.ingredientsStatus === undefined || m.recipe.ingredientsStatus === "complete") });
+    const { p: prob, basis } = chanceFor(p, state, m.recipe, m.goal);
+    out.push({ item: m.item, recipe: m.recipe, goal: m.goal, count: 1, p: prob, basis, expected: null, n80: null, ingredientsKnown: ingredientsKnown(m.recipe) });
   }
   for (const l of out) {
     l.expected = l.p === null || l.p === 0 ? null : l.count / l.p;
     l.n80 = attemptsForK(l.p, l.count);
   }
   return out;
+}
+
+const ingredientsKnown = (r: Recipe) => r.ingredients.length > 0 && (r.ingredientsStatus === undefined || r.ingredientsStatus === "complete");
+
+/** Chance per attempt used for planning: the character's chance, else the documented one, else the best documented one. */
+export function chanceFor(p: Project, state: CraftState, recipe: Recipe, goal: ChanceGoal): { p: Prob; basis: NeedLine["basis"] } {
+  const c = chancesFor(recipe, state.overrides, p.character, p.mastery);
+  let prob: Prob = c.actual ? effectiveChance(c.actual, goal) : null;
+  let basis: NeedLine["basis"] = c.actual ? (c.basis === "none" ? "required" : c.basis) : "none";
+  if (prob === null) { prob = effectiveChance(c.documented, goal); basis = prob === null ? "none" : "required"; }
+  if (prob === null && c.best) { prob = effectiveChance(c.best, goal); basis = prob === null ? "none" : "best"; }
+  return { p: prob, basis };
+}
+
+/* ------------------------------------------------------------------ craft plan (top-down calculator) ------------------------------------------------------------------ */
+
+/** One stage of the plan: how many of its item are needed, how many are there, and how many attempts that takes. */
+export interface PlanLine {
+  item: ItemRef;
+  recipe: Recipe;
+  goal: ChanceGoal;
+  need: number;
+  have: number;
+  missing: number;
+  p: Prob;
+  basis: NeedLine["basis"];
+  /** attempts planned for the missing ones (at the confidence, or the mean); null = chance unknown */
+  attempts: number | null;
+  ingredientsKnown: boolean;
+}
+/** A bought or gathered item of the plan: total needed (after own crafted stock), in stock, still missing. */
+export interface PlanMaterial { item: ItemRef & { bound?: boolean | null }; total: number; have: number; missing: number; chainItem: boolean }
+
+/**
+ * Top-down calculator: to get the target, the missing hits of each stage need this many attempts (binomial, at the
+ * project confidence, or the mean in mode "mean"); every attempt uses its inputs, so the stage below must deliver
+ * attempts × qty items. Stock (owned / crafted items, then the inventory) is used first. Lines come lowest stage first.
+ */
+export function craftPlan(p: Project, state: CraftState, mode: "conf" | "mean" = "conf") {
+  const conf = p.confidence ?? PLAN_CONFIDENCE;
+  const held = holdings(p, state.events);
+  const unknown: string[] = [];
+  const root = state.recipes.find((r) => r.recipeKey === p.targetRecipeKey);
+  const target = projectTarget(p, state.recipes);
+  const gearItem = (i: ItemRef) => { const r = producerOf(i, state.recipes, p.faction); return !!r && !isMaterialRecipe(r); };
+  // the crafted items of the path as a graph, then demand handed down from the target (consumers before producers)
+  type Node = { item: ItemRef; recipe: Recipe; goal: ChanceGoal; inputs: Ingredient[] };
+  const nodes = new Map<string, Node>();
+  const order: string[] = [];
+  const seen = new Set<string>();
+  const visit = (item: ItemRef, forced?: { recipe: Recipe; goal: ChanceGoal }) => {
+    const k = itemKey(item);
+    if (seen.has(k)) return;
+    seen.add(k);
+    const recipe = forced?.recipe ?? craftsItself(p, item, state.recipes);
+    if (!recipe) return;
+    const node: Node = { item, recipe, goal: forced?.goal ?? goalFor(recipe, item), inputs: recipe.ingredients };
+    nodes.set(k, node);
+    for (const ing of recipe.ingredients) if (craftsItself(p, ing, state.recipes)) visit(ing);
+    order.push(k); // post-order: inputs first
+  };
+  const mats = new Map<string, PlanMaterial>();
+  const material = (item: ItemRef, n: number) => {
+    const k = itemKey(item);
+    const m = mats.get(k) ?? { item, total: 0, have: 0, missing: 0, chainItem: gearItem(item) };
+    m.total += n;
+    mats.set(k, m);
+  };
+  const lines: PlanLine[] = [];
+  if (root && target) {
+    if (p.buyFinal) material(target, Math.max(0, 1 - held.get(target)));
+    else {
+      visit(target, { recipe: root, goal: rootGoal(p, root) });
+      const demand = new Map<string, number>([[itemKey(target), 1]]);
+      for (const k of [...order].reverse()) {
+        const n = nodes.get(k)!;
+        const need = demand.get(k) ?? 0;
+        if (need <= 0) continue;
+        const have = Math.min(held.get(n.item), need);
+        const missing = need - have;
+        const c = chanceFor(p, state, n.recipe, n.goal);
+        const raw = missing <= 0 ? 0 : mode === "mean" ? (c.p ? missing / c.p : null) : attemptsForK(c.p, missing, conf);
+        const attempts = raw !== null && Number.isFinite(raw) ? raw : null;
+        lines.push({ item: n.item, recipe: n.recipe, goal: n.goal, need, have, missing, p: c.p, basis: c.basis, attempts, ingredientsKnown: ingredientsKnown(n.recipe) });
+        if (missing <= 0) continue;
+        if (attempts === null) { unknown.push(`${n.recipe.name}: ${c.p === null ? "Chance unbekannt" : "Chance 0"}`); continue; }
+        if (!n.inputs.length) { unknown.push(`${n.recipe.name}: Zutaten fehlen`); continue; }
+        for (const ing of n.inputs) {
+          if (ing.qty === null) { unknown.push(`${n.recipe.name}: Menge von ${ing.name} unbekannt`); continue; }
+          const q = attempts * ing.qty;
+          const ik = itemKey(ing);
+          if (nodes.has(ik)) demand.set(ik, (demand.get(ik) ?? 0) + (mode === "mean" ? q : Math.ceil(q)));
+          else if (gearItem(ing)) material(ing, Math.max(0, q - takeHeld(held, ing, q)));
+          else material(ing, q);
+        }
+      }
+      lines.reverse(); // lowest stage first
+    }
+  }
+  const materials = [...mats.values()].map((m) => {
+    const have = m.chainItem ? 0 : Math.min(m.total, state.inventory[itemKey(m.item)] ?? 0);
+    return { ...m, have, missing: Math.max(0, m.total - have) };
+  });
+  return { lines, materials, unknown: [...new Set(unknown)], confidence: conf };
+}
+const takeHeld = (h: Holdings, i: ItemRef, n: number) => { const t = Math.min(h.get(i), n); if (t > 0) h.add(i, -t); return t; };
+
+/** Kinah for what the plan still has to buy (missing materials × price); null while a price is missing. */
+export function planCost(plan: ReturnType<typeof craftPlan>, ctx: PriceCtx, s: Scenario) {
+  let cost = 0, known = 0;
+  const missingPrices: ItemRef[] = [];
+  for (const m of plan.materials) {
+    if (m.missing <= 0) continue;
+    const pr = findPrice(ctx, m.item);
+    const v = pr ? pr[s] ?? pr.low ?? pr.ref : null;
+    if (v === null || v === undefined) { missingPrices.push(m.item); continue; }
+    cost += v * m.missing; known += v * m.missing;
+  }
+  return { cost: missingPrices.length || plan.unknown.length ? null : cost, known, missingPrices };
+}
+
+/** Items of the line that can be bought instead of crafted below them (crafted inputs of the path), lowest first. */
+export function routeItems(p: Project, state: CraftState) {
+  const out: ItemRef[] = [];
+  const free = { ...p, buy: (p.buy ?? []).filter((k) => !state.recipes.some((r) => itemKey(r.output) === k || (r.comboOutput && itemKey(r.comboOutput) === k))), buyFinal: false };
+  for (const { recipe } of remainingPath(free, state, { fromScratch: true }))
+    for (const i of recipe.ingredients) if (craftsItself(free, i, state.recipes) && !isMaterialRecipe(craftsItself(free, i, state.recipes)!) && !out.some((x) => sameItem(x, i))) out.push(i);
+  return out;
+}
+
+/** Route key of a project: "final" (buy the end item), the itemKey of the bought start item, or "all" (craft everything). */
+export function routeOf(p: Project, state: CraftState): string {
+  if (p.buyFinal) return "final";
+  const keys = new Set(routeItems(p, state).map(itemKey));
+  return (p.buy ?? []).find((k) => keys.has(k)) ?? "all";
+}
+
+/** The project with a route applied (start item bought, everything above crafted). */
+export function withRoute(p: Project, state: CraftState, route: string): Project {
+  const keys = new Set(routeItems(p, state).map(itemKey));
+  const buy = (p.buy ?? []).filter((k) => !keys.has(k));
+  return { ...p, buyFinal: route === "final", buy: route === "final" || route === "all" ? buy : [...buy, route], craft: (p.craft ?? []).filter((k) => k !== route) };
+}
+
+/** Every route with its remaining cost (at the confidence and as mean), cheapest known first marked as recommended. */
+export function routeOptions(p: Project, state: CraftState, s: Scenario = "low") {
+  const target = projectTarget(p, state.recipes);
+  const routes: { key: string; item?: ItemRef }[] = [{ key: "all" }, ...routeItems(p, state).map((item) => ({ key: itemKey(item), item })), { key: "final", item: target }];
+  const opts = routes.map((r) => {
+    const v = withRoute(p, state, r.key);
+    const ctx = ctxOf(state, v);
+    const plan = craftPlan(v, state);
+    const conf = planCost(plan, ctx, s);
+    const mean = planCost(craftPlan(v, state, "mean"), ctx, s);
+    return { ...r, conf, mean, unknown: plan.unknown, recommended: false };
+  });
+  const best = opts.filter((o) => o.conf.cost !== null).sort((a, b) => a.conf.cost! - b.conf.cost!)[0];
+  if (best) best.recommended = true;
+  return opts;
+}
+
+/** The craft to do now: the lowest stage of the plan that still misses items (null when nothing is left or the path is unknown). */
+export function currentCraft(p: Project, state: CraftState) {
+  const plan = craftPlan(p, state);
+  const line = plan.lines.find((l) => l.missing > 0);
+  return { plan, line, step: line ? stepFor(p, state, line.recipe, line.goal) : null };
 }

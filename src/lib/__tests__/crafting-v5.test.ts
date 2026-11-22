@@ -294,3 +294,47 @@ describe("gear lines and the bottom-up need list", () => {
     expect(l.at(-1)!.recipe.name).toBe("Splendent Ebony Dragon Lord Orb");
   });
 });
+
+describe("craft plan (top-down calculator) and routes", () => {
+  it("hands attempts × qty down to the stage below, at 75 % by default", async () => {
+    const { craftPlan, PLAN_CONFIDENCE, itemKey } = await import("../crafting/model");
+    const { attemptsForK } = await import("../crafting/prob");
+    expect(PLAN_CONFIDENCE).toBe(0.75);
+    const plan = craftPlan(proj("recipe:321093015", { faction: "Asmodian" }), data);
+    expect(plan.lines.at(-1)!.recipe.name).toBe("Splendent Ebony Dragon Lord Orb");
+    for (const l of plan.lines) if (l.attempts !== null) expect(l.attempts).toBe(attemptsForK(l.p, l.missing, 0.75));
+    // every crafted input line gets exactly the attempts × qty its consumers plan
+    for (const low of plan.lines) {
+      const fromAbove = plan.lines.reduce((n, up) => n + up.recipe.ingredients.filter((i) => itemKey(i) === itemKey(low.item)).reduce((m, i) => m + Math.ceil((up.attempts ?? 0) * (i.qty ?? 0)), 0), 0);
+      if (low !== plan.lines.at(-1)) expect(low.need).toBe(fromAbove);
+    }
+  });
+  it("uses stock first and plans less below", async () => {
+    const { craftPlan, withOwnedCount } = await import("../crafting/model");
+    const p = proj("recipe:321093015", { faction: "Asmodian" });
+    const before = craftPlan(p, data);
+    const art = before.lines.find((l) => /^Artisan/.test(l.item.name))!;
+    const after = craftPlan(withOwnedCount(p, art.item, 2), data);
+    const art2 = after.lines.find((l) => l.recipe.recipeKey === art.recipe.recipeKey)!;
+    expect(art2.have).toBe(2);
+    expect(art2.missing).toBe(art.missing - 2);
+    expect(after.lines[0].need).toBeLessThan(before.lines[0].need);
+  });
+  it("routes: buying a start item drops its crafts, buying the final item drops all", async () => {
+    const { craftPlan, routeItems, withRoute, routeOptions, itemKey, savePrice } = await import("../crafting/model");
+    const p = proj("recipe:321093015", { faction: "Asmodian" });
+    const items = routeItems(p, data);
+    expect(items.length).toBeGreaterThan(3);
+    const fin = craftPlan(withRoute(p, data, "final"), data);
+    expect(fin.lines).toHaveLength(0);
+    expect(fin.materials).toHaveLength(1);
+    const top = items.at(-1)!;
+    const v = withRoute(p, data, itemKey(top));
+    expect(craftPlan(v, data).lines.some((l) => itemKey(l.item) === itemKey(top))).toBe(false);
+    // with only the final price known, buying it is the only priced route and gets recommended
+    const priced = savePrice(data, craftPlan(withRoute(p, data, "final"), data).materials[0].item, { low: 5, high: 5, ref: null, tradeable: true }, { kind: "global", server: "odar" });
+    const opts = routeOptions(p, priced);
+    expect(opts.find((o) => o.recommended)?.key).toBe("final");
+    expect(opts.find((o) => o.key === "all")!.conf.cost).toBeNull();
+  });
+});

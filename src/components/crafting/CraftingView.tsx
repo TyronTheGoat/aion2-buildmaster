@@ -9,11 +9,10 @@ import { useCraft } from "../craft-store";
 import { Card, CardArt, Filler, SHOW_ITEM_ICONS } from "../deck/Card";
 import {
   activeAttempts, attemptCost, attemptEffects, buildCatalog, canCraft, craftSlotOf, craftsItself, ctxOf, findPrice, importFile,
-  GEAR_SLOTS, itemKey, ladderItems, levelOf, needList, nextStep, normName, ownedCount, prioritySlot, topOf, weaponTypeOf, withOwnedCount, openCost, pathSimInput, producerOf, progress, projectTarget, remainingPath, savePrice, sortProjects,
+  GEAR_SLOTS, PLAN_CONFIDENCE, craftPlan, currentCraft, itemKey, ladderItems, levelOf, normName, ownedCount, planCost, prioritySlot, routeItems, routeOf, routeOptions, sameItem, topOf, weaponTypeOf, withOwnedCount, withRoute, producerOf, progress, projectTarget, savePrice, sortProjects,
   spent, stageLevel, uid, validatePrice,
-  type CatalogEntry, type CraftSlot, type CraftState, type ImportError, type ItemRef, type NeedLine, type NextStep, type Outcome, type Project, type Scenario,
+  type CatalogEntry, type CraftSlot, type CraftState, type ImportError, type ItemRef, type NextStep, type PlanLine, type Outcome, type Project, type Scenario,
 } from "@/lib/crafting/model";
-import { effectiveChance, simulateBudget } from "@/lib/crafting/prob";
 
 const BTN = "rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-xs text-[#efe6cc] hover:border-[#d9c58f]/45 disabled:opacity-40";
 const INPUT = "min-w-0 rounded-lg border border-[#d9c58f]/20 bg-white/[0.03] px-2.5 py-1.5 text-sm text-[#f4eed7] outline-none focus:border-[#d9c58f]/50";
@@ -251,12 +250,13 @@ const factionOfName = (n: string) => n.match(/\((elyos|asmodian)\)\s*$/i)?.[1];
 
 function ProjectCard({ p, state, onOpen }: { p: Project; state: CraftState; onOpen: () => void }) {
   const t = useT();
-  const range = useRange();
   const target = projectTarget(p, state.recipes);
   const root = state.recipes.find((r) => r.recipeKey === p.targetRecipeKey);
   const pr = progress(p, state);
-  const step = p.status === "done" ? null : nextStep(p, state);
-  const cost = { low: openCost(p, state, "low"), high: openCost(p, state, "high") };
+  const cur = p.status === "done" || p.setup ? null : currentCraft(p, state);
+  const step = cur?.step;
+  const cost = cur ? planCost(cur.plan, ctxOf(state, p), "low") : null;
+  const kinah = useKinah();
   const last = [...pr.milestones].reverse().find((m) => m.done);
   const from = last ? stageLevel(last) : null;
   const to = root ? levelOf(state, root) : null;
@@ -266,25 +266,28 @@ function ProjectCard({ p, state, onOpen }: { p: Project; state: CraftState; onOp
       <div className="relative flex w-full items-center gap-3 pr-10">
         <div className="relative w-16 shrink-0">{icon ? <CardArt src={icon} alt={target!.name} /> : <Filler className="aspect-square w-full" />}</div>
         <div className="relative min-w-0">
-          <div className="truncate text-sm font-semibold text-[#f4eed7]">{target?.name ?? t("Rezept fehlt", "Recipe missing")}</div>
+          <div className="truncate text-sm font-semibold text-[#f4eed7]">{target ? shown(target.name) : t("Rezept fehlt", "Recipe missing")}</div>
           <div className="truncate text-xs text-zinc-400">{p.gearSlot ? gearSlotName(p.gearSlot === p.gearSlot.toLowerCase() && ["ring", "earrings", "necklace", "gloves", "chest", "legs", "helm", "shoulders", "boots", "cape"].includes(p.gearSlot) ? p.gearSlot : "weapon", t) : slotName(p.slot, t)} · {statusName(p.status, t)}</div>
           <div className="truncate text-[11px] text-zinc-500">{from !== null ? `Lv ${from}` : t("Start", "Start")} → {to !== null ? `Lv ${to}` : t("Ziel", "Goal")}</div>
         </div>
       </div>
       <div className="relative w-full space-y-1 text-[11px]">
         <div className="truncate text-zinc-400">{t("Aktueller Craft", "Current craft")}: <span className="text-[#efe6cc]/85">
-          {p.status === "done" ? t("keiner (fertig)", "none (finished)") : step ? (step.goal === "combo" && step.recipe.comboOutput ? step.recipe.comboOutput.name : step.recipe.output.name) : pr.percent === 100 ? t("fertig", "done") : t("unbekannt", "unknown")}
+          {p.status === "done" ? t("keiner (fertig)", "none (finished)") : p.setup ? t("Einrichtung offen", "setup open") : step ? `${shown(step.goal === "combo" && step.recipe.comboOutput ? step.recipe.comboOutput.name : step.recipe.output.name)}${cur?.line ? ` · ${t("noch", "still")} ${cur.line.missing}×` : ""}` : pr.percent === 100 ? t("fertig", "done") : t("unbekannt", "unknown")}
         </span></div>
-        {p.status !== "done" && (
-          <div className="truncate text-zinc-500">{t("Offene Materialkosten", "Open material cost")}: {cost.low.cost !== null
-            ? <span className="text-[#efe6cc]/85">{range(cost.low.cost, cost.high.cost)}{cost.low.unconfirmed.length > 0 && <span className={MISSING}> · {t("vorläufig", "provisional")}</span>}</span>
-            : <span className={MISSING}>{t("Daten fehlen", "Data missing")}{cost.low.partial > 0 ? ` (${t("bekannt", "known")} ${range(cost.low.partial, cost.high.partial)})` : ""}</span>}</div>
+        {cost && (
+          <div className="truncate text-zinc-500">{t("Noch zu kaufen", "Still to buy")}: {cost.cost !== null
+            ? <span className="text-[#efe6cc]/85">{kinah(cost.cost)}</span>
+            : <span className={MISSING}>{t("Preise fehlen", "prices missing")}{cost.known > 0 ? ` (${t("bekannt", "known")} ${kinah(cost.known)})` : ""}</span>}</div>
         )}
       </div>
       <div className="relative w-full"><Progress percent={pr.percent} done={pr.done} total={pr.total} /></div>
     </Card>
   );
 }
+
+/** Equipment slot of the character for each project choice. */
+const WORN_SLOT: Record<string, string> = { weapon: "weapon", offhand: "offhand", ring: "ring", earrings: "earring", necklace: "necklace", gloves: "gloves", chest: "torso", legs: "pants", helm: "helmet", shoulders: "shoulders", boots: "boots", cape: "cape" };
 
 /** Recipe gear slot for a project choice: weapon and off-hand follow what the character has equipped. */
 function gearSlotFor(choice: string, char: Character): string | null {
@@ -313,7 +316,9 @@ function NewProject({ state, char, charKey: key, onDone }: { state: CraftState; 
       <div className={LABEL}>{t("Was willst du craften?", "What do you want to craft?")}</div>
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
         {options.map((o) => {
-          const icon = iconOf(o.top?.output, faction);
+          // the target's own icon; while it is missing, the item the character wears in that slot stands for the slot
+          const worn = SHOW_ITEM_ICONS ? char.gear.find((g) => g.slot === WORN_SLOT[o.choice])?.icon : undefined;
+          const icon = iconOf(o.top?.output, faction) ?? worn;
           const lv = o.top ? levelOf(state, o.top) : null;
           return (
             <li key={o.choice}>
@@ -322,7 +327,7 @@ function NewProject({ state, char, charKey: key, onDone }: { state: CraftState; 
                 <ItemIcon src={icon} />
                 <span className="min-w-0">
                   <span className="block text-xs font-semibold text-[#f4eed7]">{gearSlotName(o.choice, t)}</span>
-                  <span className="block truncate text-[11px] text-zinc-400">{o.top ? `${o.top.output.name}${lv ? ` · Lv ${lv}` : ""}` : t("Waffentyp wählen", "Pick weapon type")}</span>
+                  <span className="block truncate text-[11px] text-zinc-400">{o.top ? `${shown(o.top.output.name)}${lv ? ` · Lv ${lv}` : ""}` : t("Waffentyp wählen", "Pick weapon type")}</span>
                 </span>
               </button>
             </li>
@@ -341,14 +346,14 @@ function NewProject({ state, char, charKey: key, onDone }: { state: CraftState; 
         <div className="flex flex-wrap items-end gap-3 border-t border-white/5 pt-3">
           <div className="min-w-0 flex-1">
             <div className={LABEL}>{t("Ziel (immer die höchste Stufe)", "Goal (always the highest stage)")}</div>
-            <div className="text-[#f4eed7]">{chosen.top.output.name}{levelOf(state, chosen.top) ? <span className="text-zinc-500"> · Lv {levelOf(state, chosen.top)}</span> : ""}</div>
+            <div className="text-[#f4eed7]">{shown(chosen.top.output.name)}{levelOf(state, chosen.top) ? <span className="text-zinc-500"> · Lv {levelOf(state, chosen.top)}</span> : ""}</div>
           </div>
           <label className="grid gap-1"><span className={LABEL}>{t("Deine Handwerksstufe", "Your crafting level")}</span>
             <input className={`${INPUT} w-32`} inputMode="numeric" value={mastery} onChange={(e) => setMastery(e.target.value)} placeholder={t("unbekannt", "unknown")} /></label>
           <button className={BTN} disabled={m !== null && !Number.isFinite(m)} onClick={() => onDone({
             id: uid(), charKey: key, character: char.name, faction, server: char.server, className: char.className,
             slot: prioritySlot(chosen.gearSlot!), gearSlot: chosen.gearSlot!, mastery: m, profession: chosen.top!.profession,
-            targetRecipeKey: chosen.top!.recipeKey, goal: "normal", status: "active", createdAt: new Date().toISOString(), owned: [],
+            targetRecipeKey: chosen.top!.recipeKey, goal: "normal", status: "active", createdAt: new Date().toISOString(), owned: [], setup: "stock", confidence: PLAN_CONFIDENCE,
           })}>{t("Projekt starten", "Start project")}</button>
         </div>
       )}
@@ -356,66 +361,274 @@ function NewProject({ state, char, charKey: key, onDone }: { state: CraftState; 
   );
 }
 
-type DetailTab = "next" | "stock" | "log";
+/** Name without the faction tag: the project already knows the faction. */
+const shown = (n: string) => n.replace(/\s*\((elyos|asmodian)\)\s*$/i, "");
 
 function ProjectDetail({ p, state, update, char, onBack, onPrice }: { p: Project; state: CraftState; update: Update; char: Character; onBack: () => void; onPrice: (x: PriceTarget) => void }) {
   const t = useT();
   const range = useRange();
+  const kinah = useKinah();
   const target = projectTarget(p, state.recipes);
   const pr = progress(p, state);
   const money = spent(p, state.events);
-  const step = p.status === "active" ? nextStep(p, state) : null;
-  const [tab, setTab] = useState<DetailTab>("next");
   const set = (patch: Partial<Project>) => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
-  const tabs = [["next", "Next Steps"], ["stock", t("Ist-Stand & Inventar", "Stock & inventory")], ["log", t("Protokoll", "Log")]] as const;
+  const header = (
+    <div className="flex items-center gap-3">
+      <button onClick={onBack} className="shrink-0 rounded-full border border-[#d9c58f]/20 bg-white/[0.03] px-3.5 py-1.5 text-sm text-[#efe6cc]/85 hover:border-[#d9c58f]/40">‹ {t("Projekte", "Projects")}</button>
+      <h2 className="min-w-0 flex-1 text-base font-semibold leading-tight tracking-tight text-[#f4eed7] sm:truncate sm:text-xl">{target ? shown(target.name) : t("Rezept fehlt", "Recipe missing")}</h2>
+      <input className={`${INPUT} w-28 text-xs`} inputMode="numeric" title={t("Deine Handwerksstufe", "Your crafting level")} aria-label={t("Deine Handwerksstufe", "Your crafting level")}
+        placeholder={t("Stufe ?", "Level ?")} value={p.mastery ?? ""} onChange={(e) => set({ mastery: e.target.value === "" ? null : Number(e.target.value) })} />
+      <ProjectMenu p={p} update={update} />
+    </div>
+  );
+  if (p.setup) return <div className="space-y-4">{header}<Setup p={p} state={state} update={update} char={char} /></div>;
+
+  const { plan, line, step } = currentCraft(p, state);
+  const cost = planCost(plan, ctxOf(state, p), "low");
+  const conf = Math.round((p.confidence ?? PLAN_CONFIDENCE) * 100);
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <button onClick={onBack} className="shrink-0 rounded-full border border-[#d9c58f]/20 bg-white/[0.03] px-3.5 py-1.5 text-sm text-[#efe6cc]/85 hover:border-[#d9c58f]/40">‹ {t("Projekte", "Projects")}</button>
-        <h2 className="min-w-0 flex-1 text-base font-semibold leading-tight tracking-tight text-[#f4eed7] sm:truncate sm:text-xl">{target?.name ?? t("Rezept fehlt", "Recipe missing")}</h2>
-        <input className={`${INPUT} w-28 text-xs`} inputMode="numeric" title={t("Deine Handwerksstufe", "Your crafting level")} aria-label={t("Deine Handwerksstufe", "Your crafting level")}
-          placeholder={t("Stufe ?", "Level ?")} value={p.mastery ?? ""} onChange={(e) => set({ mastery: e.target.value === "" ? null : Number(e.target.value) })} />
-        <ProjectMenu p={p} update={(fn) => { update(fn); }} />
-      </div>
-
+      {header}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-400">
-        <span>{statusName(p.status, t)} · {p.server}{p.faction ? ` · ${p.faction}` : ""}{p.className ? ` · ${p.className}` : ""}</span>
+        <span>{statusName(p.status, t)} · {p.server}{p.className ? ` · ${p.className}` : ""}</span>
         <span>{t("Bisher ausgegeben", "Spent so far")}: {range(money.low, money.high) ?? "0 Kinah"}{money.unknown > 0 && <span className={MISSING}> · {money.unknown} {t("Versuche ohne Preis", "attempts without price")}</span>}</span>
+        <span>{t("Noch zu kaufen", "Still to buy")} ({conf} %): {cost.cost !== null ? <b className="text-[#f4eed7]">{kinah(cost.cost)}</b> : <span className={MISSING}>{t("Preise fehlen", "prices missing")}{cost.known > 0 ? ` (${t("bekannt", "known")} ${kinah(cost.known)})` : ""}</span>}</span>
         <span className="min-w-[12rem] flex-1"><Progress percent={pr.percent} done={pr.done} total={pr.total} /></span>
       </div>
-
       {p.status === "paused" && <p className="text-xs text-zinc-500">{t("Pausiert. Über ⋯ fortsetzen.", "Paused. Resume via ⋯.")}</p>}
-      {step ? <CurrentCraft s={step} state={state} onLog={(o) => update((st) => logAttempt(st, step, o))} onPrice={onPrice} />
-        : p.status === "active" && pr.percent !== 100 && <p className={`text-sm ${MISSING}`}>{t("Kein nächster Craft bestimmbar: Zutaten dieser Linie fehlen noch in den Daten.", "No next craft: the ingredients of this line are still missing in the data.")}</p>}
 
-      <div role="tablist" className="grid grid-cols-3 rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-xs sm:text-sm">
-        {tabs.map(([k, l]) => (
-          <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-            className={`rounded-lg px-2 py-1.5 transition-colors ${tab === k ? "bg-white/[0.09] text-[#f4eed7] ring-1 ring-[#d9c58f]/40" : "text-zinc-500 hover:text-zinc-300"}`}>{l}</button>
-        ))}
+      {p.buyFinal ? (
+        <Card className="p-4 text-center text-sm">
+          <div className="relative space-y-2">
+            <div className={LABEL}>{t("Dein Weg", "Your route")}</div>
+            <div className="text-[#f4eed7]">{t("Endwaffe direkt im Markt kaufen", "Buy the final item on the market")}: <b>{target ? shown(target.name) : "?"}</b></div>
+            <button className={BTN} onClick={() => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...x, status: "done", owned: target ? [...x.owned, target] : x.owned } : x)) }))}>{t("Gekauft, Projekt fertig", "Bought, project finished")}</button>
+          </div>
+        </Card>
+      ) : step && line && p.status === "active" ? (
+        <CurrentCraft s={step} line={line} conf={conf} state={state} onLog={(o) => update((st) => logAttempt(st, step, o))} onPrice={onPrice} />
+      ) : p.status === "active" && pr.percent !== 100 && (
+        <p className={`text-sm ${MISSING}`}>{plan.unknown.length ? `${t("Kein nächster Craft bestimmbar", "No next craft")}: ${plan.unknown.slice(0, 3).join(" · ")}` : t("Kein nächster Craft bestimmbar: Zutaten dieser Linie fehlen noch in den Daten.", "No next craft: the ingredients of this line are still missing in the data.")}</p>
+      )}
+
+      <div className="flex flex-wrap gap-1.5">
+        <button className={BTN} onClick={() => set({ setup: "stock" })}>{t("Lager anpassen", "Adjust stock")}</button>
+        <button className={BTN} onClick={() => set({ setup: "prices" })}>{t("Preise anpassen", "Adjust prices")}</button>
+        <button className={BTN} onClick={() => set({ setup: "route" })}>{t("Weg ändern", "Change route")}</button>
       </div>
-      {tab === "next" && <NextStepsPanel p={p} state={state} />}
-      {tab === "stock" && <StockPanel p={p} state={state} update={update} char={char} onPrice={onPrice} />}
-      {tab === "log" && <LogPanel p={p} state={state} update={update} />}
+
+      <details className="card-face relative rounded-2xl px-4 py-3 text-sm">
+        <summary className="cursor-pointer text-[#efe6cc]/90">{t("Gesamtplan anzeigen", "Show the whole plan")}</summary>
+        <div className="mt-3"><PlanPanel p={p} plan={plan} state={state} /></div>
+      </details>
+      <details className="card-face relative rounded-2xl px-4 py-3 text-sm">
+        <summary className="cursor-pointer text-[#efe6cc]/90">{t("Protokoll", "Log")}</summary>
+        <div className="mt-3"><LogPanel p={p} state={state} update={update} /></div>
+      </details>
     </div>
   );
 }
 
-/** One material tile of the current craft: icon, name, have / need, price. */
-function MaterialTile({ i, p, state, stepKey, onPrice }: { i: NextStep["ingredients"][number]; p: Project; state: CraftState; stepKey: string; onPrice: (x: PriceTarget) => void }) {
+/* ------------------------------------------------------------------ guided setup ------------------------------------------------------------------ */
+
+const SETUP_STEPS = ["stock", "prices", "route"] as const;
+
+/** After creating a project: stock first (or "I have nothing"), then market prices, then the route (buy or craft, where to start). */
+function Setup({ p, state, update, char }: { p: Project; state: CraftState; update: Update; char: Character }) {
   const t = useT();
-  const ok = i.qty !== null && i.have >= i.qty;
+  const set = (patch: Partial<Project>) => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
+  const at = SETUP_STEPS.indexOf(p.setup!);
+  const names = [t("Lager", "Stock"), t("Preise", "Prices"), t("Weg", "Route")];
+  const go = (i: number) => set({ setup: SETUP_STEPS[i] });
+  // what the whole line uses, crafted from scratch (so the lists do not change while typing)
+  const full = { ...p, owned: [], buyFinal: false, buy: (p.buy ?? []).filter((k) => !routeItems(p, state).some((x) => itemKey(x) === k)) };
+  const fullPlan = craftPlan(full, { ...state, events: [] });
+  const stages = routeItems(p, state);
+  const ladder = ladderItems(state, p.faction, p.gearSlot ?? state.recipes.find((r) => r.recipeKey === p.targetRecipeKey)?.slot ?? "");
+  const levelOfItem = (i: ItemRef) => ladder.find((x) => sameItem(x.item, i))?.level ?? null;
+  const mats = fullPlan.materials.filter((m) => !m.chainItem);
+  return (
+    <Card className="p-4 text-sm">
+      <div className="relative space-y-4">
+        <ol className="flex flex-wrap gap-2 text-xs">
+          {names.map((n, i) => (
+            <li key={n}><button onClick={() => go(i)} className={`rounded-full px-3 py-1 ring-1 ${i === at ? "bg-white/[0.1] text-[#f4eed7] ring-[#d9c58f]/50" : i < at ? "text-[#5fbf8a] ring-white/10" : "text-zinc-500 ring-white/10"}`}>{i + 1}. {n}</button></li>
+          ))}
+        </ol>
+
+        {p.setup === "stock" && <>
+          <div>
+            <div className="text-base font-semibold text-[#f4eed7]">{t("Hast du schon gecraftete Waffen oder Material?", "Do you already have crafted items or materials?")}</div>
+            <p className="text-xs text-zinc-400">{t("Trag ein, was im Lager liegt. Die Endstufe fehlt hier absichtlich: Wenn du die hast, musst du nicht mehr craften.", "Enter what is in your storage. The final stage is left out on purpose: if you have it, there is nothing left to craft.")}</p>
+          </div>
+          <StockGroup title={t("Combo-Stufen bis Lv 44", "Combo stages up to Lv 44")} items={stages.filter((i) => (levelOfItem(i) ?? 0) <= 44)} p={p} update={update} levelOf={levelOfItem} />
+          <StockGroup title={t("Höhere Stufen (optional, ab hier Safecraft)", "Higher stages (optional, safe crafts from here)")} items={stages.filter((i) => (levelOfItem(i) ?? 0) > 44)} p={p} update={update} levelOf={levelOfItem} />
+          <section className="space-y-2">
+            <div className={LABEL}>{t("Materialien der ganzen Kette (Lager gilt für alle Projekte)", "Materials of the whole line (stock is shared by all projects)")}</div>
+            <ul className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+              {mats.map((m) => (
+                <li key={itemKey(m.item)} className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-2 py-1.5 text-xs ring-1 ring-white/5" style={rarityEdge(m.item.name)}>
+                  <ItemIcon src={iconOf(m.item, p.faction)} rarity={rarityOf(m.item.name)} />
+                  <span className="min-w-0 flex-1 truncate text-[#efe6cc]/90">{shown(m.item.name)}</span>
+                  <input className={`${INPUT} w-20 text-right text-xs`} inputMode="numeric" aria-label={m.item.name} value={state.inventory[itemKey(m.item)] ?? ""} placeholder="0"
+                    onChange={(e) => { const v = e.target.value.replace(/\D/g, ""); update((s) => { const inv = { ...s.inventory }; if (v === "") delete inv[itemKey(m.item)]; else inv[itemKey(m.item)] = Number(v); return { ...s, inventory: inv }; }); }} />
+                </li>
+              ))}
+              {!mats.length && <li className="text-zinc-500">{t("Keine Materialliste: Zutaten fehlen in den Daten.", "No material list: ingredients missing in the data.")}</li>}
+            </ul>
+          </section>
+          <div className="flex flex-wrap gap-2">
+            <button className={BTN} onClick={() => update((s) => {
+              const inv = { ...s.inventory };
+              for (const m of mats) delete inv[itemKey(m.item)];
+              return { ...s, inventory: inv, projects: s.projects.map((x) => (x.id === p.id ? { ...x, owned: [], setup: "prices" } : x)) };
+            })}>{t("Ich habe nichts", "I have nothing")}</button>
+            <button className={`${BTN} border-[#d9c58f]/50 text-[#f4eed7]`} onClick={() => go(1)}>{t("Weiter zu den Preisen", "Next: prices")} ›</button>
+          </div>
+        </>}
+
+        {p.setup === "prices" && <>
+          <div>
+            <div className="text-base font-semibold text-[#f4eed7]">{t("Was kosten die Stufen im Markt?", "What do the stages cost on the market?")}</div>
+            <p className="text-xs text-zinc-400">{t("Ein Preis pro Stück für deinen Server", "One price per piece for your server")} ({char.server}). {t("Leer lassen, wenn du es nicht weißt. Damit rechne ich aus, ob Kaufen oder Craften günstiger ist.", "Leave empty if you do not know. I use them to work out whether buying or crafting is cheaper.")}</p>
+          </div>
+          <ul className="grid gap-1.5 sm:grid-cols-2">
+            {[...stages, ...(projectTarget(p, state.recipes) ? [projectTarget(p, state.recipes)!] : [])].map((i) => (
+              <li key={itemKey(i)} className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-2 py-1.5 text-xs ring-1 ring-white/5">
+                <ItemIcon src={iconOf(i, p.faction)} />
+                <span className="min-w-0 flex-1"><span className="block truncate text-[#efe6cc]/90">{shown(i.name)}</span><span className="text-[11px] text-zinc-500">{levelOfItem(i) ? `Lv ${levelOfItem(i)}` : ""}</span></span>
+                <PriceInput item={i} state={state} update={update} server={p.server} />
+              </li>
+            ))}
+          </ul>
+          <section className="space-y-2">
+            <div className={LABEL}>{t("Materialpreise", "Material prices")}</div>
+            <ul className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+              {mats.map((m) => (
+                <li key={itemKey(m.item)} className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-2 py-1.5 text-xs ring-1 ring-white/5" style={rarityEdge(m.item.name)}>
+                  <ItemIcon src={iconOf(m.item, p.faction)} rarity={rarityOf(m.item.name)} />
+                  <span className="min-w-0 flex-1 truncate text-[#efe6cc]/90">{shown(m.item.name)}</span>
+                  <PriceInput item={m.item} state={state} update={update} server={p.server} />
+                </li>
+              ))}
+            </ul>
+          </section>
+          <p className="text-[11px] text-zinc-500">{t("Referenzpreise aus deinem anderen Tool kannst du später als Preis-CSV importieren; sie landen hier automatisch.", "Reference prices from your other tool can be imported later as a price CSV; they show up here automatically.")}</p>
+          <div className="flex flex-wrap gap-2">
+            <button className={BTN} onClick={() => go(0)}>‹ {t("Zurück", "Back")}</button>
+            <button className={`${BTN} border-[#d9c58f]/50 text-[#f4eed7]`} onClick={() => go(2)}>{t("Weiter: Kaufen oder Craften", "Next: buy or craft")} ›</button>
+          </div>
+        </>}
+
+        {p.setup === "route" && <RouteStep p={p} state={state} update={update} onBack={() => go(1)} />}
+      </div>
+    </Card>
+  );
+}
+
+/** Stock of some stages of the line, with − n + steppers. */
+function StockGroup({ title, items, p, update, levelOf: lv }: { title: string; items: ItemRef[]; p: Project; update: Update; levelOf: (i: ItemRef) => number | null }) {
+  if (!items.length) return null;
+  const setCount = (item: ItemRef, n: number) => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? withOwnedCount(x, item, n) : x)) }));
+  return (
+    <section className="space-y-2">
+      <div className={LABEL}>{title}</div>
+      <ul className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((i) => (
+          <li key={itemKey(i)} className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-2 py-1.5 text-xs ring-1 ring-white/5">
+            <ItemIcon src={iconOf(i, p.faction)} />
+            <span className="min-w-0 flex-1"><span className="block truncate text-[#efe6cc]/90">{shown(i.name)}</span><span className="text-[11px] text-zinc-500">{lv(i) ? `Lv ${lv(i)}` : ""}</span></span>
+            <Stepper value={ownedCount(p, i)} onChange={(n) => setCount(i, n)} label={i.name} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Market price per piece for the server, typed in place (saved when the field is left). */
+function PriceInput({ item, state, update, server }: { item: ItemRef; state: CraftState; update: Update; server: string }) {
+  const t = useT();
+  const lang = useLang();
+  const cur = findPrice({ prices: state.prices.filter((x) => (x.server ?? "").toLowerCase() === server.toLowerCase()), server }, item);
+  const value = cur?.low ?? cur?.ref ?? null;
+  const [text, setText] = useState<string>();
+  const commit = () => {
+    if (text === undefined) return;
+    const n = numOrNull(text);
+    setText(undefined);
+    if (n === null) { update((s) => ({ ...s, prices: s.prices.filter((x) => !(sameItem(x, item) && (x.server ?? "").toLowerCase() === server.toLowerCase())) })); return; }
+    if (!Number.isFinite(n) || n < 0) return;
+    update((s) => savePrice(s, item, { low: n, high: n, ref: null, tradeable: true, note: cur?.note }, { kind: "global", server }));
+  };
+  return (
+    <label className="flex shrink-0 items-center gap-1 text-zinc-500">
+      <input className={`${INPUT} w-28 text-right text-xs`} inputMode="numeric" aria-label={`${item.name}: ${t("Preis", "price")}`} placeholder={t("Kinah", "Kinah")}
+        value={text ?? (value === null ? "" : value.toLocaleString(numberLocale(lang)))} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} />
+    </label>
+  );
+}
+
+/** Buy or craft: every route with what is still to buy, the cheapest known one recommended; the player picks. */
+function RouteStep({ p, state, update, onBack }: { p: Project; state: CraftState; update: Update; onBack: () => void }) {
+  const t = useT();
+  const kinah = useKinah();
+  const opts = routeOptions(p, state, "low");
+  const current = routeOf(p, state);
+  const [pick, setPick] = useState(current === "all" ? (opts.find((o) => o.recommended)?.key ?? "all") : current);
+  const conf = p.confidence ?? PLAN_CONFIDENCE;
+  const label = (o: (typeof opts)[number]) => o.key === "all" ? t("Alles selbst craften", "Craft everything myself")
+    : o.key === "final" ? `${t("Endwaffe direkt kaufen", "Buy the final item")}: ${shown(o.item?.name ?? "?")}`
+      : `${shown(o.item!.name)} ${t("kaufen, ab da selbst craften", "buy, craft from there")}`;
+  return (
+    <>
+      <div>
+        <div className="text-base font-semibold text-[#f4eed7]">{t("Kaufen oder selbst craften?", "Buy or craft yourself?")}</div>
+        <p className="text-xs text-zinc-400">{t("Pro Weg: was du mit deinem Lager noch kaufen musst. Geplant wird so, dass jede Stufe mit der gewählten Sicherheit klappt; Ø ist der Mittelwert.", "Per route: what you still have to buy given your stock. Each stage is planned to work with the chosen confidence; Ø is the mean.")}</p>
+      </div>
+      <label className="flex items-center gap-2 text-xs text-zinc-400">{t("Sicherheit pro Stufe", "Confidence per stage")}
+        <select className={`${INPUT} text-xs`} value={conf} onChange={(e) => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...x, confidence: Number(e.target.value) } : x)) }))}>
+          {[0.75, 0.8, 0.9].map((c) => <option key={c} value={c}>{Math.round(c * 100)} %</option>)}
+        </select>
+      </label>
+      <ul className="space-y-1.5" role="radiogroup">
+        {opts.map((o) => (
+          <li key={o.key}>
+            <label className={`flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-3 py-2 text-xs ring-1 ${pick === o.key ? "bg-white/[0.08] ring-[#d9c58f]/50" : "bg-white/[0.02] ring-white/10 hover:ring-[#d9c58f]/30"}`}>
+              <input type="radio" name="route" checked={pick === o.key} onChange={() => setPick(o.key)} />
+              {o.item && <ItemIcon src={iconOf(o.item, p.faction)} />}
+              <span className="min-w-0 flex-1 text-sm text-[#efe6cc]/90">{label(o)}{o.recommended && <span className="ml-2 rounded-full bg-[#5fbf8a]/15 px-2 py-0.5 text-[11px] text-[#5fbf8a]">{t("Empfohlen", "Recommended")}</span>}</span>
+              <span className="text-zinc-300">{o.conf.cost !== null ? <>{Math.round(conf * 100)} %: <b className="text-[#f4eed7]">{kinah(o.conf.cost)}</b>{o.mean.cost !== null && <span className="text-zinc-500"> · Ø {kinah(o.mean.cost)}</span>}</>
+                : <span className={MISSING}>{o.unknown.length ? t("Daten fehlen", "data missing") : `${o.conf.missingPrices.length} ${o.conf.missingPrices.length === 1 ? t("Preis fehlt", "price missing") : t("Preise fehlen", "prices missing")}`}</span>}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      {!opts.some((o) => o.recommended) && <p className={`text-xs ${MISSING}`}>{t("Für eine Empfehlung fehlen noch Preise. Du kannst trotzdem einen Weg wählen und die Preise später eintragen.", "Prices are missing for a recommendation. You can still pick a route and add prices later.")}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button className={BTN} onClick={onBack}>‹ {t("Zurück", "Back")}</button>
+        <button className={`${BTN} border-[#d9c58f]/50 text-[#f4eed7]`} onClick={() => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...withRoute(x, s, pick), setup: undefined } : x)) }))}>{t("Weg übernehmen und loslegen", "Take this route and start")} ›</button>
+      </div>
+    </>
+  );
+}
+
+/** One material tile of the current craft: icon, name, in stock / needed for this stage, per attempt, price. */
+function MaterialTile({ i, p, state, stepKey, attempts, onPrice }: { i: NextStep["ingredients"][number]; p: Project; state: CraftState; stepKey: string; attempts: number | null; onPrice: (x: PriceTarget) => void }) {
+  const t = useT();
+  const total = i.qty !== null && attempts !== null ? Math.ceil(i.qty * attempts) : null;
+  const ok = total !== null && i.have >= total;
   const own = i.crafted || (i.kind === "transfer" && canCraft(p, i, state.recipes));
   return (
-    <li className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-2 py-1.5 ring-1 ring-white/5">
-      <ItemIcon src={iconOf(i, p.faction)} rarity={rarityOf(i.name)} />
+    <li className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-2 py-1.5 ring-1 ring-white/5" style={own ? undefined : rarityEdge(i.name)}>
+      <ItemIcon src={iconOf(i, p.faction)} rarity={own ? undefined : rarityOf(i.name)} size="h-10 w-10" />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-xs text-[#efe6cc]/90">{i.name}</div>
+        <div className="truncate text-xs text-[#efe6cc]/90">{shown(i.name)}</div>
         <div className="text-[11px]">
-          <span className={ok ? "text-[#5fbf8a]" : "text-[#ff6b6b]"}>{i.have} / {i.qty ?? "?"}</span>
-          {i.crafted && <span className="text-zinc-500"> · {t("Zwischenstufe", "intermediate")}</span>}
-          {i.kind === "transfer" && <span className="text-zinc-500"> · Transfer</span>}
-          {i.alternatives?.map((a) => <span key={a.itemId ?? a.name} className="text-zinc-500"> · {t("oder", "or")} {a.name}{a.unverified ? ` (${t("unbestätigt", "unconfirmed")})` : ""}</span>)}
+          <span className={ok ? "text-[#5fbf8a]" : "text-[#ff6b6b]"}>{i.have} / {total ?? "?"}</span>
+          <span className="text-zinc-500"> · {i.qty ?? "?"} {t("pro Versuch", "per attempt")}</span>
+          {i.crafted && <span className="text-zinc-500"> · {t("Vorstufe", "previous stage")}</span>}
+          {i.alternatives?.map((a) => <span key={a.itemId ?? a.name} className="text-zinc-500"> · {t("oder", "or")} {shown(a.name)}{a.unverified ? ` (${t("unbestätigt", "unconfirmed")})` : ""}</span>)}
         </div>
         {!own && <div className="mt-0.5"><PriceCell item={i} ctxProject={p} stepKey={stepKey} state={state} compact onEdit={() => onPrice({ item: i, server: p.server, project: p, stepKey })} /></div>}
       </div>
@@ -423,8 +636,8 @@ function MaterialTile({ i, p, state, stepKey, onPrice }: { i: NextStep["ingredie
   );
 }
 
-/** The craft to do now: big item picture in the middle, materials left and right, chances and the result buttons. */
-function CurrentCraft({ s, state, onLog, onPrice }: { s: NextStep; state: CraftState; onLog: (o: Outcome) => void; onPrice: (x: PriceTarget) => void }) {
+/** The craft to do now: big item picture in the middle, materials left and right, how many are still missing, chances and the result buttons. */
+function CurrentCraft({ s, line, conf, state, onLog, onPrice }: { s: NextStep; line: PlanLine; conf: number; state: CraftState; onLog: (o: Outcome) => void; onPrice: (x: PriceTarget) => void }) {
   const t = useT();
   const range = useRange();
   const want = s.goal === "combo" && s.recipe.comboOutput ? s.recipe.comboOutput : s.recipe.output;
@@ -432,12 +645,11 @@ function CurrentCraft({ s, state, onLog, onPrice }: { s: NextStep; state: CraftS
   const free = (i: ItemRef) => !!craftsItself(s.project, i, state.recipes) || ((i as { kind?: string }).kind === "transfer" && !!producerOf(i, state.recipes, s.project.faction));
   const ctx = ctxOf(state, s.project, s.recipe.recipeKey);
   const next = { low: attemptCost(s.recipe, ctx, "low", free), high: attemptCost(s.recipe, ctx, "high", free) };
-  const pActual = s.chance.actual ? effectiveChance(s.chance.actual, s.goal) : null;
-  const plan = s.plan.p !== null ? s.plan : s.documentedPlan.p !== null ? s.documentedPlan : s.bestPlan;
-  const planBasis = s.plan.p !== null ? t("bei deiner Stufe", "at your level") : s.documentedPlan.p !== null ? `${t("bei Mindeststufe", "at required level")} ${s.chance.documentedMastery ?? "?"}` : t("bei bester dok. Stufe", "at best documented level");
   const half = Math.ceil(s.ingredients.length / 2);
   const lv = stageLevel(s);
+  const basis = { character: t("deine Stufe", "your level"), required: t("Mindeststufe", "required level"), fixed: t("garantiert", "guaranteed"), best: t("beste dok. Stufe", "best documented level"), none: "" }[line.basis];
   const unconfirmed = s.ingredients.length > 0 && s.recipe.ingredientsStatus !== undefined && s.recipe.ingredientsStatus !== "complete";
+  const tile = (i: NextStep["ingredients"][number]) => <MaterialTile key={`${i.kind}:${itemKey(i)}`} i={i} p={s.project} state={state} stepKey={s.recipe.recipeKey} attempts={line.attempts} onPrice={onPrice} />;
   return (
     <Card className="p-4 text-sm">
       <div className="relative mb-3 flex flex-wrap items-baseline gap-2">
@@ -445,20 +657,22 @@ function CurrentCraft({ s, state, onLog, onPrice }: { s: NextStep; state: CraftS
         {unconfirmed && <span className={`text-[11px] ${MISSING}`}>{t("Zutatenliste unbestätigt, Kosten vorläufig", "ingredient list unconfirmed, cost provisional")}</span>}
         {s.recipe.liveUnconfirmed && <span className="text-[11px] text-zinc-500">{t("Global-Clientdaten, nicht live bestätigt", "Global client data, not confirmed live")}{s.recipe.source && <> · <a className="underline hover:text-zinc-300" href={s.recipe.source} target="_blank" rel="noreferrer">{t("Quelle", "Source")}</a></>}</span>}
       </div>
-      <div className="relative grid gap-3 md:grid-cols-[1fr_minmax(0,14rem)_1fr] md:items-center">
-        <ul className="order-2 space-y-1.5 md:order-1">{s.ingredients.slice(0, half).map((i) => <MaterialTile key={`${i.kind}:${itemKey(i)}`} i={i} p={s.project} state={state} stepKey={s.recipe.recipeKey} onPrice={onPrice} />)}</ul>
+      <div className="relative grid gap-3 md:grid-cols-[1fr_minmax(0,15rem)_1fr] md:items-center">
+        <ul className="order-2 space-y-1.5 md:order-1">{s.ingredients.slice(0, half).map(tile)}</ul>
         <div className="order-1 text-center md:order-2">
-          <div className="mx-auto w-28 sm:w-36">{icon ? <CardArt src={icon} alt={want.name} /> : <Filler className="aspect-square w-full" />}</div>
-          <div className="mt-2 font-semibold text-[#f4eed7]">{want.name}</div>
+          <div className="mx-auto w-32 sm:w-40">{icon ? <CardArt src={icon} alt={want.name} /> : <Filler className="aspect-square w-full" />}</div>
+          <div className="mt-2 font-semibold text-[#f4eed7]">{shown(want.name)}</div>
           <div className="text-xs text-zinc-400">{lv ? `Lv ${lv}` : ""}{s.goal === "combo" ? " · Combo" : ""}</div>
-          <div className="mt-1 text-xs text-zinc-300">
-            {t("Chance", "Chance")}: {pct(plan.p) ?? <span className={MISSING}>{t("unbekannt", "unknown")}</span>} <span className="text-zinc-500">({planBasis})</span>
+          <div className="mt-2 rounded-xl bg-white/[0.04] px-3 py-2 ring-1 ring-[#d9c58f]/25">
+            <div className="text-lg font-semibold text-[#f4eed7]">{t("Noch", "Still")} {line.missing}× {t("craften", "to craft")}</div>
+            <div className="text-[11px] text-zinc-400">{t("gebraucht", "needed")} {line.need} · {t("im Lager", "in stock")} {line.have}</div>
+            <div className="text-xs text-zinc-300">{t("Geplant", "Planned")}: <b className="text-[#f4eed7]">{line.attempts ?? "?"}</b> {t("Versuche", "attempts")} ({conf} %)</div>
           </div>
-          {plan.p !== null && <div className="text-xs text-zinc-400">Ø {plan.expected !== null && Number.isFinite(plan.expected) ? plan.expected.toFixed(1) : "∞"} · 80 %: <b className="text-[#f4eed7]">{plan.n80 !== null && Number.isFinite(plan.n80) ? plan.n80 : "∞"}</b> {t("Versuche", "attempts")}</div>}
-          {pActual === null && <div className="text-[11px] text-zinc-500">{t("Trag deine Handwerksstufe ein, wenn du die Chance im Spiel siehst.", "Enter your crafting level once you see the chance in game.")}</div>}
+          <div className="mt-1 text-xs text-zinc-300">{t("Chance", "Chance")}: {pct(line.p) ?? <span className={MISSING}>{t("unbekannt", "unknown")}</span>}{basis && <span className="text-zinc-500"> ({basis})</span>}</div>
+          {s.chance.actual === null && line.basis !== "fixed" && <div className="text-[11px] text-zinc-500">{t("Trag deine Handwerksstufe oben ein, dann rechne ich mit deiner Chance.", "Enter your crafting level above to use your own chance.")}</div>}
           <div className="mt-1 text-xs text-zinc-400">{t("Ein Versuch", "One attempt")}: {next.low.cost !== null ? range(next.low.cost, next.high.cost) : <span className={MISSING}>{t("Preise fehlen", "prices missing")}</span>}</div>
         </div>
-        <ul className="order-3 space-y-1.5">{s.ingredients.slice(half).map((i) => <MaterialTile key={`${i.kind}:${itemKey(i)}`} i={i} p={s.project} state={state} stepKey={s.recipe.recipeKey} onPrice={onPrice} />)}</ul>
+        <ul className="order-3 space-y-1.5">{s.ingredients.slice(half).map(tile)}</ul>
         {!s.ingredients.length && <p className={`order-3 md:col-span-3 ${MISSING}`}>{t("Zutaten nicht dokumentiert (Datenlücke)", "Ingredients not documented (data gap)")}</p>}
       </div>
       <div className="relative mt-3 flex flex-wrap justify-center gap-1.5">
@@ -469,110 +683,58 @@ function CurrentCraft({ s, state, onLog, onPrice }: { s: NextStep; state: CraftS
   );
 }
 
-/** What is still to craft, lowest stage first, with Ø and 80 % attempts; then the recommendation and the whole-goal budget. */
-function NextStepsPanel({ p, state }: { p: Project; state: CraftState }) {
+/** The whole plan, lowest stage first: needed, in stock, missing, chance, planned attempts; then what is still to buy. */
+function PlanPanel({ p, plan, state }: { p: Project; plan: ReturnType<typeof craftPlan>; state: CraftState }) {
   const t = useT();
-  const lines = needList(p, state);
-  const basisName = (b: NeedLine["basis"]) => ({ character: t("deine Stufe", "your level"), required: t("Mindeststufe", "required level"), fixed: t("garantiert", "guaranteed"), best: t("beste dok. Stufe", "best documented level"), none: "" })[b];
-  const fmt = (n: number | null) => (n === null ? "?" : !Number.isFinite(n) ? "∞" : Number.isInteger(n) ? String(n) : n.toFixed(1));
-  const first = lines[0];
+  const kinah = useKinah();
+  const conf = Math.round(plan.confidence * 100);
+  const ctx = ctxOf(state, p);
   return (
     <div className="space-y-3">
-      {first && (
-        <p className="text-sm text-[#efe6cc]/90">
-          {t("Als Nächstes", "Next")}: <b className="text-[#f4eed7]">{first.item.name}</b>{first.count > 1 ? ` (${t("noch", "still")} ${first.count}×)` : ""}.
-          {" "}{t("Von unten nach oben brauchst du noch:", "From the bottom up you still need:")}
-        </p>
-      )}
       <ol className="space-y-1.5">
-        {lines.map((l) => {
-          const lv = stageLevel(l);
+        {plan.lines.map((l) => {
+          const lv = l.goal === "combo" ? l.recipe.comboLevel ?? l.recipe.level : l.recipe.level;
           return (
-            <li key={`${l.recipe.recipeKey}:${l.goal}`} className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-3 py-2 text-xs">
+            <li key={`${l.recipe.recipeKey}:${l.goal}`} className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-white/[0.03] px-3 py-2 text-xs ring-1 ${l.missing > 0 ? "ring-white/10" : "opacity-60 ring-white/5"}`}>
               <ItemIcon src={iconOf(l.item, p.faction)} />
-              <span className="min-w-0 text-sm text-[#efe6cc]/90">{l.item.name}</span>
+              <span className="min-w-0 text-sm text-[#efe6cc]/90">{shown(l.item.name)}</span>
               <span className="text-zinc-500">{lv ? `Lv ${lv}` : ""}{l.goal === "combo" ? " · Combo" : ""}</span>
               {!l.ingredientsKnown && <span className={MISSING}>{l.recipe.ingredients.length ? t("Zutaten unbestätigt", "ingredients unconfirmed") : t("Zutaten fehlen", "ingredients missing")}</span>}
               <span className="ml-auto flex flex-wrap items-center gap-3 text-zinc-300">
-                <span>{t("noch", "still")} <b className="text-[#f4eed7]">{l.count}×</b></span>
-                <span>{t("Chance", "Chance")} {pct(l.p) ?? <span className={MISSING}>?</span>}{l.basis !== "none" && <span className="text-zinc-500"> ({basisName(l.basis)})</span>}</span>
-                <span>Ø <b className="text-[#f4eed7]">{fmt(l.expected)}</b></span>
-                <span>80 %: <b className="text-[#f4eed7]">{fmt(l.n80)}</b> {t("Versuche", "attempts")}</span>
+                <span>{t("gebraucht", "needed")} {l.need} · {t("Lager", "stock")} {l.have}</span>
+                <span>{t("fehlen", "missing")} <b className="text-[#f4eed7]">{l.missing}</b></span>
+                <span>{t("Chance", "Chance")} {pct(l.p) ?? <span className={MISSING}>?</span>}</span>
+                <span>{conf} %: <b className="text-[#f4eed7]">{l.attempts ?? "?"}</b> {t("Versuche", "attempts")}</span>
               </span>
             </li>
           );
         })}
-        {!lines.length && <li className="text-sm text-zinc-500">{progress(p, state).percent === 100 ? t("Alles da, Projekt fertig.", "Everything there, project finished.") : t("Pfad unbekannt: Zutaten fehlen in den Daten.", "Path unknown: ingredients missing in the data.")}</li>}
+        {!plan.lines.length && !p.buyFinal && <li className="text-zinc-500">{t("Pfad unbekannt: Zutaten fehlen in den Daten.", "Path unknown: ingredients missing in the data.")}</li>}
       </ol>
-      <p className="text-[11px] text-zinc-500">{t("Ø = Mittelwert der Versuche. 80 % = so viele Versuche reichen in 8 von 10 Fällen für alle benötigten Erfolge dieser Stufe. Gilt pro Stufe, nicht als Garantie für die ganze Kette.",
-        "Ø = average attempts. 80 % = this many attempts are enough for all needed successes of this stage in 8 of 10 cases. Per stage, not a guarantee for the whole chain.")}</p>
-      {p.status !== "done" && <ProjectBudget p={p} state={state} />}
+      {plan.materials.some((m) => m.missing > 0) && (
+        <div className="space-y-1">
+          <div className={LABEL}>{t("Noch zu kaufen", "Still to buy")}</div>
+          <ul className="grid gap-1 text-xs sm:grid-cols-2 lg:grid-cols-3">
+            {plan.materials.filter((m) => m.missing > 0).map((m) => {
+              const pr = findPrice(ctx, m.item);
+              return (
+                <li key={itemKey(m.item)} className="flex items-center gap-2 rounded-lg bg-white/[0.02] px-2 py-1" style={rarityEdge(m.item.name)}>
+                  <ItemIcon src={iconOf(m.item, p.faction)} rarity={m.chainItem ? undefined : rarityOf(m.item.name)} size="h-6 w-6" />
+                  <span className="min-w-0 flex-1 truncate text-[#efe6cc]/90">{shown(m.item.name)}</span>
+                  <b className="text-[#f4eed7]">{Math.ceil(m.missing)}×</b>
+                  <span className={pr?.low != null ? "text-zinc-400" : MISSING}>{pr?.low != null ? kinah(pr.low * Math.ceil(m.missing)) : "?"}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {plan.unknown.length > 0 && <p className={`text-xs ${MISSING}`}>{t("Unvollständig", "Incomplete")}: {plan.unknown.slice(0, 6).join(" · ")}</p>}
+      <p className="text-[11px] text-zinc-500">{t(`Gerechnet von oben nach unten: Für die fehlenden Treffer einer Stufe braucht es so viele Versuche, dass sie in ${conf} % der Fälle reichen. Jeder Versuch verbraucht eine Vorstufe, deshalb ist das die Menge, die die Stufe darunter liefern muss.`,
+        `Worked out top-down: a stage needs so many attempts that its missing hits come in ${conf} % of cases. Every attempt uses one item of the stage below, so that is how many the stage below must deliver.`)}</p>
     </div>
   );
 }
-
-/** Starting stock of the gear line (how many of each stage you already have) and the materials with stock and price. */
-function StockPanel({ p, state, update, char, onPrice }: { p: Project; state: CraftState; update: Update; char: Character; onPrice: (x: PriceTarget) => void }) {
-  const t = useT();
-  const gearSlot = p.gearSlot ?? state.recipes.find((r) => r.recipeKey === p.targetRecipeKey)?.slot ?? "";
-  const items = ladderItems(state, p.faction, gearSlot);
-  const setCount = (item: ItemRef, n: number) => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? withOwnedCount(x, item, n) : x)) }));
-  const mats = useMemo(() => {
-    const out = new Map<string, { item: ItemRef & { bound?: boolean | null }; crafted: boolean; craftable: boolean }>();
-    for (const { recipe } of remainingPath(p, state)) for (const i of recipe.ingredients) {
-      if (i.kind === "transfer") continue;
-      const k = itemKey(i);
-      if (!out.has(k)) out.set(k, { item: i, crafted: !!craftsItself(p, i, state.recipes), craftable: canCraft(p, i, state.recipes) });
-    }
-    return [...out.values()].filter((m) => !m.crafted || !items.some((x) => sameItemRef(x.item, m.item)));
-  }, [p, state, items]);
-  const toggleBuy = (item: ItemRef, craft: boolean) => {
-    const k = itemKey(item);
-    update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...x, buy: (x.buy ?? []).filter((y) => y !== k).concat(craft ? [] : [k]), craft: (x.craft ?? []).filter((y) => y !== k).concat(craft ? [k] : []) } : x)) }));
-  };
-  const setStock = (item: ItemRef, v: string) => update((s) => { const inv = { ...s.inventory }; if (v === "") delete inv[itemKey(item)]; else inv[itemKey(item)] = Number(v); return { ...s, inventory: inv }; });
-  return (
-    <div className="space-y-4">
-      <section className="space-y-2">
-        <div className={LABEL}>{t("Was hast du von dieser Linie schon?", "What do you already have of this line?")}</div>
-        <ul className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((x) => (
-            <li key={itemKey(x.item)} className="card-face relative flex items-center gap-2 rounded-xl px-2 py-1.5 text-xs">
-              <ItemIcon src={iconOf(x.item, p.faction)} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[#efe6cc]/90">{x.item.name}</div>
-                <div className="text-[11px] text-zinc-500">{x.level ? `Lv ${x.level}` : ""}{x.combo ? " · Combo" : ""}</div>
-              </div>
-              <Stepper value={ownedCount(p, x.item)} onChange={(n) => setCount(x.item, n)} label={x.item.name} />
-            </li>
-          ))}
-          {!items.length && <li className="text-sm text-zinc-500">{t("Für diese Linie gibt es noch keine Stufenliste.", "No stage list for this line yet.")}</li>}
-        </ul>
-        <p className="text-[11px] text-zinc-500">{t("Gecraftete und hier eingetragene Teile zählen beide. Was später noch zusätzlich gebraucht wird (z. B. Lv44-Basen), bleibt im Bedarf.", "Crafted items and items entered here both count. What later stages need on top (e.g. Lv44 bases) stays in the need list.")}</p>
-      </section>
-      <section className="space-y-2">
-        <div className={LABEL}>{t("Materialien (Bestand gilt für alle Projekte)", "Materials (stock is shared by all projects)")}</div>
-        <ul className="grid gap-1.5 lg:grid-cols-2">
-          {mats.map((m) => (
-            <li key={itemKey(m.item)} className="card-face relative flex flex-wrap items-center gap-2 rounded-xl px-2 py-1.5 text-xs" style={rarityEdge(m.item.name)}>
-              <ItemIcon src={iconOf(m.item, p.faction)} rarity={rarityOf(m.item.name)} />
-              <span className="min-w-0 flex-1 truncate text-[#efe6cc]/90">{m.item.name}
-                {m.craftable && <button className="ml-2 text-[11px] text-zinc-500 underline hover:text-zinc-300" onClick={() => toggleBuy(m.item, !m.crafted)}>{m.crafted ? t("selbst craften · lieber kaufen", "craft myself · buy instead") : t("kaufen · selbst craften", "buy · craft myself")}</button>}
-              </span>
-              {!m.crafted && <label className="flex items-center gap-1 text-zinc-500">{t("Bestand", "Stock")}
-                <input className={`${INPUT} w-16 text-right text-xs`} inputMode="numeric" value={state.inventory[itemKey(m.item)] ?? ""} placeholder="–" onChange={(e) => setStock(m.item, e.target.value.replace(/\D/g, ""))} /></label>}
-              {!m.crafted && <PriceCell item={m.item} ctxProject={p} state={state} compact onEdit={() => onPrice({ item: m.item, server: p.server, project: p })} />}
-            </li>
-          ))}
-          {!mats.length && <li className="text-sm text-zinc-500">{t("Keine Materialliste: Zutaten fehlen in den Daten.", "No material list: ingredients missing in the data.")}</li>}
-        </ul>
-      </section>
-      <p className="text-[11px] text-zinc-500">{char.server} · {t("Preise und Bestand sind für deinen Server.", "Prices and stock are for your server.")}</p>
-    </div>
-  );
-}
-
-const sameItemRef = (a: ItemRef, b: ItemRef) => itemKey(a) === itemKey(b) || (normName(a.name) === normName(b.name));
 
 /** − n + stepper for a count. */
 function Stepper({ value, onChange, label }: { value: number; onChange: (n: number) => void; label: string }) {
@@ -629,51 +791,6 @@ function PriceCell({ item, ctxProject, server, stepKey, state, onEdit, hide, com
         ? <button className="text-[11px] text-zinc-400 underline hover:text-zinc-200" onClick={onEdit}>{p ? t("ändern", "edit") : t("eingeben", "enter")}</button>
         : <button className={BTN} onClick={onEdit}>{p ? t("Bearbeiten", "Edit") : t("Preis eingeben", "Enter price")}</button>}
     </span>
-  );
-}
-
-/** Whole-project 80 % budget, simulated on request (not while rendering), cached per input. */
-function ProjectBudget({ p, state }: { p: Project; state: CraftState }) {
-  const t = useT();
-  const kinah = useKinah();
-  const [s, setS] = useState<Scenario>("low");
-  const input = useMemo(() => pathSimInput(p, state, s), [p, state, s]);
-  const [result, setResult] = useState<{ key: string; r: ReturnType<typeof simulateBudget> }>();
-  const key = JSON.stringify([input.steps, s]);
-  const [busy, setBusy] = useState(false);
-  const run = () => {
-    if (!input.steps) return;
-    setBusy(true);
-    setTimeout(() => { setResult({ key, r: simulateBudget(input.steps!, { runs: 20000, seed: 80 }) }); setBusy(false); }, 0);
-  };
-  const r = result?.key === key ? result.r : undefined;
-  if (!input.path.length) return null;
-  return (
-    <div className="card-face relative rounded-2xl px-4 py-3 text-xs">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={LABEL}>{t("Gesamtziel · 80 %-Planungswert", "Whole goal · 80 % planning value")}</span>
-        <select className={`${INPUT} text-xs`} value={s} onChange={(e) => setS(e.target.value as Scenario)}>
-          <option value="low">{t("Mindestpreis", "Minimum price")}</option><option value="high">{t("Höchstpreis", "Maximum price")}</option><option value="ref">{t("Referenzpreis", "Reference price")}</option>
-        </select>
-        <button className={BTN} disabled={!input.steps || busy} onClick={run}>{busy ? t("Rechnet …", "Running …") : t("Berechnen", "Calculate")}</button>
-      </div>
-      {!input.steps && (
-        <div className={`mt-1 ${MISSING}`}>
-          {t("Daten fehlen, deshalb keine vollständige Kostenangabe", "Data missing, so no complete cost")}{input.partial > 0 ? ` (${t("bekannte Teilsumme je 1 Versuch", "known part, 1 attempt each")}: ${kinah(input.partial)})` : ""}:
-          <ul className="list-inside list-disc text-zinc-400">{[...new Set(input.missing.map((m) => `${m.step}: ${m.what}${m.item ? ` (${m.item})` : ""}`))].slice(0, 8).map((m) => <li key={m}>{m}</li>)}</ul>
-        </div>
-      )}
-      {input.unconfirmed.length > 0 && (
-        <div className={`mt-1 ${MISSING}`}>{t("Vorläufig: Zutatenliste nicht bestätigt bei", "Provisional: ingredient list not confirmed for")} {input.unconfirmed.join(", ")}</div>
-      )}
-      {r && (
-        <div className="mt-1 space-y-0.5 text-zinc-300">
-          <div>{t("80 %-Budget", "80 % budget")}: <b className="text-[#f4eed7]">{kinah(r.budget80)}</b> <span className="text-zinc-500">({t("95 %-Intervall", "95 % interval")} {kinah(r.ci95[0])} – {kinah(r.ci95[1])})</span></div>
-          <div>{t("Erwarteter Rohkostenwert", "Expected raw cost")}: {kinah(r.expectedCost)} · {t("Versuche bei 80 %", "Attempts at 80 %")}: {r.attempts80}</div>
-          <div className="text-zinc-500">{t("Statistische Schätzung", "Statistical estimate")} · {r.runs.toLocaleString()} {t("Durchläufe", "runs")} · Seed {r.seed}. {t("Keine garantierte Kostenobergrenze.", "Not a guaranteed cost ceiling.")}</div>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -875,14 +992,15 @@ function PriceDialog({ target, state, onClose, onSave }: { target: PriceTarget; 
     if (bad) return [];
     const after = apply(state);
     // every open project on this server whose open path uses the item
-    return state.projects.filter((p) => p.status !== "done" && p.server.toLowerCase() === server.toLowerCase() && remainingPath(p, state).some(({ recipe }) => recipe.ingredients.some((i) => findPrice({ prices: [{ ...item, low: 0, high: 0, ref: 0, tradeable: null }] }, i))))
+    return state.projects.filter((p) => p.status !== "done" && p.server.toLowerCase() === server.toLowerCase() && craftPlan(p, state).materials.some((m) => m.missing > 0 && findPrice({ prices: [{ ...item, low: 0, high: 0, ref: 0, tradeable: null }] }, m.item)))
       .map((p) => {
         const pa = after.projects.find((x) => x.id === p.id)!;
-        return { p, before: [openCost(p, state, "low"), openCost(p, state, "high")] as const, after: [openCost(pa, after, "low"), openCost(pa, after, "high")] as const };
+        const cost = (x: Project, st: CraftState, sc: Scenario) => { const r = planCost(craftPlan(x, st), ctxOf(st, x), sc); return { cost: r.cost, partial: r.known }; };
+        return { p, before: [cost(p, state, "low"), cost(p, state, "high")] as const, after: [cost(pa, after, "low"), cost(pa, after, "high")] as const };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [low, high, ref, tradeable, scope, state]);
-  const show = (c: readonly [ReturnType<typeof openCost>, ReturnType<typeof openCost>]) => c[0].cost !== null ? range(c[0].cost, c[1].cost) : <span className={MISSING}>{t("Daten fehlen", "Data missing")}{c[0].partial ? ` (${t("bekannt", "known")} ${range(c[0].partial, c[1].partial)})` : ""}</span>;
+  const show = (c: readonly [{ cost: number | null; partial: number }, { cost: number | null; partial: number }]) => c[0].cost !== null ? range(c[0].cost, c[1].cost) : <span className={MISSING}>{t("Daten fehlen", "Data missing")}{c[0].partial ? ` (${t("bekannt", "known")} ${range(c[0].partial, c[1].partial)})` : ""}</span>;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
