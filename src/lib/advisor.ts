@@ -1,9 +1,13 @@
+import { statLabel } from "./stat-names";
 import type { Character, Grade, Item, StatLine } from "./types";
 import { gradeRank, minScoreFor } from "./grades";
 import { SLOT_LABEL_DE, SLOT_WEIGHT } from "./knowledge/slots";
 import { lineShare, missingIdealLines } from "./knowledge/ideal-lines";
 import { ARCANA_SOURCES, arcanaType } from "./knowledge/arcana";
 import { compareIdeal } from "./compare";
+
+/** Recommendation texts are German: stat and skill names in the German client wording. */
+const de = (n: string) => statLabel(n, "de");
 
 export type ActionKind = "reroll" | "replace" | "arcana" | "enhance" | "keep";
 
@@ -69,9 +73,9 @@ function adviseItem(char: Character, item: Item): UpgradeStep | undefined {
     const missing = cmp?.rows.filter((r) => r.state === "missing") ?? [];
     const lowLv = cmp?.rows.filter((r) => r.state === "low") ?? [];
     const details = [
-      ...missing.map((r) => `Fehlt: ${r.name} ${r.target}`),
-      ...lowLv.map((r) => `Stufe erhöhen: ${r.name} ${r.have?.value} → ${r.target}`),
-      ...bad.map((l) => `Unnötig: ${l.name} ${l.value}`),
+      ...missing.map((r) => `Fehlt: ${de(r.name)} ${r.target}`),
+      ...lowLv.map((r) => `Stufe erhöhen: ${de(r.name)} ${r.have?.value} → ${r.target}`),
+      ...bad.map((l) => `Unnötig: ${de(l.name)} ${l.value}`),
       ...(missing.length && type && ARCANA_SOURCES[type] ? ARCANA_SOURCES[type].map((x) => `Neue Karte farmen: ${x}`) : []),
       ...(missing.length >= 2 ? ["Alternative: per Transmutation eine Unique-Karte mit Wunschlinien bauen."] : []),
     ];
@@ -93,23 +97,23 @@ function adviseItem(char: Character, item: Item): UpgradeStep | undefined {
       title: `${label} ersetzen: ${item.name} hat feste Linien`,
       details: [
         "Feste Linien lassen sich nicht neu rollen, nur ein neues Teil hilft.",
-        want.length ? `Suche ein Armband mit: ${want.join(", ")}` : "Suche ein Teil mit besseren Linien für deine Klasse.",
+        want.length ? `Suche ein Armband mit: ${want.map(de).join(", ")}` : "Suche ein Teil mit besseren Linien für deine Klasse.",
       ],
     };
   }
 
   const cmp = compareIdeal(item);
   const want = cmp
-    ? cmp.rows.filter((r) => r.state === "missing").map((r) => `${r.name} ${r.target}`)
+    ? cmp.rows.filter((r) => r.state === "missing").map((r) => `${de(r.name)} ${r.target}`)
     : missingIdealLines(char.className, item.slot, item.lines.filter((l) => !bad.includes(l)).map((l) => l.name));
   const details: string[] = [];
   const sortedBad = [...bad].sort((a, b) => (shareOf(char, item, a) ?? 0) - (shareOf(char, item, b) ?? 0));
   sortedBad.forEach((l, i) =>
-    details.push(`${i + 1}. ${l.name} (${l.value}${l.max ? `/${l.max}` : ""}) neu rollen`),
+    details.push(`${i + 1}. ${de(l.name)} (${l.value}${l.max ? `/${l.max}` : ""}) neu rollen`),
   );
-  if (want.length) details.push(`Ziel-Linien: ${want.join(", ")}`);
-  cmp?.rows.filter((r) => r.state === "low").forEach((r) => details.push(`Wert noch unter BiS: ${r.name} ${r.have?.value} → ${r.target}`));
-  if (!cmp) low.forEach((l) => details.push(`Gute Linie, Wert noch nicht maximal: ${l.name} ${l.value}/${l.max}`));
+  if (want.length) details.push(`Ziel-Linien: ${want.map(de).join(", ")}`);
+  cmp?.rows.filter((r) => r.state === "low").forEach((r) => details.push(`Wert noch unter BiS: ${de(r.name)} ${r.have?.value} → ${r.target}`));
+  if (!cmp) low.forEach((l) => details.push(`Gute Linie, Wert noch nicht maximal: ${de(l.name)} ${l.value}/${l.max}`));
   if (!details.length) details.push("Linien passen schon. Weiter verstärken bzw. Werte maximieren.");
 
   const effort: 1 | 2 | 3 = bad.length <= 1 ? 1 : bad.length <= 2 ? 2 : 3;

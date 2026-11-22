@@ -6,6 +6,8 @@ import { buildPlan, shareOf, GOOD_SHARE } from "@/lib/advisor";
 import { SLOT_LABEL_DE } from "@/lib/knowledge/slots";
 import { findCatalogItem, iconFor } from "@/lib/knowledge/item-catalog";
 import { GradeBadge } from "./GradeBadge";
+import { useLang } from "@/lib/i18n";
+import { statLabel } from "@/lib/stat-names";
 import { ItemIcon, SkillIcon, Sheet, isSkillLine } from "./ui";
 
 function lineState(char: Character, item: Item, l: StatLine): "good" | "bad" | "neutral" {
@@ -19,11 +21,12 @@ const STATE_CLS = { good: "text-emerald-300", bad: "text-red-300/90", neutral: "
 const STATE_MARK = { good: "✓", bad: "✗", neutral: "·" };
 
 function LineRow({ l, state }: { l: StatLine; state: "good" | "bad" | "neutral" }) {
+  const lang = useLang();
   return (
     <li className="flex items-center justify-between gap-2 text-[13px] leading-5">
       <span className={`flex min-w-0 items-center gap-1.5 ${STATE_CLS[state]}`}>
         {isSkillLine(l.value) ? <SkillIcon name={l.name} size={16} /> : <span className="w-4 text-center text-[11px]">{STATE_MARK[state]}</span>}
-        <span className="truncate">{l.name}</span>
+        <span className="truncate">{statLabel(l.name, lang)}</span>
       </span>
       <span className="shrink-0 tabular-nums text-zinc-400">{l.value}</span>
     </li>
@@ -99,6 +102,7 @@ const ROW_STYLE: Record<IdealRow["state"], { mark: string; cls: string; label: s
 };
 
 function BisDetail({ char, item }: { char: Character; item: Item }) {
+  const lang = useLang();
   const cmp = compareIdeal(item);
   const step = buildPlan(char).steps.find((s) => s.item === item);
   // The table above already shows missing/extra lines; only keep the extra advice here.
@@ -124,7 +128,7 @@ function BisDetail({ char, item }: { char: Character; item: Item }) {
                     <span className={`flex min-w-0 items-center gap-2 ${st.cls}`}>
                       <span className="w-4 text-center">{st.mark}</span>
                       {isSkillLine(r.target) && <SkillIcon name={r.name} size={18} />}
-                      <span className="truncate">{r.name}</span>
+                      <span className="truncate">{statLabel(r.name, lang)}</span>
                     </span>
                     <span className="text-right tabular-nums text-zinc-400">{r.have?.value ?? "–"}</span>
                     <span className="text-right font-semibold tabular-nums text-zinc-100">{r.target}</span>

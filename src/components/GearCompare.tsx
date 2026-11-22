@@ -11,7 +11,7 @@ import { CATALOG_SLOTS, fitsClass } from "@/lib/slot-map";
 import { ItemIcon, SkillIcon, Sheet } from "./ui";
 import { usePlanned } from "./plan-store";
 import { craftedBis } from "@/lib/crafted-bis";
-import { statLabel } from "@/lib/stat-names";
+import { skillLabel, statLabel } from "@/lib/stat-names";
 import { Card, CardArt, Filler, SHOW_ITEM_ICONS } from "./deck/Card";
 import { slotLabel, useLang, useT } from "@/lib/i18n";
 import { GRADE_HEX_CSS } from "@/lib/grades";
@@ -66,11 +66,11 @@ export function GearCompare({ char, item, slotId }: {
   const step = buildPlan(char).steps.find((s) => s.item === item);
   const isBis = item.grade === "BiS";
   const todo = [
-    ...(cmp?.rows.filter((r) => r.state === "missing").map((r) => `${r.name} ${r.target} ${t("fehlt", "missing")}`) ?? []),
-    ...(cmp?.rows.filter((r) => r.state === "low").map((r) => `${r.name}: ${r.have?.value} → ${r.target}`) ?? []),
+    ...(cmp?.rows.filter((r) => r.state === "missing").map((r) => `${statLabel(r.name, lang)} ${r.target} ${t("fehlt", "missing")}`) ?? []),
+    ...(cmp?.rows.filter((r) => r.state === "low").map((r) => `${statLabel(r.name, lang)}: ${r.have?.value} → ${r.target}`) ?? []),
     // Arcana: a plus above the ideal is wasted too
-    ...(arcana ? cmp?.rows.filter((r) => r.have && toNum(r.have.value) > toNum(r.target)).map((r) => `${r.name}: ${r.have?.value} → ${r.target} (${t("zu hoch", "too high")})`) ?? [] : []),
-    ...(cmp?.extra.map((l) => `${l.name} ${l.value} ${item.fixedLines ? t("ist fest (Teil ersetzen)", "is fixed (replace the item)") : t("neu rollen", "reroll")}`) ?? []),
+    ...(arcana ? cmp?.rows.filter((r) => r.have && toNum(r.have.value) > toNum(r.target)).map((r) => `${statLabel(r.name, lang)}: ${r.have?.value} → ${r.target} (${t("zu hoch", "too high")})`) ?? [] : []),
+    ...(cmp?.extra.map((l) => `${statLabel(l.name, lang)} ${l.value} ${item.fixedLines ? t("ist fest (Teil ersetzen)", "is fixed (replace the item)") : t("neu rollen", "reroll")}`) ?? []),
   ];
 
   // the target piece shown on the Soll card
@@ -220,7 +220,7 @@ function IstStat({ id, line, color, unlockSlot, plus }: { id: string; line: Stat
       <span className="flex min-w-0 items-center gap-1.5">
         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${v?.dot ?? "bg-zinc-500"}`} />
         {isSkillValue(line.value) && <SkillIcon name={line.name} size={16} />}
-        <span className="truncate font-medium text-zinc-100">{isSkillValue(line.value) ? line.name : statLabel(line.name, lang)}</span>
+        <span className="truncate font-medium text-zinc-100">{isSkillValue(line.value) ? skillLabel(line.name, lang) : statLabel(line.name, lang)}</span>
       </span>
       {plus ? <span className={`shrink-0 text-[12px] font-semibold tabular-nums ${v?.markCls ?? "text-zinc-300"}`}>{line.value}</span>
         : v && <span className={`shrink-0 text-[11px] font-semibold ${v.markCls}`}>{color === "orange" ? (lang === "en" ? "Pos." : "Platz") : v.mark}</span>}
@@ -238,7 +238,7 @@ function BisStat({ id, name, skill, missing, unlock, plus }: { id: string; name:
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ffa31a]/70" />
         {skill && <SkillIcon name={name} size={16} />}
-        <span className={`truncate font-medium ${unlock ? "text-violet-50" : "text-zinc-100"}`}>{skill ? name : statLabel(name, lang)}</span>
+        <span className={`truncate font-medium ${unlock ? "text-violet-50" : "text-zinc-100"}`}>{skill ? skillLabel(name, lang) : statLabel(name, lang)}</span>
       </span>
       {plus ? <span className={`shrink-0 text-[12px] font-semibold tabular-nums ${missing ? "text-rose-300/80" : "text-[#ffa31a]"}`}>{plus}</span>
         : <span className={`shrink-0 text-[11px] font-semibold ${missing ? "text-rose-300/80" : "text-[#ffa31a]"}`}>{missing ? missingWord : "◆"}</span>}
