@@ -17,7 +17,7 @@ describe("compareIdeal", () => {
 
   it("matches kisk's 'yours has X of Y' for gear", () => {
     expect(compareIdeal(byName("Splendent Ebony Dragon Lord Orb"))!.present).toBe(4);
-    expect(compareIdeal(byName("Nuakum Breastplate"))!.present).toBe(0);
+    expect(compareIdeal(byName("Nuakum Breastplate"))!.present).toBe(2); // Damage Boost, Attack (kisk 2026-11-22)
     expect(compareIdeal(byName("Nuakum Gloves"))!.present).toBe(3);
   });
 });

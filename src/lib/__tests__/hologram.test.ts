@@ -21,7 +21,7 @@ describe("weaponKindFor", () => {
 describe("bodyItems", () => {
   it("numbers paired slots and skips arcana and runes", () => {
     const m = bodyItems(FLORENTINA);
-    expect(m.get("ring:0")?.grade).toBe("D");
+    expect(m.get("ring:0")?.grade).toBe("A");
     expect(m.get("ring:1")?.grade).toBe("A");
     expect(m.get("weapon:0")?.name).toContain("Orb");
     expect([...m.keys()].some((k) => k.startsWith("rune") || k.startsWith("arcana"))).toBe(false);

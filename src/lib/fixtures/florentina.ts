@@ -1,6 +1,6 @@
 import type { Character, IdealLine, Item, StatLine } from "../types";
 
-/** Snapshot of kisk.app/c/eu/odar/Florentina/gear (2026-11-21), used as demo/test data. */
+/** Snapshot of kisk.app/c/eu/odar/Florentina/gear (kisk gear data 2026-11-22 23:08 UTC), used as demo/test data. */
 const s = (name: string, value: string, max?: string, share?: number): StatLine => ({ name, value, max, share });
 const ideal = (...pairs: [string, string][]): IdealLine[] => pairs.map(([name, value]) => ({ name, value }));
 const CDN = "https://assets.playnccdn.com/static-aion2-gamedata/resources/";
@@ -19,11 +19,11 @@ export const FLORENTINA: Character = {
   className: "Spiritmaster",
   race: "Asmodian",
   level: 45,
-  combatPower: 193085,
-  gearGrade: "A",
+  combatPower: 195377,
+  gearGrade: "S",
   // linked on kisk.app (og:image), 2026-11-22
   portrait: "https://profileimg.plaync.com/game_profile_images/aion2global/images?gameServerKey=2314&charKey=651333096108652459",
-  source: { url: "https://kisk.app/c/eu/odar/Florentina/gear", fetchedAt: "2026-11-21T21:20:00Z", mode: "demo" },
+  source: { url: "https://kisk.app/c/eu/odar/Florentina/gear", fetchedAt: "2026-11-22T23:08:00Z", mode: "demo" },
   warnings: [],
   gear: [
     it({ slot: "weapon", name: "Splendent Ebony Dragon Lord Orb", icon: "Icon_WP_OR_0100_T06.png", level: 102, rarity: "Unique", exceed: 3, enhance: 15, grade: "S+", score: 79,
@@ -32,8 +32,8 @@ export const FLORENTINA: Character = {
     it({ slot: "offhand", name: "Nuakum Guard", icon: "Icon_Weapon_Guarder_L_012.png", level: 86, rarity: "Unique", enhance: 13, grade: "S", score: 47,
       lines: [s("Weapon Damage Boost", "7.3%", "7.3%", 100), s("Damage Boost", "5.5%", "5.5%", 100), s("Combat Speed", "9.6%", "9.6%", 100), s("Accuracy", "76", "76", 0)],
       ideal: ideal(["Combat Speed", "10.1%"], ["Weapon Damage Boost", "7.7%"], ["Might", "27"], ["Damage Boost", "5.8%"], ["Precision", "27"], ["Multi-hit Chance", "7.7%"]) }),
-    it({ slot: "torso", name: "Nuakum Breastplate", icon: "Icon_Equip_AR_L_Idris_01_Torso.png", level: 86, rarity: "Unique", enhance: 10, grade: "D", score: 0,
-      lines: [s("Natural HP Regen", "47", "61", 0), s("Evasion", "30", "37", 0), s("Double Resist", "3.3%", "3.7%", 0), s("Front Defense", "271", "316", 0)],
+    it({ slot: "torso", name: "Nuakum Breastplate", icon: "Icon_Equip_AR_L_Idris_01_Torso.png", level: 86, rarity: "Unique", enhance: 10, grade: "A", score: 29,
+      lines: [s("Block", "27", "38", 0), s("Damage Boost", "5.4%", "6.2%", 100), s("Attack", "23", "32", 96), s("Spirit Protection", "+13%")],
       ideal: ideal(["Damage Boost", "6.6%"], ["Perfect Chance", "5.8%"], ["Attack", "33"], ...ARMOR_SKILLS) }),
     it({ slot: "pants", name: "Nuakum Greaves", icon: "Icon_Equip_AR_L_Idris_01_Pants.png", level: 86, rarity: "Unique", enhance: 10, grade: "D", score: 0,
       lines: [s("Front Defense", "253", "291", 0), s("Critical Hit Resist", "46", "56", 0), s("Block", "25", "36", 0), s("Spirit Communion", "+10%")],
@@ -60,8 +60,8 @@ export const FLORENTINA: Character = {
       lines: [s("HP", "209", "239", 1), s("Accuracy", "46", "59", 89), s("Spirit Strike", "+1", undefined, 85), s("Corrode", "+1", undefined, 33)], ideal: EARRING_IDEAL }),
     it({ slot: "earring", name: "Enraged Kromede Earrings", icon: "Icon_ACC_ER_0053.png", level: 86, rarity: "Unique", enhance: 10, grade: "A", score: 25,
       lines: [s("Accuracy", "46", "59", 89), s("Critical Hit", "41", "45", 89), s("Flight Power", "254", "289", 90), s("MP", "104", "122", 20)], ideal: EARRING_IDEAL }),
-    it({ slot: "ring", name: "Enraged Kromede Ring", icon: "Icon_ACC_Ring_0053.png", level: 86, rarity: "Unique", enhance: 10, grade: "D", score: 4,
-      lines: [s("MP", "95", "104", 0), s("Natural MP Regen", "30", "30", 0), s("Accuracy", "45", "50", 25), s("Natural HP Regen", "41", "52", 0)], ideal: RING_IDEAL }),
+    it({ slot: "ring", name: "Enraged Kromede Ring", icon: "Icon_ACC_Ring_0053.png", level: 86, rarity: "Unique", enhance: 10, grade: "A", score: 30,
+      lines: [s("Accuracy", "37", "50", 25), s("Block", "25", "32", 0), s("Elemental Fusion", "+1", undefined, 85), s("Jointstrike: Curse", "+1", undefined, 60)], ideal: RING_IDEAL }),
     it({ slot: "ring", name: "Enraged Kromede Ring", icon: "Icon_ACC_Ring_0053.png", level: 86, rarity: "Unique", enhance: 10, grade: "A", score: 32,
       lines: [s("Block", "23", "32", 0), s("Summon: Fire Spirit", "+1", undefined, 79), s("Jointstrike: Curse", "+1", undefined, 60), s("Summon: Earth Spirit", "+1", undefined, 33)], ideal: RING_IDEAL }),
     it({ slot: "bracelet", name: "Ascension Bracelet", icon: "Icon_Acc_Bracelet_R_027.png", level: 51, rarity: "Unique", enhance: 10, grade: "D", score: 0, fixedLines: true,
