@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import type { Character } from "@/lib/types";
 import { numberLocale, useLang, useT, type T } from "@/lib/i18n";
-import { iconFor } from "@/lib/knowledge/item-catalog";
 import { craftIcon } from "@/lib/crafting/craft-icons";
 import { GEAR_GROUPS, GROUP_COLOR, MATERIAL_GROUPS, entriesFor, type GearGroup, type MaterialGroup, type PriceArea, type PriceGroup } from "@/lib/crafting/catalog-groups";
 import { charKey } from "../store";
@@ -207,7 +206,7 @@ function ProjectCard({ p, state, onOpen }: { p: Project; state: CraftState; onOp
   const last = [...pr.milestones].reverse().find((m) => m.done);
   const from = last ? stageLevel(last) : null;
   const to = pr.milestones.length ? stageLevel(pr.milestones[pr.milestones.length - 1]) : null;
-  const icon = SHOW_ITEM_ICONS && target ? iconFor(target) : undefined;
+  const icon = SHOW_ITEM_ICONS && target ? craftIcon({ ...target, faction: target.faction ?? p.faction }) : undefined;
   return (
     <Card as="button" onClick={onOpen} label={`${target?.name ?? "?"}: ${pr.percent ?? "–"} %`} className={`flex h-full w-full flex-col gap-3 p-3 ${p.status !== "active" ? "opacity-70" : ""}`}>
       <div className="relative flex w-full items-center gap-3">
