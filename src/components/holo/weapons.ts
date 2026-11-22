@@ -57,8 +57,8 @@ export const LOADOUTS: Record<WeaponKind, Loadout> = {
   bow: { main: "bow", hold: { socket: "hand", side: "L", dir: [0.05, 1, 0.04], face: [0, 0, 1], scale: 1 }, intro: "bow_aim_focus" },
   spellbook: { main: "spellbook", hold: { socket: "float", side: "L", dir: [0, 0.82, 0.57], face: [0, 0.57, 0.82], scale: 0.7, offset: [0.06, 0.16, 0.12] }, intro: "spellbook_awakening" },
   orb: {
-    main: "orb", hold: { socket: "float", side: "R", dir: [0, 1, 0], face: [0, 0, 1], scale: 0.6, offset: [0.1, 0.13, 0.09] },
-    second: { hold: { socket: "float", side: "L", dir: [0, 1, 0], face: [0, 0, 1], scale: 0.6, offset: [0.1, 0.13, 0.09] }, introOnly: true },
+    main: "orb", hold: { socket: "float", side: "R", dir: [0, 1, 0], face: [0, 0, 1], scale: 0.62, offset: [0.05, 0.03, 0.12] },
+    second: { hold: { socket: "float", side: "L", dir: [0, 1, 0], face: [0, 0, 1], scale: 0.62, offset: [0.05, 0.03, 0.12] }, introOnly: true },
     intro: "orb_dual_summon",
   },
   mace: {

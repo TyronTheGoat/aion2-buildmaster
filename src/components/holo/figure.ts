@@ -472,7 +472,10 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
     const tip = new THREE.Object3D();
     holder.add(tip);
     if (wm) {
-      for (const p of wm.parts) part(holder, p.geometry, id, { strength: p.strength });
+      // the status aura goes on the outer shell only, so the weapon's own detail stays readable
+      const vol = (g: THREE.BufferGeometry) => { g.computeBoundingBox(); const v = g.boundingBox!.getSize(new THREE.Vector3()); return v.x + v.y + v.z; };
+      const outer = wm.parts.reduce((a, p) => (vol(p.geometry) > vol(a.geometry) ? p : a), wm.parts[0]);
+      for (const p of wm.parts) part(holder, p.geometry, id, { strength: p.strength, noAura: p !== outer });
       const size = wm.box.getSize(new THREE.Vector3()), c = wm.box.getCenter(new THREE.Vector3());
       part(holder, new THREE.BoxGeometry(Math.max(size.x, 0.1), size.y, Math.max(size.z, 0.1)), id, { p: c.toArray() as V3, hitOnly: true });
       tip.position.set(0, wm.box.max.y * 0.92, 0);
@@ -786,8 +789,8 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
       anchor.getWorldPosition(tmp);
       halo.position.copy(tmp);
       const pulse = 0.85 + 0.15 * Math.sin(t * (1.5 + 2 * wl));
-      halo.scale.setScalar((0.16 + 0.42 * wl * wl) * pulse);
-      haloMat.color.copy(weaponColor).multiplyScalar(wl * wl * wl * 0.9 * Math.min(wf, 1.2));
+      halo.scale.setScalar((0.14 + 0.3 * wl * wl) * pulse);
+      haloMat.color.copy(weaponColor).multiplyScalar(wl * wl * wl * 0.45 * Math.min(wf, 1.2));
       const shown = Math.round(SPARKS * Math.max(0, wl - 0.3) / 0.7);
       sparkGeo.setDrawRange(0, shown);
       for (let i = 0; i < shown; i++) {
