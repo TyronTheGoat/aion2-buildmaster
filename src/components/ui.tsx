@@ -11,14 +11,16 @@ const GRADE_RING: Record<Grade, string> = {
 export function ItemIcon({ src, name, grade = "?", enhance, size = 48, tall = false }: {
   src?: string; name: string; grade?: Grade; enhance?: number; size?: number; tall?: boolean;
 }) {
-  const [failed, setFailed] = useState(false);
+  // remember which URL failed, so switching to another item tries its icon again
+  const [failedSrc, setFailedSrc] = useState<string>();
+  const failed = !!src && failedSrc === src;
   const w = size, h = tall ? Math.round(size * 1.4) : size;
   return (
     <div className={`relative shrink-0 overflow-hidden rounded-lg bg-gradient-to-br from-zinc-700 to-zinc-900 ring-2 ${GRADE_RING[grade]}`} style={{ width: w, height: h }}>
       {src && !failed ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt={name} width={w} height={h} loading="lazy" referrerPolicy="no-referrer"
-          className="h-full w-full object-cover" onError={() => setFailed(true)} />
+          className="h-full w-full object-cover" onError={() => setFailedSrc(src)} />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-zinc-500" title={`${name}: kein Originalbild vorhanden`}>
           <GearGlyph size={Math.round(Math.min(w, h) * 0.55)} />

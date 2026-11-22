@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { PUBLIC_ITEMS, REGION_LABEL, regionCounts } from "@/lib/region";
 import { CLASSES, fitsClass } from "@/lib/slot-map";
 import { ItemIcon } from "./ui";
+import { localIcon } from "@/lib/knowledge/item-catalog";
 
 const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))].sort((a, b) => a.localeCompare(b, "de"));
 // filter options come only from the released EU / Global selection
@@ -66,7 +67,7 @@ export function ItemCatalog({ onBack }: { onBack: () => void }) {
       <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {items.map((i) => (
           <li key={i.key} className="flex items-center gap-3 rounded-xl border border-white/10 bg-zinc-900/75 p-2.5">
-            <ItemIcon src={i.icon || undefined} name={i.name} size={44} />
+            <ItemIcon src={localIcon(i.icon)} name={i.name} size={44} />
             <div className="min-w-0">
               <div className="truncate text-sm font-medium">{i.name}</div>
               <div className="truncate text-[11px] text-zinc-500">

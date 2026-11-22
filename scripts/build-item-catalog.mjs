@@ -7,7 +7,7 @@
 //  - data/gear-catalog.json          output/catalog.json of collect_and_download.py (NCSOFT TW)   → TW
 //  - data/icon-manifest.json         output/manifest.json of the first download_icons.py          → local icons
 //  - OFFICIAL_ICONS                  items seen equipped on an EU character via kisk.app           → EU + icon
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -144,6 +144,11 @@ writeFileSync(path.join(root, "src/lib/knowledge/item-catalog.json"), JSON.strin
 const iconFiles = {};
 for (const s of items(read("data/gear-catalog.json")))
   if (s.icon_url && s.icon_file) iconFiles[s.icon_url.split("/").pop()] = "/item-icons/" + String(s.icon_file).replace(/^icons\//, "");
+// icons saved under their original NCSOFT file name (e.g. Icon_ACC_Ring_0053.png) map to themselves
+try {
+  for (const f of readdirSync(path.join(root, "public/item-icons")))
+    if (/^Icon_.+\.(png|webp|jpg)$/i.test(f) && !iconFiles[f]) iconFiles[f] = "/item-icons/" + f;
+} catch { /* no icons installed */ }
 writeFileSync(path.join(root, "data/icon-files.json"), JSON.stringify(iconFiles, null, 1));
 
 const status = (i) => (i.regions.some((r) => r.region === "EU") ? "eu" : i.regions.some((r) => r.region === "TW") ? "tw" : "unclear");

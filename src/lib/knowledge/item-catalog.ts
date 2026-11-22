@@ -53,7 +53,18 @@ export function findCatalogItem(name: string): CatalogItem | undefined {
   return BY_NAME.get(norm(name));
 }
 
+declare global {
+  // offline file: original icons embedded by file name (see offline/build.mjs)
+  var __BM_ICONS__: Record<string, string> | undefined;
+}
+
+/** Swap an icon URL for the embedded copy of the same original file, when the offline file carries one. */
+export function localIcon(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  return globalThis.__BM_ICONS__?.[url.split("/").pop() ?? ""] ?? url;
+}
+
 /** Original icon for an item: by item ID first, then the icon kisk.app delivered, then an unambiguous name match. */
 export function iconFor(item: { name: string; icon?: string; itemId?: string }): string | undefined {
-  return (item.itemId && findById(item.itemId)?.icon) || item.icon || findCatalogItem(item.name)?.icon || undefined;
+  return localIcon((item.itemId && findById(item.itemId)?.icon) || item.icon || findCatalogItem(item.name)?.icon || undefined);
 }
