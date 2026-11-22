@@ -20,8 +20,8 @@ export function ItemIcon({ src, name, grade = "?", enhance, size = 48, tall = fa
         <img src={src} alt={name} width={w} height={h} loading="lazy" referrerPolicy="no-referrer"
           className="h-full w-full object-cover" onError={() => setFailed(true)} />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-sm font-bold text-zinc-300">
-          {name.split(/\s+/).filter((x) => /^[A-Z]/.test(x)).slice(0, 2).map((x) => x[0]).join("") || "?"}
+        <div className="flex h-full w-full items-center justify-center text-zinc-500" title={`${name}: kein Originalbild vorhanden`}>
+          <GearGlyph size={Math.round(Math.min(w, h) * 0.55)} />
         </div>
       )}
       {enhance !== undefined && (
@@ -70,5 +70,15 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
         {children}
       </div>
     </div>
+  );
+}
+
+/** Neutral equipment symbol shown when no original item icon is available (never a fake item picture). */
+export function GearGlyph({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" opacity="0.9" />
+      <path d="M12 7v10M8.5 10.5h7" opacity="0.6" />
+    </svg>
   );
 }

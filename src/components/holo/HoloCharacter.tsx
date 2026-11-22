@@ -2,13 +2,9 @@
 import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { Character, Item } from "@/lib/types";
 import { BODY_SLOTS, bodyItems, hexCss, weaponKindFor, type Gender } from "@/lib/hologram";
-import { compareIdeal, type IdealRow } from "@/lib/compare";
-import { buildPlan } from "@/lib/advisor";
-import { minScoreFor } from "@/lib/grades";
 import { SLOT_LABEL_DE } from "@/lib/knowledge/slots";
-import { iconFor } from "@/lib/knowledge/item-catalog";
 import { GradeBadge } from "../GradeBadge";
-import { ItemIcon, SkillIcon, isSkillLine } from "../ui";
+import { GearCompare } from "../GearCompare";
 import { AuraLegend } from "./AuraLegend";
 
 const HoloScene = lazy(() => import("./HoloScene"));
@@ -117,9 +113,9 @@ export function HoloCharacter({ char, gender, onBack, onDetails, onGender }: {
 
       {/* info panel */}
       <div className={`absolute z-10 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
-        ${isWide ? "bottom-4 right-4 top-20 w-[400px]" : "inset-x-0 bottom-0 max-h-[56vh]"}
+        ${isWide ? "bottom-4 right-4 top-20 w-[min(680px,calc(100vw-2rem))]" : "inset-x-0 bottom-0 max-h-[72vh]"}
         ${focus ? "translate-x-0 translate-y-0 opacity-100" : isWide ? "pointer-events-none translate-x-8 opacity-0" : "pointer-events-none translate-y-full opacity-0"}`}>
-        {item && shown && <SlotPanel char={char} item={item} label={slotLabel(shown, items)} wide={isWide} onClose={() => setFocus(undefined)} />}
+        {item && shown && <GearCompare char={char} item={item} slotId={shown} label={slotLabel(shown, items)} wide={isWide} onClose={() => setFocus(undefined)} />}
       </div>
     </div>
   );
@@ -160,128 +156,6 @@ function GearList({ items, active, onPick, onClose }: { items: Map<string, Item>
           );
         })}
       </ul>
-    </div>
-  );
-}
-
-const ROW: Record<IdealRow["state"], { mark: string; cls: string }> = {
-  ok: { mark: "✓", cls: "text-emerald-300" },
-  low: { mark: "◐", cls: "text-amber-300" },
-  missing: { mark: "✗", cls: "text-rose-300" },
-};
-
-function SlotPanel({ char, item, label, wide, onClose }: { char: Character; item: Item; label: string; wide: boolean; onClose: () => void }) {
-  const cmp = compareIdeal(item);
-  const step = buildPlan(char).steps.find((s) => s.item === item);
-  const isBis = item.grade === "BiS";
-  const target = minScoreFor("BiS");
-  const score = item.score ?? 0;
-  const todo = [
-    ...(cmp?.rows.filter((r) => r.state === "missing").map((r) => `${r.name} ${r.target} fehlt`) ?? []),
-    ...(cmp?.rows.filter((r) => r.state === "low").map((r) => `${r.name}: ${r.have?.value} → ${r.target}`) ?? []),
-    ...(cmp?.extra.map((l) => `${l.name} ${l.value} ${item.fixedLines ? "ist fest (Teil ersetzen)" : "neu rollen"}`) ?? []),
-  ];
-
-  return (
-    <div className={`flex h-full max-h-[inherit] flex-col overflow-hidden border border-sky-200/10 bg-[#07101f]/75 shadow-2xl shadow-sky-900/30 backdrop-blur-2xl ${wide ? "rounded-3xl" : "rounded-t-3xl"}`}>
-      <div className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.25em] text-sky-300/70">{label}</div>
-          <div className="truncate text-base font-semibold">{item.name}</div>
-        </div>
-        <button onClick={onClose} aria-label="Schließen" className="rounded-full bg-white/5 px-2.5 py-1 text-sm text-zinc-300 hover:bg-white/10">✕</button>
-      </div>
-
-      <div className="overflow-y-auto px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
-        <div className="grid grid-cols-2 gap-2.5">
-          <StateCard title="Ist-Stand">
-            <ItemIcon src={iconFor(item)} name={item.name} grade={item.grade} enhance={item.enhance} size={46} />
-            <div className="mt-2 flex items-center gap-1.5"><GradeBadge grade={item.grade} score={item.score} size="sm" /></div>
-            <Meta label="Verbesserung" value={item.enhance !== undefined ? `+${item.enhance}${item.exceed ? ` · Exceed ${item.exceed}` : ""}` : "–"} />
-            <Progress label="Score" value={score} max={target} />
-            {cmp && <Progress label="BiS-Linien" value={cmp.present} max={cmp.total} raw />}
-          </StateCard>
-          <StateCard title="BiS-Stand" gold>
-            {isBis ? (
-              <ItemIcon src={iconFor(item)} name={item.name} grade="BiS" enhance={item.enhance} size={46} />
-            ) : (
-              <div className="flex h-[46px] w-[46px] items-center justify-center rounded-lg bg-gradient-to-br from-amber-300/25 to-amber-500/5 text-lg text-amber-200 ring-2 ring-amber-400">★</div>
-            )}
-            <div className="mt-2"><GradeBadge grade="BiS" size="sm" /></div>
-            <Meta label="Ziel" value={`Score ≥ ${target}`} />
-            <Meta label="Linien" value={cmp ? `${cmp.total} BiS-Linien` : "keine Daten"} />
-            <p className="mt-1 text-[10px] leading-snug text-zinc-500">{isBis ? "Dieses Teil ist schon BiS." : "BiS-Ziel von kisk.app (Linien), noch ohne festes Item."}</p>
-          </StateCard>
-        </div>
-
-        {cmp && (
-          <div className="mt-4 overflow-hidden rounded-2xl border border-white/[0.07]">
-            <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 bg-white/[0.04] px-3 py-1.5 text-[10px] uppercase tracking-[0.15em] text-zinc-500">
-              <span>Linie</span><span className="text-right">Ist</span><span className="text-right">BiS</span>
-            </div>
-            <ul>
-              {cmp.rows.map((r) => (
-                <li key={r.name} className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 border-t border-white/[0.05] px-3 py-1.5 text-[13px]">
-                  <span className={`flex min-w-0 items-center gap-1.5 ${ROW[r.state].cls}`}>
-                    <span className="w-3.5 text-center">{ROW[r.state].mark}</span>
-                    {isSkillLine(r.target) && <SkillIcon name={r.name} size={16} />}
-                    <span className="truncate">{r.name}</span>
-                  </span>
-                  <span className="text-right tabular-nums text-zinc-400">{r.have?.value ?? "–"}</span>
-                  <span className="text-right font-semibold tabular-nums text-zinc-100">{r.target}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {!cmp && item.lines.length > 0 && (
-          <ul className="mt-4 space-y-1 rounded-2xl border border-white/[0.07] px-3 py-2 text-[13px]">
-            {item.lines.map((l, i) => (
-              <li key={i} className="flex justify-between gap-2"><span className="truncate text-zinc-300">{l.name}</span><span className="tabular-nums text-zinc-400">{l.value}</span></li>
-            ))}
-          </ul>
-        )}
-
-        <div className="mt-4">
-          <div className="mb-1.5 text-[10px] uppercase tracking-[0.25em] text-sky-300/70">Noch zu tun</div>
-          {isBis ? (
-            <p className="text-sm text-amber-200">Nichts mehr. Dieses Teil ist BiS.</p>
-          ) : todo.length ? (
-            <ul className="space-y-1 text-sm text-zinc-200">
-              {todo.map((t) => <li key={t} className="flex gap-2"><span className="text-sky-400">•</span><span>{t}</span></li>)}
-            </ul>
-          ) : (
-            <p className="text-sm text-zinc-300">{step?.title ?? "Für dieses Teil liegt kein BiS-Ziel vor."}</p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StateCard({ title, gold, children }: { title: string; gold?: boolean; children: React.ReactNode }) {
-  return (
-    <div className={`rounded-2xl border p-3 ${gold ? "border-amber-300/20 bg-amber-300/[0.04]" : "border-sky-300/15 bg-sky-300/[0.04]"}`}>
-      <div className={`mb-2 text-[10px] uppercase tracking-[0.2em] ${gold ? "text-amber-200/80" : "text-sky-200/80"}`}>{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function Meta({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="mt-1.5 flex items-baseline justify-between gap-2 text-[11px]">
-      <span className="text-zinc-500">{label}</span><span className="truncate text-right text-zinc-200">{value}</span>
-    </div>
-  );
-}
-
-function Progress({ label, value, max, raw }: { label: string; value: number; max: number; raw?: boolean }) {
-  const pct = Math.max(0, Math.min(100, (value / Math.max(1, max)) * 100));
-  return (
-    <div className="mt-1.5">
-      <div className="flex justify-between text-[11px]"><span className="text-zinc-500">{label}</span><span className="tabular-nums text-zinc-300">{raw ? `${value}/${max}` : `${Math.round(pct)} %`}</span></div>
-      <div className="mt-0.5 h-1 rounded-full bg-white/10"><div className="h-1 rounded-full bg-gradient-to-r from-sky-400 to-cyan-200" style={{ width: `${pct}%` }} /></div>
     </div>
   );
 }
