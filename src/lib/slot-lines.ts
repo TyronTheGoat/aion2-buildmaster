@@ -18,14 +18,54 @@ export interface LinePair {
   unlock?: boolean;
 }
 
+export type LinkColor = "green" | "red" | "orange";
+
+export interface StatLinks {
+  /** current stat lines in the order they sit on the item (never re-sorted) */
+  ist: StatLine[];
+  /** BiS stat lines in BiS order; the last one is the unlockable line */
+  bis: { name: string; value: string; missing: boolean }[];
+  /** arrows from an Ist line to a BiS line */
+  links: { from: number; to: number; color: LinkColor }[];
+}
+
+/**
+ * Stat lines of one item against its BiS target, both in their own order.
+ * - green: the current line is a BiS stat (arrow to that BiS line)
+ * - orange: it is the last BiS stat (the unlockable line) but not on the last line of the item
+ * - red: the current line is not part of the BiS target (arrow to a BiS stat that is still missing)
+ * The current item never shows more lines than the BiS target has.
+ */
+export function statLinks(item: Item): StatLinks | undefined {
+  const cmp = compareIdeal(item);
+  if (!cmp) return undefined;
+  const bisRows = cmp.rows.filter((r) => !isSkillValue(r.target));
+  const ist = item.lines.filter((l) => !isSkillValue(l.value)).slice(0, Math.max(bisRows.length, 1));
+  const bis = bisRows.map((r) => ({ name: r.name, value: r.target, missing: !r.have || !ist.includes(r.have) }));
+  const links: StatLinks["links"] = [];
+  const free = bis.map((b, i) => (b.missing ? i : -1)).filter((i) => i >= 0);
+  ist.forEach((line, from) => {
+    const to = bisRows.findIndex((r) => r.have === line);
+    if (to >= 0) {
+      const unlock = to === bisRows.length - 1;
+      links.push({ from, to, color: unlock && from !== ist.length - 1 ? "orange" : "green" });
+    } else {
+      const target = free.shift();
+      links.push({ from, to: target ?? -1, color: "red" });
+    }
+  });
+  return { ist, bis, links };
+}
+
 /**
  * Lines of one item, aligned with its BiS target.
  * - Exactly as many stat lines as the BiS target has.
  * - Each BiS stat is paired with the same current stat; free positions take a wrong current stat (or stay empty).
- * - The last BiS stat is the unlockable line: unless the item is already the highest craft, it only counts
- *   as fully right when it is also the last stat line of the current item, otherwise "half".
+ * - The last BiS stat is the unlockable line: it
+ *   only counts as fully right when it is also the last stat line of the current item, otherwise "half"
+ *   (this applies to every item, the highest craft included).
  */
-export function slotLines(item: Item, opts: { topCraft?: boolean } = {}): { skills: LinePair[]; stats: LinePair[]; dropped: StatLine[] } {
+export function slotLines(item: Item): { skills: LinePair[]; stats: LinePair[]; dropped: StatLine[] } {
   const cmp = compareIdeal(item);
   const istStats = item.lines.filter((l) => !isSkillValue(l.value));
   if (!cmp) {
@@ -46,7 +86,7 @@ export function slotLines(item: Item, opts: { topCraft?: boolean } = {}): { skil
     const unlock = i === statRows.length - 1;
     if (r.have) {
       const onLast = r.have === lastIst;
-      const verdict: Verdict = unlock && !opts.topCraft && !onLast ? "half" : "right";
+      const verdict: Verdict = unlock && !onLast ? "half" : "right";
       return { key: r.name, bis: { name: r.name, value: r.target }, ist: r.have, state: r.state, verdict, unlock };
     }
     const filler = wrong.shift();

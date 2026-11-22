@@ -25,6 +25,33 @@ body {
     radial-gradient(120% 80% at 50% 0%, rgba(61, 102, 162, 0.22) 0%, transparent 60%),
     linear-gradient(160deg, #22252c 0%, #15171c 55%, #0e0f13 100%);
 }
+/* clickable cards: lift and tilt towards the pointer (set by Card via --rx / --ry) */
+.card-tilt {
+  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(0);
+  transition: transform 180ms ease-out, filter 180ms ease-out;
+  will-change: transform;
+}
+.card-tilt:hover { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-3px); filter: brightness(1.06); }
+.card-tilt:active { transform: perspective(900px) translateY(1px) scale(0.985); }
+.card-tilt .card-sheen { transition: transform 180ms ease-out; transform: rotate(12deg) translate(var(--sx, 0px), var(--sy, 0px)); }
+
+/* gear / Arcana switch: the views turn like a big wheel seen from the front, around an axis behind the screen */
+.wheel { perspective: 1600px; }
+.wheel > * { transform-origin: 50% 50% -420px; backface-visibility: hidden; }
+.wheel-in-top { animation: wheel-in-top 650ms cubic-bezier(.3,.7,.2,1) both; }
+.wheel-in-bottom { animation: wheel-in-bottom 650ms cubic-bezier(.3,.7,.2,1) both; }
+.wheel-out-down { animation: wheel-out-down 650ms cubic-bezier(.5,0,.6,.4) both; }
+.wheel-out-up { animation: wheel-out-up 650ms cubic-bezier(.5,0,.6,.4) both; }
+@keyframes wheel-in-top { from { transform: rotateX(80deg); opacity: 0; } 40% { opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes wheel-in-bottom { from { transform: rotateX(-80deg); opacity: 0; } 40% { opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes wheel-out-down { from { transform: none; opacity: 1; } 60% { opacity: 1; } to { transform: rotateX(-80deg); opacity: 0; } }
+@keyframes wheel-out-up { from { transform: none; opacity: 1; } 60% { opacity: 1; } to { transform: rotateX(80deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .card-tilt, .card-tilt:hover { transform: none; transition: none; }
+  .wheel-in-top, .wheel-in-bottom, .wheel-out-down, .wheel-out-up { animation: none; }
+  .wheel-out-down, .wheel-out-up { display: none; }
+}
+
 .bm-backdrop {
   background:
     radial-gradient(60% 45% at 50% 0%, rgba(61, 102, 162, 0.28) 0%, transparent 70%),

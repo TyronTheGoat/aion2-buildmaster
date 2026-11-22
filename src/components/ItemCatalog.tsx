@@ -88,7 +88,7 @@ export function ItemCatalog({ onBack }: { onBack: () => void }) {
         <Chips value={rarity} options={opts.rarities} onChange={setRarity} />
         <Chips value={level} options={opts.levels} onChange={setLevel} />
       </div>
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5 lg:grid-cols-5">
         {items.slice(0, limit).map((i) => (
           <li key={i.key}>
             <Card as="button" grade={i.crafted ? "BiS" : "?"} onClick={() => setShown(i)} label={i.name} className="flex h-full w-full flex-col p-2.5">

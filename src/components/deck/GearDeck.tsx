@@ -40,6 +40,17 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
   const all = useMemo(() => deckOf(char), [char]);
   // two pages: equipment and Arcana cards
   const [tab, setTab] = useState<"gear" | "arcana">("gear");
+  // the view that is turning away during the wheel switch
+  const [leaving, setLeaving] = useState<"gear" | "arcana">();
+  const switchTab = () => {
+    setLeaving(tab);
+    setTab(tab === "gear" ? "arcana" : "gear");
+  };
+  useEffect(() => {
+    if (!leaving) return;
+    const t = setTimeout(() => setLeaving(undefined), 700);
+    return () => clearTimeout(t);
+  }, [leaving, tab]);
   const deck = useMemo(() => all.filter((d) => (tab === "arcana") === (d.item.slot === "arcana")), [all, tab]);
   const [open, setOpen] = useState<string>();
   const entry = all.find((d) => d.id === open);
@@ -110,32 +121,48 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
       </div>
       {note}
 
-      <div role="tablist" aria-label="Kartenart" className="inline-flex rounded-xl border border-[#d9c58f]/20 bg-white/[0.03] p-1 text-sm">
+      {/* one switch: Ausrüstung ⇄ Arcana; the views turn like a big wheel */}
+      <button type="button" role="switch" aria-checked={tab === "arcana"} onClick={switchTab}
+        aria-label={`Umschalten auf ${tab === "gear" ? "Arcana" : "Ausrüstung"}`}
+        className="relative grid grid-cols-2 rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_3px_0_-0.5px_#06070a] hover:border-[#d9c58f]/45">
+        <span aria-hidden className="absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg bg-white/[0.09] ring-1 ring-[#d9c58f]/40 transition-transform duration-500 ease-out motion-reduce:transition-none"
+          style={{ transform: tab === "arcana" ? "translateX(100%)" : "none" }} />
         {([["gear", "Ausrüstung", all.length - arcanaCount], ["arcana", "Arcana", arcanaCount]] as const).map(([k, l, n]) => (
-          <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-            className={`rounded-lg px-4 py-1.5 transition ${tab === k ? "bg-white/[0.09] text-[#f4eed7] ring-1 ring-[#d9c58f]/40" : "text-zinc-400 hover:text-zinc-200"}`}>
+          <span key={k} className={`relative px-4 py-1.5 text-center transition-colors ${tab === k ? "text-[#f4eed7]" : "text-zinc-500"}`}>
             {l} <span className="text-xs text-zinc-500">{n}</span>
-          </button>
+          </span>
         ))}
-      </div>
+      </button>
 
-      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {deck.map((d) => (
-          <li key={d.id}>
-            <Card as="button" grade={d.item.grade} onClick={() => setOpen(d.id)} label={`${d.label}: ${d.item.name}`}
-              className="flex h-full w-full items-center gap-3 p-3">
-              <div className="relative w-16 shrink-0">
-                {SHOW_ITEM_ICONS ? <CardArt src={iconFor(d.item)} alt={d.item.name} grade={d.item.grade} /> : <Filler className="aspect-square w-full" />}
-              </div>
-              <div className="relative min-w-0">
-                <div className="truncate text-sm font-semibold text-[#f4eed7]">{d.label}</div>
-                <div className="text-xs text-zinc-400">Rang: <span className="font-semibold" style={{ color: GRADE_HEX_CSS[d.item.grade] }}>{d.item.grade === "?" ? "–" : d.item.grade}</span></div>
-                <div className="truncate text-[11px] text-zinc-500">{d.item.name}</div>
-              </div>
-            </Card>
-          </li>
-        ))}
-      </ul>
+      <div className="wheel relative">
+        {leaving && <Tiles key={`out-${leaving}`} deck={all.filter((d) => (leaving === "arcana") === (d.item.slot === "arcana"))} onOpen={setOpen}
+          className={`pointer-events-none absolute inset-x-0 top-0 ${leaving === "gear" ? "wheel-out-down" : "wheel-out-up"}`} />}
+        <Tiles key={`in-${tab}`} deck={deck} onOpen={setOpen}
+          className={leaving ? (tab === "arcana" ? "wheel-in-top" : "wheel-in-bottom") : ""} />
+      </div>
     </div>
+  );
+}
+
+/** The card grid of one view (equipment or Arcana). The gap keeps the rank lights of neighbours apart. */
+function Tiles({ deck, onOpen, className = "" }: { deck: DeckEntry[]; onOpen: (id: string) => void; className?: string }) {
+  return (
+    <ul className={`grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4 ${className}`}>
+      {deck.map((d) => (
+        <li key={d.id}>
+          <Card as="button" grade={d.item.grade} onClick={() => onOpen(d.id)} label={`${d.label}: ${d.item.name}`}
+            className="flex h-full w-full items-center gap-3 p-3">
+            <div className="relative w-16 shrink-0">
+              {SHOW_ITEM_ICONS ? <CardArt src={iconFor(d.item)} alt={d.item.name} grade={d.item.grade} /> : <Filler className="aspect-square w-full" />}
+            </div>
+            <div className="relative min-w-0">
+              <div className="truncate text-sm font-semibold text-[#f4eed7]">{d.label}</div>
+              <div className="text-xs text-zinc-400">Rang: <span className="font-semibold" style={{ color: GRADE_HEX_CSS[d.item.grade] }}>{d.item.grade === "?" ? "–" : d.item.grade}</span></div>
+              <div className="truncate text-[11px] text-zinc-500">{d.item.name}</div>
+            </div>
+          </Card>
+        </li>
+      ))}
+    </ul>
   );
 }
