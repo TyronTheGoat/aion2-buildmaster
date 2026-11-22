@@ -10,14 +10,23 @@ const inlineIcons = {
   setup(b) {
     b.onLoad({ filter: /item-catalog\.json$/ }, (args) => {
       const items = JSON.parse(readFileSync(args.path, "utf8"));
+      let iconFiles = {};
+      try { iconFiles = JSON.parse(readFileSync(path.join(root, "data/icon-files.json"), "utf8")); } catch { /* no download imported */ }
+      const cache = new Map();
+      let inlined = 0;
       for (const it of items) {
-        if (!it.icon?.startsWith("/item-icons/")) continue;
-        const file = path.join(root, "public", decodeURIComponent(it.icon));
+        // only the released EU / Global selection is visible, so only those icons are embedded (keeps the file small)
+        const visible = it.regions?.some((r) => r.region === "EU");
+        const local = it.icon?.startsWith("/item-icons/") ? it.icon : iconFiles[it.icon?.split("/").pop()];
+        if (!local) continue;
+        if (!visible) { if (it.icon.startsWith("/item-icons/")) it.icon = ""; continue; }
+        const file = path.join(root, "public", decodeURIComponent(local));
         try {
-          const ext = path.extname(file).slice(1).replace("jpg", "jpeg");
-          it.icon = `data:image/${ext};base64,${readFileSync(file).toString("base64")}`;
-        } catch { it.icon = ""; }
+          if (!cache.has(file)) cache.set(file, `data:image/${path.extname(file).slice(1).replace("jpg", "jpeg")};base64,${readFileSync(file).toString("base64")}`);
+          it.icon = cache.get(file); inlined++;
+        } catch { /* keep the original URL */ }
       }
+      console.log(`Icons eingebettet: ${inlined} Items, ${cache.size} Dateien`);
       return { contents: JSON.stringify(items), loader: "json" };
     });
   },
