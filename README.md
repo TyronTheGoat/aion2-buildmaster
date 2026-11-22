@@ -43,6 +43,11 @@ jeden Slot bewertet, die BiS-Linien pro Slot zeigt und einen priorisierten Upgra
 - Meshy-Modelle (v3, detailreich, ohne Rig): `node scripts/optimize-character.mjs <male|female> <Meshy_AI_model.glb>`
   stellt die Füße auf y = 0, skaliert auf Körpergröße, reduziert auf ca. 60k Dreiecke und die Textur auf 1024 px WebP.
   v3 hat Vorrang vor v2; ihr Hell-Dunkel wird im Shader zum Hologramm (Farbton fällt weg).
+- Geriggte Modelle (v4, Mixamo-Skelett): `node scripts/rig-character.mjs <male|female> <rigged.glb> [<texturiert.glb>]`
+  skaliert Mesh, Skelett und Bind-Matrizen auf Körpergröße und vereinfacht; mit einem texturierten Modell in gleicher Pose
+  werden dessen Mesh und Textur übernommen und die Skin-Gewichte übertragen. v4 hat Vorrang vor v3.
+  Die Mixamo-Knochen folgen den App-Knochen (`RIG_MAP` in `model-body.ts`): Kampfhaltung, Atmen, Intro-Choreografien
+  (`pose` in `intro.ts`) und Fingergriff laufen auf dem echten Skelett.
 - Der Orb ist ein eigenes, festes Modell (Kristall in Klauenfassung): `node scripts/make-orb.mjs`.
 - Auren: Palette und Stärke je Rang in `src/lib/hologram.ts` (BiS Gold … D Crimson, ungeprüft Grau); Waffe am stärksten,
   Rüstung dezenter, Schmuck kompakter, BiS/S+ pulsieren und funkeln.

@@ -10,7 +10,7 @@ import type { BoneName } from "./body";
  *  - effects: light flashes, rune rings and spark bursts
  *  - pose: bone rotations for bodies that can move. The current Bildmaster models have no rig, so only the
  *    weapon and light tracks play; a rigged model gets the arm choreography from the same blueprint.
- * Blueprint rule kept: no fake limb motion without a rig.
+ * Blueprint rule kept: no fake limb motion without a rig (static models only play the weapon and light tracks).
  */
 
 export type IntroId =
@@ -32,6 +32,8 @@ export interface Blueprint {
 }
 
 const appear = (t: number): Key[] => [{ t: 0, s: 0, glow: 0 }, { t, s: 1, glow: 2.2 }];
+/** the same arm motion on the left side (Euler offsets are mirrored across the body's centre plane) */
+const mir = (r: V): V => [r[0], -r[1], -r[2]];
 
 export const INTROS: Record<IntroId, Blueprint> = {
   orb_dual_summon: {
@@ -56,39 +58,88 @@ export const INTROS: Record<IntroId, Blueprint> = {
     duration: 1.85, crossfade: 0.28,
     weapon: [{ t: 0, s: 0, glow: 0, y: -0.12, r: [-1.2, 0, 0] }, { t: 0.32, s: 1, glow: 0.8, y: -0.05, r: [-1.2, 0, 0] }, { t: 0.74, y: 0.04, r: [0, 0, 0], glow: 2.2 }, { t: 1.25, glow: 2.8 }, { t: 1.85, y: 0, glow: 1 }],
     effects: [{ t: 0.74, kind: "flash", at: "weapon" }, { t: 1.25, kind: "ring", at: "weapon", size: 0.8 }],
+    // book hand lifts the grimoire, the free hand opens over it as the pages awaken
+    pose: [
+      { t: 0, bones: {} },
+      { t: 0.32, bones: { "upperArm.L": [-0.45, 0, -0.15], "foreArm.L": [-1.0, -0.2, 0] } },
+      { t: 0.74, bones: { "upperArm.L": [-0.55, 0, -0.2], "foreArm.L": [-1.2, -0.25, 0], "upperArm.R": [-0.55, 0.2, 0.35], "foreArm.R": [-0.9, 0.3, 0], "hand.R": [0.3, 0, 0], chest: [0.05, -0.08, 0] } },
+      { t: 1.25, bones: { "upperArm.L": [-0.7, 0, -0.2], "foreArm.L": [-1.25, -0.25, 0], "upperArm.R": [-0.8, 0.3, 0.4], "foreArm.R": [-0.7, 0.3, 0], "hand.R": [0.4, 0, 0], head: [0.15, -0.15, 0] } },
+    ],
   },
   heavy_twohand_draw: {
     duration: 1.85, crossfade: 0.28,
     weapon: [{ t: 0, s: 0, glow: 0, r: [0.55, 0, 0] }, { t: 0.35, s: 1, glow: 1.4, r: [0.55, 0, 0] }, { t: 0.85, r: [0.2, 0, -0.15], glow: 2.4 }, { t: 1.32, r: [0, 0, 0], glow: 1.8 }, { t: 1.85, glow: 1 }],
     effects: [{ t: 0.35, kind: "flash", at: "weapon" }, { t: 1.32, kind: "flash", at: "tip", size: 1.2 }, { t: 1.32, kind: "groundRing", at: "ground", size: 1.2 }],
+    // draw over the shoulder with both hands, then bring the blade down in front
+    pose: [
+      { t: 0, bones: {} },
+      { t: 0.35, bones: { "upperArm.R": [-0.7, 0.2, 0.25], "foreArm.R": [-1.0, 0, 0] } },
+      { t: 0.85, bones: { "upperArm.R": [-1.35, 0.3, 0.35], "foreArm.R": [-0.7, 0, 0], "upperArm.L": [-1.1, -0.45, -0.45], "foreArm.L": [-1.0, 0, 0], chest: [-0.06, 0.1, 0] } },
+      { t: 1.32, bones: { "upperArm.R": [-0.55, 0.2, 0.3], "foreArm.R": [-0.9, 0, 0], "upperArm.L": [-0.6, -0.5, -0.45], "foreArm.L": [-1.0, 0, 0], chest: [0.12, 0, 0], hips: [0.05, 0, 0] } },
+    ],
   },
   guardian_draw_and_brace: {
     duration: 1.85, crossfade: 0.28,
     weapon: [{ t: 0, s: 0, glow: 0, r: [0.25, 0, 0] }, { t: 0.32, s: 1, glow: 1.6 }, { t: 0.67, r: [0, 0, 0] }, { t: 1.18, glow: 2 }, { t: 1.85, glow: 1 }],
     offhand: [{ t: 0, s: 0, glow: 0, r: [0, 0.9, 0] }, { t: 0.45, s: 1, glow: 1.2, r: [0, 0.9, 0] }, { t: 1.18, r: [0, 0, 0], glow: 2.6 }, { t: 1.85, glow: 1 }],
     effects: [{ t: 0.32, kind: "flash", at: "weapon" }, { t: 1.18, kind: "ring", at: "offhand", size: 1.1 }],
+    // sword comes up and forward, the shield arm braces in front of the chest
+    pose: [
+      { t: 0, bones: {} },
+      { t: 0.32, bones: { "upperArm.R": [-0.6, 0.1, 0.2], "foreArm.R": [-0.9, 0, 0] } },
+      { t: 0.67, bones: { "upperArm.R": [-0.8, 0.2, 0.3], "foreArm.R": [-0.6, 0, 0] } },
+      { t: 1.18, bones: { "upperArm.R": [-0.5, 0.1, 0.2], "foreArm.R": [-0.8, 0, 0], "upperArm.L": [-0.95, -0.2, -0.35], "foreArm.L": [-1.25, -0.2, 0], chest: [0.08, 0.1, 0], head: [0.06, 0, 0] } },
+    ],
   },
   twin_dagger_cross: {
     duration: 1.75, crossfade: 0.28,
     weapon: [...appear(0.37), { t: 0.81, glow: 2.6 }, { t: 1.21, glow: 1.4 }, { t: 1.75, glow: 1 }],
     second: [...appear(0.37), { t: 0.81, glow: 2.6 }, { t: 1.21, glow: 1.4 }, { t: 1.75, glow: 1 }],
     effects: [{ t: 0.1, kind: "flash", at: "weapon" }, { t: 0.1, kind: "flash", at: "second" }, { t: 0.81, kind: "flash", at: "chest", size: 1.2 }, { t: 0.81, kind: "burst", at: "chest" }],
+    // both blades come up, cross in front of the chest and snap apart
+    pose: [
+      { t: 0, bones: {} },
+      { t: 0.37, bones: { "upperArm.R": [-0.6, 0, 0.1], "foreArm.R": [-1.0, 0, 0], "upperArm.L": mir([-0.6, 0, 0.1]), "foreArm.L": [-1.0, 0, 0] } },
+      { t: 0.81, bones: { "upperArm.R": [-0.95, 0.5, 0.55], "foreArm.R": [-1.25, 0.3, 0], "upperArm.L": mir([-0.95, 0.5, 0.55]), "foreArm.L": mir([-1.25, 0.3, 0]), chest: [0.1, 0, 0] } },
+      { t: 1.21, bones: { "upperArm.R": [-0.45, 0, -0.15], "foreArm.R": [-0.8, 0, 0], "upperArm.L": mir([-0.45, 0, -0.15]), "foreArm.L": [-0.8, 0, 0] } },
+    ],
   },
   bow_aim_focus: {
     duration: 1.85, crossfade: 0.28,
     weapon: [{ t: 0, s: 0, glow: 0 }, { t: 0.42, s: 1, glow: 1.4 }, { t: 0.83, glow: 2.8 }, { t: 1.29, glow: 1.6 }, { t: 1.85, glow: 1 }],
     effects: [{ t: 0.42, kind: "flash", at: "weapon" }, { t: 0.83, kind: "ring", at: "weapon", size: 0.7 }],
+    // bow arm rises to aim, the string hand draws to the cheek, holds, releases
+    pose: [
+      { t: 0, bones: {} },
+      { t: 0.42, bones: { "upperArm.L": [-1.15, 0, 0.1], "foreArm.L": [-0.15, 0, 0], head: [0, 0.35, 0] } },
+      { t: 0.83, bones: { "upperArm.L": [-1.35, 0, 0.25], "foreArm.L": [-0.1, 0, 0], "upperArm.R": [-1.3, 0.3, 0.55], "foreArm.R": [-1.9, 0.2, 0], chest: [0, 0.3, 0], head: [0, 0.45, 0] } },
+      { t: 1.29, bones: { "upperArm.L": [-1.3, 0, 0.25], "foreArm.L": [-0.1, 0, 0], "upperArm.R": [-1.0, 0.2, 0.2], "foreArm.R": [-1.0, 0, 0], chest: [0, 0.25, 0], head: [0, 0.4, 0] } },
+    ],
   },
   healer_bless_and_guard: {
     duration: 1.85, crossfade: 0.28,
     weapon: [{ t: 0, s: 0, glow: 0 }, { t: 0.38, s: 1, glow: 1.4, r: [-0.25, 0, 0] }, { t: 0.86, glow: 2.6 }, { t: 1.21, r: [0, 0, 0] }, { t: 1.85, glow: 1 }],
     offhand: [{ t: 0, s: 0, glow: 0, r: [0, 0.7, 0] }, { t: 0.5, s: 1, glow: 1.2, r: [0, 0.7, 0] }, { t: 1.21, r: [0, 0, 0], glow: 1.8 }, { t: 1.85, glow: 1 }],
     effects: [{ t: 0.38, kind: "flash", at: "weapon" }, { t: 0.86, kind: "ring", at: "tip", size: 1.2 }, { t: 0.86, kind: "groundRing", at: "ground", size: 1.4 }],
+    // mace raised high for the blessing, then lowered as the shield comes up to guard
+    pose: [
+      { t: 0, bones: {} },
+      { t: 0.38, bones: { "upperArm.R": [-1.0, 0.1, 0.2], "foreArm.R": [-0.7, 0, 0] } },
+      { t: 0.86, bones: { "upperArm.R": [-1.6, 0.1, 0.25], "foreArm.R": [-0.35, 0, 0], head: [-0.15, 0, 0], chest: [-0.05, 0, 0] } },
+      { t: 1.21, bones: { "upperArm.R": [-0.5, 0.1, 0.2], "foreArm.R": [-0.8, 0, 0], "upperArm.L": [-0.9, -0.2, -0.35], "foreArm.L": [-1.2, -0.2, 0], chest: [0.06, 0.08, 0] } },
+    ],
   },
   chanter_circular_staff_guard: {
     duration: 1.85, crossfade: 0.28,
     weapon: [{ t: 0, s: 0, glow: 0, r: [0, 0, 0] }, { t: 0.33, s: 1, glow: 1.4, r: [0, 0, 0] }, { t: 0.76, r: [0, Math.PI, 0], glow: 2 }, { t: 1.23, r: [0, Math.PI * 2, 0], glow: 2.6 }, { t: 1.85, glow: 1 }],
     effects: [{ t: 0.33, kind: "flash", at: "weapon" }, { t: 1.23, kind: "groundRing", at: "ground", size: 1.5 }, { t: 1.23, kind: "flash", at: "tip", size: 1.1 }],
+    // the staff is lifted while it spins, then planted in front of the body
+    pose: [
+      { t: 0, bones: {} },
+      { t: 0.33, bones: { "upperArm.R": [-0.7, 0.1, 0.25], "foreArm.R": [-0.9, 0, 0] } },
+      { t: 0.76, bones: { "upperArm.R": [-1.05, 0.3, 0.4], "foreArm.R": [-0.8, 0.2, 0], "upperArm.L": [-0.5, -0.2, -0.3], "foreArm.L": [-0.9, 0, 0], chest: [0, 0.12, 0] } },
+      { t: 1.23, bones: { "upperArm.R": [-0.45, 0.2, 0.3], "foreArm.R": [-1.0, 0, 0], "upperArm.L": [-0.35, -0.1, -0.2], "foreArm.L": [-0.8, 0, 0], chest: [0.1, -0.06, 0] } },
+    ],
   },
 };
 

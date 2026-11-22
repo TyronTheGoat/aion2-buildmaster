@@ -2,7 +2,8 @@ import * as THREE from "three";
 import type { Grade } from "@/lib/types";
 import { GRADE_HEX, GRADE_LEVEL, type Gender, type WeaponKind } from "@/lib/hologram";
 import { bodyGeometry, bodySkeleton, buildBody, SKIN_SLOTS, type BoneName } from "./body";
-import type { ModelBody } from "./model-body";
+import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
+import { RIG_MAP, rigName, type ModelBody } from "./model-body";
 import { holdOffset, holdQuaternion, LOADOUTS, type Hold, type LoadedLoadout, type WeaponModel } from "./weapons";
 import { INTROS, sample, samplePose, sampleRot, type Effect, type Key } from "./intro";
 
@@ -44,6 +45,8 @@ void main() {
 }`;
 
 const MODEL_VERT = /* glsl */ `
+#include <common>
+#include <skinning_pars_vertex>
 attribute float aSlot;
 uniform vec3 uSlotColor[${SKIN_SLOTS.length}];
 uniform float uSlotLevel[${SKIN_SLOTS.length}];
@@ -62,15 +65,21 @@ void main() {
     * (1.0 - smoothstep(0.13, 0.2, abs(p.x - uChest.z)));
   p += normal * chestW * 0.0045 * uBreath;
   p += normal * uInflate * (0.003 + 0.015 * vLevel);
-  vec4 w = modelMatrix * vec4(p, 1.0);
+  // rigged models: the skeleton poses the surface (no-op for static models)
+  vec3 objectNormal = normal;
+  #include <skinbase_vertex>
+  #include <skinnormal_vertex>
+  vec3 transformed = p;
+  #include <skinning_vertex>
+  vec4 w = modelMatrix * vec4(transformed, 1.0);
   vW = w.xyz;
-  vN = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+  vN = normalize((modelMatrix * vec4(objectNormal, 0.0)).xyz);
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 
 const MODEL_FRAG = /* glsl */ `
 uniform vec3 uColor; uniform float uTime; uniform float uReveal; uniform sampler2D uMap; uniform float uTexGain;
-uniform sampler2D uRef; uniform float uRefOn; uniform float uNatural;
+uniform sampler2D uRef; uniform float uRefOn; uniform float uNatural; uniform float uNoTex;
 varying vec2 vUv; varying vec2 vUvRef; varying float vFront;
 ${VARY}
 void main() {
@@ -78,6 +87,17 @@ void main() {
   vec3 v = normalize(cameraPosition - vW);
   float fres = pow(1.0 - abs(dot(normalize(vN), v)), 2.6);
   vec3 tex = texture2D(uMap, vUv).rgb;
+  if (uNoTex > 0.5) {
+    // untextured sculpt: hologram light from the surface itself (key light from the front-top, soft fill)
+    vec3 nn = normalize(vN);
+    float key = max(dot(nn, normalize(vec3(0.35, 0.6, 0.75))), 0.0);
+    float fill = max(dot(nn, normalize(vec3(-0.6, 0.1, 0.5))), 0.0);
+    float l = clamp(0.1 + 0.7 * key + 0.2 * fill, 0.0, 1.0);
+    float k = vW.y * 88.0;
+    float fw = max(fwidth(k), 1e-4);
+    float line = (1.0 - min(abs(fract(k) - 0.5) / fw, 1.0)) * clamp(1.6 - 2.0 * fw, 0.0, 1.0);
+    tex = mix(vec3(0.015, 0.05, 0.1), vec3(0.17, 0.4, 0.6), l * l) * (0.8 + 0.3 * line);
+  }
   if (uNatural > 0.5) {
     // natural colours → hologram: keep the light and shade (face, armour seams, cloth folds), drop the hue
     float l = dot(tex, vec3(0.299, 0.587, 0.114));
@@ -268,6 +288,18 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
   const data = model ?? buildBody(gender);
   const { map: bones, list: boneList, skeleton } = bodySkeleton(data);
   figure.add(bones.hips);
+  // rigged model: its own skeleton deforms the mesh and follows the app's bones (see driveRig)
+  let rigSkeleton: THREE.Skeleton | undefined, rigBind: THREE.Matrix4 | undefined;
+  if (model?.rig) {
+    const rigScene = cloneSkinned(model.rig);
+    let sm: THREE.SkinnedMesh | undefined;
+    rigScene.traverse((o) => { if (!sm && (o as THREE.SkinnedMesh).isSkinnedMesh) sm = o as THREE.SkinnedMesh; });
+    if (sm) {
+      rigSkeleton = sm.skeleton; rigBind = sm.bindMatrix.clone();
+      sm.removeFromParent();
+      figure.add(rigScene);
+    }
+  }
   root.updateMatrixWorld(true);
   skeleton.calculateInverses();
   const bodyGeo = model ? model.geometry : bodyGeometry(buildBody(gender));
@@ -297,6 +329,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
     uMap: { value: model?.texture ?? null },
     uRef: { value: model?.reference ?? null }, uRefOn: { value: model?.reference ? 1 : 0 },
     uNatural: { value: model?.natural ? 1 : 0 },
+    uNoTex: { value: model && !model.texture ? 1 : 0 },
     uChest: { value: new THREE.Vector3(...(model ? [model.fit.chest[0], model.fit.chest[1], model.joint.chest[0]] : [0, 0, 0])) },
   };
   const modelMat = (frag: string, inflate: number) => {
@@ -309,8 +342,10 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
     return m;
   };
   const bodyPart = (mat: THREE.Material, order: number) => {
-    const m = model ? new THREE.Mesh(bodyGeo, mat) : new THREE.SkinnedMesh(bodyGeo, mat);
-    if (m instanceof THREE.SkinnedMesh) m.bind(skeleton);
+    const m = model && !rigSkeleton ? new THREE.Mesh(bodyGeo, mat) : new THREE.SkinnedMesh(bodyGeo, mat);
+    if (m instanceof THREE.SkinnedMesh) {
+      if (rigSkeleton) m.bind(rigSkeleton, rigBind); else m.bind(skeleton);
+    }
     m.frustumCulled = false;
     m.renderOrder = order;
     figure.add(m);
@@ -476,7 +511,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
   const WID = "weapon:0";
   const lo = LOADOUTS[weapon];
   const bp = INTROS[lo.intro];
-  const animatable = !model; // the built-in body has bones that move; the Bildmaster models are not rigged
+  const animatable = !model || !!rigSkeleton; // the built-in body and rigged models have bones that move
   const sideSign = (s: "L" | "R") => (s === "L" ? 1 : -1);
   interface Mounted { id: string; hold: Hold; rest: THREE.Group; holder: THREE.Group; tip: THREE.Object3D; keys?: Key[]; introOnly?: boolean; spin?: boolean }
   const mounted: Mounted[] = [];
@@ -723,7 +758,13 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
     const mic = Math.sin(t * 2.3 + 0.7) * amp;           // micro motion
     const look = Math.sin(t * 0.31) * amp;
 
-    if (model) {
+    if (rigSkeleton) {
+      // rigged: the same stance, idle and intro choreography as the built-in body, played on its skeleton
+      introPose = !reduce && t - INTRO_T0 < bp.duration ? samplePose(bp, Math.max(0, t - INTRO_T0)) : {};
+      poseBody(t, br, ws, bob, mic, look, amp);
+      root.updateMatrixWorld(true);
+      driveRig();
+    } else if (model) {
       // no rig: breathing (vertex shader), a gentle hover and a slow shift of weight of the whole figure
       modelU.uBreath.value = br;
       figure.position.set(0.004 * ws, 0.016 + 0.012 * Math.sin(t * 0.9) * amp, 0);
@@ -736,6 +777,48 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
     capePivot.rotation.set(0.12 + 0.03 * Math.sin(t * 1.1) * amp + 0.02 * ws, 0, 0.02 * ws);
     root.updateMatrixWorld(true);
     animate(t);
+  }
+
+  // ---- rig: Mixamo bones follow the app's bones -------------------------------------
+  // The app's bones rest with identity rotations, so their world rotation IS the pose offset. A mapped rig bone
+  // gets that offset applied in front of its own rest rotation; unmapped bones (shoulders, Spine1, fingers) keep
+  // their rest pose relative to their parent. Fingers close around a held grip.
+  interface RigBone { bone: THREE.Bone; app?: THREE.Bone; restQ: THREE.Quaternion; restLocal: THREE.Quaternion; restPos: THREE.Vector3; curl: number }
+  const rigBones: RigBone[] = [];
+  if (rigSkeleton) {
+    const byRig = new Map(Object.entries(RIG_MAP).map(([app, rig]) => [rig, bones[app as BoneName]]));
+    const grip: Record<"L" | "R", number> = { L: 0, R: 0 };
+    for (const h of [lo.hold, lo.second?.hold]) if (h) grip[h.side] = Math.max(grip[h.side], h.socket === "hand" ? 0.75 : 0.22);
+    if (offW) grip.L = Math.max(grip.L, 0.6);
+    const fq = figure.getWorldQuaternion(new THREE.Quaternion()).invert();
+    for (const b of rigSkeleton.bones) {
+      const n = rigName(b.name);
+      const f = n.match(/^(Left|Right)Hand(Index|Middle|Ring|Pinky)[123]$/);
+      rigBones.push({
+        bone: b, app: byRig.get(n),
+        restQ: fq.clone().multiply(b.getWorldQuaternion(new THREE.Quaternion())),
+        restLocal: b.quaternion.clone(), restPos: b.position.clone(),
+        curl: f ? grip[f[1] === "Left" ? "L" : "R"] : 0,
+      });
+    }
+  }
+  const qa = new THREE.Quaternion(), qp = new THREE.Quaternion(), qc = new THREE.Quaternion(), xAxis = new THREE.Vector3(1, 0, 0);
+  function driveRig() {
+    const fqInv = figure.getWorldQuaternion(qc).invert().clone();
+    for (const r of rigBones) {
+      if (r.app) {
+        // desired rotation relative to the figure, then expressed in the parent's frame
+        qa.copy(fqInv).multiply(r.app.getWorldQuaternion(qp)).multiply(r.restQ);
+        r.bone.parent!.getWorldQuaternion(qp);
+        qp.premultiply(fqInv).invert();
+        r.bone.quaternion.copy(qp.multiply(qa));
+        if (r.app === bones.hips) r.bone.position.copy(r.restPos).add(tmp.copy(bones.hips.position).sub(bind.hips));
+      } else {
+        r.bone.quaternion.copy(r.restLocal);
+        if (r.curl) r.bone.quaternion.multiply(qc.setFromAxisAngle(xAxis, r.curl * (0.9 + 0.1 * Math.sin(lastT * 0.7))));
+      }
+      r.bone.updateMatrixWorld(false);
+    }
   }
 
   function poseBody(t: number, br: number, ws: number, bob: number, mic: number, look: number, amp: number) {

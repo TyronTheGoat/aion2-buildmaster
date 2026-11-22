@@ -15,11 +15,26 @@ import { fetchAsset, loadImage } from "./assets";
 
 type V = [number, number, number];
 
-/** newest first: v3 = detailed Meshy models with a natural colour texture, v2 = the earlier hologram-textured models */
+/**
+ * Newest first: v4 = rigged (Mixamo skeleton, scripts/rig-character.mjs), v3 = detailed static Meshy models
+ * with a natural colour texture, v2 = the earlier hologram-textured models.
+ * natural: the texture has natural colours (v4 decides by whether it has a texture at all).
+ */
 const FILES: Record<Gender, { file: string; natural: boolean }[]> = {
-  m: [{ file: "bildmaster_male_v3_WEB.glb", natural: true }, { file: "bildmaster_male_v2_WEB.glb", natural: false }],
-  f: [{ file: "bildmaster_female_v3_WEB.glb", natural: true }, { file: "bildmaster_female_v2_WEB.glb", natural: false }],
+  m: [{ file: "bildmaster_male_v4_RIG.glb", natural: true }, { file: "bildmaster_male_v3_WEB.glb", natural: true }, { file: "bildmaster_male_v2_WEB.glb", natural: false }],
+  f: [{ file: "bildmaster_female_v4_RIG.glb", natural: true }, { file: "bildmaster_female_v3_WEB.glb", natural: true }, { file: "bildmaster_female_v2_WEB.glb", natural: false }],
 };
+
+/** Mixamo bones that drive the app's bones (gear, auras and poses are defined on those). */
+export const RIG_MAP: Partial<Record<BoneName, string>> = {
+  hips: "Hips", spine: "Spine", chest: "Spine2", neck: "Neck", head: "Head",
+  "upperArm.L": "LeftArm", "foreArm.L": "LeftForeArm", "hand.L": "LeftHand",
+  "upperArm.R": "RightArm", "foreArm.R": "RightForeArm", "hand.R": "RightHand",
+  "thigh.L": "LeftUpLeg", "shin.L": "LeftLeg", "foot.L": "LeftFoot",
+  "thigh.R": "RightUpLeg", "shin.R": "RightLeg", "foot.R": "RightFoot",
+};
+/** strips the "mixamorig" prefix (GLTFLoader turns "mixamorig:Hips" into "mixamorigHips") */
+export const rigName = (n: string) => n.replace(/^mixamorig[:_]?/, "");
 const REF: Record<Gender, string> = { m: "hologram_male_detailed_ref.webp", f: "hologram_female_detailed_ref.webp" };
 
 export interface ModelBody {
@@ -29,6 +44,8 @@ export interface ModelBody {
   natural: boolean;
   /** detailed front reference projected onto the mesh (uvRef attribute), if installed */
   reference: THREE.Texture | null;
+  /** rigged model: the loaded scene (skinned mesh + skeleton), cloned per figure */
+  rig: THREE.Object3D | null;
   bones: BoneDef[];
   joint: Record<string, V>;
   armDir: Record<"L" | "R", V>;
@@ -66,12 +83,30 @@ async function load(g: Gender): Promise<ModelBody | null> {
   gltf.scene.updateMatrixWorld(true);
   gltf.scene.traverse((o) => { if (!mesh && (o as THREE.Mesh).isMesh) mesh = o as THREE.Mesh; });
   if (!mesh) return null;
+  const skinned = (mesh as THREE.SkinnedMesh).isSkinnedMesh === true;
   const geo = mesh.geometry.clone();
-  geo.applyMatrix4(mesh.matrixWorld);
+  // a skinned mesh stays in its bind space (the skeleton places it)
+  if (!skinned) geo.applyMatrix4(mesh.matrixWorld);
   const mat = mesh.material as THREE.MeshStandardMaterial;
   const texture = mat.map ?? null;
-  const body = analyse(geo, texture);
-  body.natural = natural;
+  // limb joints of a rig come from its bones, so gear rotates around the same pivots as the mesh
+  let pins: Record<string, V> | undefined;
+  if (skinned) {
+    pins = {};
+    const at = (n: string): V | undefined => {
+      let p: V | undefined;
+      gltf.scene.traverse((o) => { if (!p && (o as THREE.Bone).isBone && rigName(o.name) === n) p = o.getWorldPosition(new THREE.Vector3()).toArray() as V; });
+      return p;
+    };
+    for (const [side, mx] of [["L", "Left"], ["R", "Right"]] as const) {
+      const pairs: [string, string][] = [["shoulder", "Arm"], ["elbow", "ForeArm"], ["wrist", "Hand"], ["hip", "UpLeg"], ["knee", "Leg"], ["ankle", "Foot"]];
+      for (const [j, b] of pairs) { const p = at(mx + b); if (p) pins[`${j}.${side}`] = p; }
+    }
+  }
+  const body = analyse(geo, texture, pins);
+  body.natural = natural && !!texture;
+  body.rig = skinned ? gltf.scene : null;
+  if (skinned) return body;
   // the painted reference only adds detail to the simpler v2 meshes; the v3 models carry their own
   if (natural) return body;
   const img = await loadImage(`hero/${REF[g]}`);
@@ -120,7 +155,7 @@ function smoothNormals(geo: THREE.BufferGeometry) {
  * or the opaque pixels of a front image (flat: z = 0). Both give the same bone layout, which is what
  * lets a reference image be projected onto the mesh.
  */
-export function measure(P: Float32Array, flat = false) {
+export function measure(P: Float32Array, flat = false, pins?: Record<string, V>) {
   const n = P.length / 3;
   let H = 0;
   for (let i = 0; i < n; i++) H = Math.max(H, P[i * 3 + 1]);
@@ -236,6 +271,14 @@ export function measure(P: Float32Array, flat = false) {
     joint[`hip.${side}`] = hip; joint[`knee.${side}`] = knee; joint[`ankle.${side}`] = ankle; joint[`toe.${side}`] = toe;
   }
 
+  if (pins) {
+    Object.assign(joint, pins);
+    for (const side of ["L", "R"] as const) {
+      const W = joint[`wrist.${side}`], E = joint[`elbow.${side}`];
+      const d = new THREE.Vector3(W[0] - E[0], W[1] - E[1], W[2] - E[2]).normalize();
+      armDir[side] = [d.x, d.y, d.z];
+    }
+  }
   const torsoSx = 0.72;
   const j = joint;
   const bones: BoneDef[] = [
@@ -268,11 +311,11 @@ export function measure(P: Float32Array, flat = false) {
 }
 
 
-function analyse(geo: THREE.BufferGeometry, texture: THREE.Texture | null): ModelBody {
+function analyse(geo: THREE.BufferGeometry, texture: THREE.Texture | null, pins?: Record<string, V>): ModelBody {
   smoothNormals(geo);
   const P = geo.getAttribute("position").array as Float32Array;
   const n = P.length / 3;
-  const m = measure(P);
+  const m = measure(P, false, pins);
   const { bones } = m;
 
   // slot of each vertex = nearest body part
@@ -289,7 +332,7 @@ function analyse(geo: THREE.BufferGeometry, texture: THREE.Texture | null): Mode
   }
   geo.setAttribute("aSlot", new THREE.BufferAttribute(slot, 1));
   geo.computeBoundingSphere();
-  return { geometry: geo, texture, natural: false, reference: null, bones, joint: m.joint, armDir: m.armDir, height: m.H, fit: m.fit, measure: m };
+  return { geometry: geo, texture, natural: false, reference: null, rig: null, bones, joint: m.joint, armDir: m.armDir, height: m.H, fit: m.fit, measure: m };
 }
 
 // ---- reference projection ----------------------------------------------------------

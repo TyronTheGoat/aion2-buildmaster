@@ -43,8 +43,12 @@ const assets = {};
 const installed = (dir, f) => { try { return readdirSync(path.join(root, "public", dir)).includes(f); } catch { return false; } };
 // files the app never loads once their successor is installed (keeps the offline file smaller)
 const superseded = (dir, f) => {
-  const g = f.match(/^bildmaster_(male|female)_v2_WEB\.glb$/)?.[1] ?? f.match(/^hologram_(male|female)_detailed_ref\.webp$/)?.[1];
-  if ((dir === "models" || dir === "hero") && g) return installed("models", `bildmaster_${g}_v3_WEB.glb`);
+  // newer character versions replace older ones: v4 (rigged) > v3 (static, textured) > v2 (+ painted reference)
+  const newer = (g, v) => (v < 4 && installed("models", `bildmaster_${g}_v4_RIG.glb`)) || (v < 3 && installed("models", `bildmaster_${g}_v3_WEB.glb`));
+  const m = f.match(/^bildmaster_(male|female)_v([23])_WEB\.glb$/);
+  if (dir === "models" && m) return newer(m[1], +m[2]);
+  const r = f.match(/^hologram_(male|female)_detailed_ref\.webp$/);
+  if (dir === "hero" && r) return newer(r[1], 2);
   if (dir === "weapons" && f === "bildmaster_orb_hologram_v2.glb") return installed("weapons", "bildmaster_orb_solid_v3.glb");
   return false;
 };
