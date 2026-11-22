@@ -1,7 +1,7 @@
 "use client";
 import { useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import type { Grade } from "@/lib/types";
-import { GRADE_GLOW, GRADE_HEX_CSS } from "@/lib/grades";
+import { GRADE_HEX_CSS, RANK_STYLE } from "@/lib/grades";
 
 /**
  * A physical card with depth: graphite face with bevelled edges (light top edge, dark bottom edge),
@@ -14,28 +14,36 @@ import { GRADE_GLOW, GRADE_HEX_CSS } from "@/lib/grades";
 export function Card({ grade = "?", children, className = "", onClick, as = "div", label }: {
   grade?: Grade; children: ReactNode; className?: string; onClick?: () => void; as?: "div" | "button"; label?: string;
 }) {
-  const hex = GRADE_HEX_CSS[grade];
-  const g = GRADE_GLOW[grade];
-  const a = (x: number) => Math.round(Math.min(1, x) * 255).toString(16).padStart(2, "0");
+  const r = RANK_STYLE[grade];
+  const hex = r.borderColor, glow = r.glowColor, g = r.backgroundGlow;
+  const a = (x: number) => Math.round(Math.max(0, Math.min(1, x)) * 255).toString(16).padStart(2, "0");
+  // layered depth + rank light; "peak" is the same with a stronger light for the pulse
+  const shadow = (k: number) => [
+    `0 0 0 1px ${hex}${a(0.35 + g * 0.35 + k * 0.15)}`, // frame
+    "inset 0 1px 0 rgba(255,255,255,0.16)", // top bevel highlight
+    "inset 0 -3px 6px rgba(0,0,0,0.55)", // bottom bevel
+    `inset 0 0 ${16 + k * 6}px ${glow}${a(0.05 + g * 0.12 + k * 0.08)}`, // light caught inside the face
+    "0 3px 0 -0.5px #06070a", // slab edge
+    `0 3px 0 0 ${hex}${a(0.12 + g * 0.25)}`, // lit slab edge
+    `0 0 ${4 + g * 10 + k * 6}px ${glow}${a(0.12 + g * 0.4 + k * 0.2)}`, // outer glow (kept tight, cards do not bleed into each other)
+    `0 ${8 + g * 6}px ${10 + g * 12 + k * 6}px -8px ${glow}${a(0.2 + g * 0.5 + k * 0.15)}`, // indirect light underneath
+    "0 16px 22px -14px #000", // contact shadow
+  ].join(", ");
   const style = {
-    "--glow": hex,
-    boxShadow: [
-      `0 0 0 1px ${hex}${a(0.3 + g * 0.3)}`, // rim
-      "inset 0 1px 0 rgba(255,255,255,0.16)", // top bevel highlight
-      "inset 0 -3px 6px rgba(0,0,0,0.55)", // bottom bevel
-      `inset 0 0 18px ${hex}${a(0.06 + g * 0.1)}`, // light caught inside the face
-      "0 3px 0 -0.5px #06070a", // slab edge
-      `0 3px 0 0 ${hex}${a(0.15 + g * 0.2)}`, // lit slab edge
-      `0 0 ${6 + g * 8}px ${hex}${a(0.18 + g * 0.3)}`, // tight backlight
-      `0 ${10 + g * 4}px ${14 + g * 8}px -8px ${hex}${a(0.35 + g * 0.4)}`, // indirect light underneath
-      "0 16px 22px -14px #000", // contact shadow
-    ].join(", "),
+    "--glow": glow,
+    "--rank-base": shadow(0),
+    "--rank-peak": shadow(r.pulseStrength),
+    "--rank-period": `${r.period || 4}s`,
+    boxShadow: shadow(0),
   } as CSSProperties;
-  const cls = `card-face relative isolate overflow-hidden rounded-[18px] text-left ${onClick ? "card-tilt" : ""} ${className}`;
+  const cls = `card-face relative isolate overflow-hidden rounded-[18px] text-left rank-${r.animationStyle} ${onClick ? "card-tilt" : ""} ${className}`;
   const inner = (
     <>
       {/* gold frame inset */}
       <span aria-hidden className="pointer-events-none absolute inset-[5px] rounded-[13px] border border-[#d9c58f]/25" />
+      {/* glitter and a passing shine for the top ranks (BiS strongest, S+ light) */}
+      {r.sparkleIntensity > 0 && <span aria-hidden className="rank-shine pointer-events-none absolute inset-0" style={{ "--shine": r.sparkleIntensity } as CSSProperties} />}
+      {r.sparkleIntensity > 0.6 && <span aria-hidden className="rank-sparkle pointer-events-none absolute inset-0" />}
       {/* sheen, follows the tilt */}
       <span aria-hidden className="card-sheen pointer-events-none absolute -left-1/3 -top-1/2 h-[120%] w-2/3 rotate-12 bg-gradient-to-b from-white/[0.08] to-transparent" />
       {children}

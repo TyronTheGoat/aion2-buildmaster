@@ -127,7 +127,7 @@ export function GearCompare({ char, item, slotId }: {
             <CardHead title={t("Soll-Stand / BiS", "Target / BiS")} short={t("Soll / BiS", "BiS")} rank={soll ? "BiS" : undefined} />
             {soll ? (
               <ItemBlock icon={SHOW_ITEM_ICONS ? soll.icon : undefined} grade={soll.grade} name={soll.name} info={sollInfo} sub={sollSub}
-                action={<button onClick={() => setPicking(true)} className="text-[11px] text-[#ffd54a]/80 underline-offset-2 hover:underline">{wearsBisCraft ? t("Schon BiS · anderes Ziel", "Already BiS · other target") : t("anderes Ziel", "other target")}</button>} />
+                action={<button onClick={() => setPicking(true)} className="text-[11px] text-[#ffa31a]/80 underline-offset-2 hover:underline">{wearsBisCraft ? t("Schon BiS · anderes Ziel", "Already BiS · other target") : t("anderes Ziel", "other target")}</button>} />
             ) : (
               <button onClick={() => setPicking(true)} className="block w-full text-left">
                 <ItemBlock name={t("Offen", "Open")} info={slotLabel(item.slot, lang)} sub={t("Ziel-Item wählen", "Choose a target item")} />
@@ -156,7 +156,7 @@ export function GearCompare({ char, item, slotId }: {
       <Card grade="?" className="p-4 sm:p-5">
         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-[#beac80]">{t("Noch zu tun", "To do")}</div>
         {isBis && !(arcana && todo.length) ? (
-          <p className="text-sm text-[#ffd54a]">{t("Nichts mehr. Dieses Teil ist BiS.", "Nothing left. This item is BiS.")}</p>
+          <p className="text-sm text-[#ffa31a]">{t("Nichts mehr. Dieses Teil ist BiS.", "Nothing left. This item is BiS.")}</p>
         ) : todo.length ? (
           <ul className="space-y-1.5 text-sm text-zinc-200">
             {todo.map((t) => <li key={t} className="flex gap-2"><span className="text-[#99e4e2]">•</span><span>{t}</span></li>)}
@@ -236,12 +236,12 @@ function BisStat({ id, name, skill, missing, unlock, plus }: { id: string; name:
   return (
     <div data-pair={`soll:${id}`} className={`flex h-9 items-center justify-between gap-1.5 rounded-lg px-2 text-[12px] sm:px-2.5 sm:text-[13px] ${bg}`}>
       <span className="flex min-w-0 items-center gap-1.5">
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ffd54a]/70" />
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ffa31a]/70" />
         {skill && <SkillIcon name={name} size={16} />}
         <span className={`truncate font-medium ${unlock ? "text-violet-50" : "text-zinc-100"}`}>{skill ? name : statLabel(name, lang)}</span>
       </span>
-      {plus ? <span className={`shrink-0 text-[12px] font-semibold tabular-nums ${missing ? "text-rose-300/80" : "text-[#ffd54a]"}`}>{plus}</span>
-        : <span className={`shrink-0 text-[11px] font-semibold ${missing ? "text-rose-300/80" : "text-[#ffd54a]"}`}>{missing ? missingWord : "◆"}</span>}
+      {plus ? <span className={`shrink-0 text-[12px] font-semibold tabular-nums ${missing ? "text-rose-300/80" : "text-[#ffa31a]"}`}>{plus}</span>
+        : <span className={`shrink-0 text-[11px] font-semibold ${missing ? "text-rose-300/80" : "text-[#ffa31a]"}`}>{missing ? missingWord : "◆"}</span>}
     </div>
   );
 }

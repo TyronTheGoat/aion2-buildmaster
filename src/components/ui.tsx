@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import type { Grade } from "@/lib/types";
 
 export const GRADE_RING: Record<Grade, string> = {
-  BiS: "ring-[#ffd54a]", "S+": "ring-[#7dff4d]", S: "ring-[#21d96b]", A: "ring-[#ff9a2e]",
-  B: "ring-[#ff6a3d]", C: "ring-[#ff3b3b]", D: "ring-[#b81f2d]", "?": "ring-[#7a8594]",
+  // same colours as RANK_STYLE in lib/grades (Tailwind needs them spelled out)
+  BiS: "ring-[#ffa31a]", "S+": "ring-[#ffd23f]", S: "ring-[#e6c35c]", A: "ring-[#3d9bff]",
+  B: "ring-[#6a8fc7]", C: "ring-[#5fbf8a]", D: "ring-[#ff3344]", "?": "ring-[#7a8594]",
 };
 
 /** Game icon from kisk/NC CDN with a text fallback when offline or missing. */
