@@ -7,10 +7,13 @@
 //   v3 model from optimize-character.mjs). Its detailed mesh and texture replace the rigged mesh, and the
 //   skin weights are transferred from the nearest rigged vertices. The pose must match closely: the script
 //   refuses when the two surfaces are more than a few centimetres apart.
+// - a rig that already carries a colour texture keeps it (1024 px WebP); normal / PBR maps and tangents are dropped
+// - a rig without finger bones first goes through scripts/add-fingers.mjs
 // Output: public/models/bildmaster_<gender>_v4_RIG.glb (git-ignored like the other character files).
 import { NodeIO, VertexLayout } from "@gltf-transform/core";
-import { weld, simplify, dedup, prune, getBounds } from "@gltf-transform/functions";
+import { weld, simplify, dedup, prune, textureCompress } from "@gltf-transform/functions";
 import { MeshoptSimplifier } from "meshoptimizer";
+import sharp from "sharp";
 import path from "node:path";
 
 const [gender, rigFile, texFile] = process.argv.slice(2);
@@ -28,10 +31,16 @@ const skin = root.listSkins()[0];
 if (!skin) { console.error("Die Datei hat kein Skelett (keine Skin-Daten)."); process.exit(1); }
 for (const a of root.listAnimations()) a.dispose();
 const prim = root.listMeshes()[0].listPrimitives()[0];
+if (prim.getAttribute("TANGENT")) prim.setAttribute("TANGENT", null);
+for (const mat of root.listMaterials()) {
+  mat.setNormalTexture(null); mat.setMetallicRoughnessTexture(null); mat.setOcclusionTexture(null); mat.setEmissiveTexture(null);
+  mat.setMetallicFactor(0); mat.setRoughnessFactor(1);
+}
 
 // ---- scale everything to the character height ---------------------------------------
-const b0 = getBounds(root.listScenes()[0]);
-const k = HEIGHT / (b0.max[1] - b0.min[1]);
+// the skinned vertices live in mesh space (the node transforms above them do not apply), so measure those
+const pacc = prim.getAttribute("POSITION");
+const k = HEIGHT / (pacc.getMax([0, 0, 0])[1] - pacc.getMin([0, 0, 0])[1]);
 const scaleAttr = (acc) => { const a = acc.getArray(); for (let i = 0; i < a.length; i++) a[i] *= k; acc.setArray(a); };
 for (const m of root.listMeshes()) for (const p of m.listPrimitives()) scaleAttr(p.getAttribute("POSITION"));
 for (const n of root.listNodes()) n.setTranslation(n.getTranslation().map((x) => x * k));
@@ -116,6 +125,7 @@ await doc.transform(
   simplify({ simplifier: MeshoptSimplifier, ratio: Math.min(1, TARGET_TRIS / before), error: 0.002, lockBorder: false }),
   dedup(),
   prune(),
+  textureCompress({ encoder: sharp, targetFormat: "webp", resize: [1024, 1024], quality: 85 }),
 );
 const out = path.resolve(import.meta.dirname, "..", "public/models", `bildmaster_${gender}_v4_RIG.glb`);
 await io.write(out, doc);

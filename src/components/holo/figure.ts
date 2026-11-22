@@ -79,7 +79,7 @@ void main() {
 
 const MODEL_FRAG = /* glsl */ `
 uniform vec3 uColor; uniform float uTime; uniform float uReveal; uniform sampler2D uMap; uniform float uTexGain;
-uniform sampler2D uRef; uniform float uRefOn; uniform float uNatural; uniform float uNoTex;
+uniform sampler2D uRef; uniform float uRefOn; uniform float uNatural; uniform float uNoTex; uniform float uTexLum;
 varying vec2 vUv; varying vec2 vUvRef; varying float vFront;
 ${VARY}
 void main() {
@@ -102,11 +102,15 @@ void main() {
     // natural colours → hologram: keep the light and shade (face, armour seams, cloth folds), drop the hue
     float l = dot(tex, vec3(0.299, 0.587, 0.114));
     // the bodysuit is mostly light grey: stretch the upper range so seams, folds and the face read as detail
-    l = smoothstep(0.35, 0.97, l);
+    l = smoothstep(uTexLum - 0.4, min(uTexLum + 0.22, 1.0), l);
     float k = vW.y * 88.0;
     float fw = max(fwidth(k), 1e-4);
     float line = (1.0 - min(abs(fract(k) - 0.5) / fw, 1.0)) * clamp(1.6 - 2.0 * fw, 0.0, 1.0);
-    tex = mix(vec3(0.03, 0.1, 0.2), vec3(0.3, 0.68, 0.95), l) * (0.8 + 0.3 * line);
+    // plus light from the surface, so the sculpt (muscles, seams, face) reads in 3D, not only the paint
+    vec3 nn = normalize(vN);
+    float key = max(dot(nn, normalize(vec3(0.35, 0.6, 0.75))), 0.0);
+    float lit = 0.45 + 0.55 * key;
+    tex = mix(vec3(0.025, 0.07, 0.15), vec3(0.3, 0.68, 0.95), pow(l * lit, 1.4)) * (0.8 + 0.3 * line);
   }
   if (uRefOn > 0.5) {
     // detailed reference on the front; the back (a front projection would show the face there) gets a clean scan
@@ -330,6 +334,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
     uRef: { value: model?.reference ?? null }, uRefOn: { value: model?.reference ? 1 : 0 },
     uNatural: { value: model?.natural ? 1 : 0 },
     uNoTex: { value: model && !model.texture ? 1 : 0 },
+    uTexLum: { value: model?.texLum ?? 0.7 },
     uChest: { value: new THREE.Vector3(...(model ? [model.fit.chest[0], model.fit.chest[1], model.joint.chest[0]] : [0, 0, 0])) },
   };
   const modelMat = (frag: string, inflate: number) => {
@@ -783,7 +788,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
   // The app's bones rest with identity rotations, so their world rotation IS the pose offset. A mapped rig bone
   // gets that offset applied in front of its own rest rotation; unmapped bones (shoulders, Spine1, fingers) keep
   // their rest pose relative to their parent. Fingers close around a held grip.
-  interface RigBone { bone: THREE.Bone; app?: THREE.Bone; restQ: THREE.Quaternion; restLocal: THREE.Quaternion; restPos: THREE.Vector3; curl: number }
+  interface RigBone { bone: THREE.Bone; app?: THREE.Bone; restQ: THREE.Quaternion; restLocal: THREE.Quaternion; restPos: THREE.Vector3; curl: number; unit: number }
   const rigBones: RigBone[] = [];
   if (rigSkeleton) {
     const byRig = new Map(Object.entries(RIG_MAP).map(([app, rig]) => [rig, bones[app as BoneName]]));
@@ -799,6 +804,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
         restQ: fq.clone().multiply(b.getWorldQuaternion(new THREE.Quaternion())),
         restLocal: b.quaternion.clone(), restPos: b.position.clone(),
         curl: f ? grip[f[1] === "Left" ? "L" : "R"] : 0,
+        unit: b.parent ? b.parent.getWorldScale(new THREE.Vector3()).x / figure.getWorldScale(new THREE.Vector3()).x : 1,
       });
     }
   }
@@ -812,7 +818,8 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
         r.bone.parent!.getWorldQuaternion(qp);
         qp.premultiply(fqInv).invert();
         r.bone.quaternion.copy(qp.multiply(qa));
-        if (r.app === bones.hips) r.bone.position.copy(r.restPos).add(tmp.copy(bones.hips.position).sub(bind.hips));
+        // hip sway in metres, converted into the rig's own units (Meshy armatures are often in centimetres)
+        if (r.app === bones.hips) r.bone.position.copy(r.restPos).add(tmp.copy(bones.hips.position).sub(bind.hips).divideScalar(r.unit));
       } else {
         r.bone.quaternion.copy(r.restLocal);
         if (r.curl) r.bone.quaternion.multiply(qc.setFromAxisAngle(xAxis, r.curl * (0.9 + 0.1 * Math.sin(lastT * 0.7))));

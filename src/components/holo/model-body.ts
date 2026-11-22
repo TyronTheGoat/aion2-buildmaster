@@ -42,6 +42,8 @@ export interface ModelBody {
   texture: THREE.Texture | null;
   /** the texture has natural colours (skin, cloth); the shader turns its light and shade into hologram light */
   natural: boolean;
+  /** mean brightness of the texture (0..1), so light and dark textures map to the same hologram range */
+  texLum: number;
   /** detailed front reference projected onto the mesh (uvRef attribute), if installed */
   reference: THREE.Texture | null;
   /** rigged model: the loaded scene (skinned mesh + skeleton), cloned per figure */
@@ -88,8 +90,7 @@ async function load(g: Gender): Promise<ModelBody | null> {
   // a skinned mesh stays in its bind space (the skeleton places it)
   if (!skinned) geo.applyMatrix4(mesh.matrixWorld);
   const mat = mesh.material as THREE.MeshStandardMaterial;
-  // rigged models are shown untextured so both genders share the same surface-lit hologram look
-  const texture = skinned ? null : mat.map ?? null;
+  const texture = mat.map ?? null;
   // limb joints of a rig come from its bones, so gear rotates around the same pivots as the mesh
   let pins: Record<string, V> | undefined;
   if (skinned) {
@@ -106,6 +107,7 @@ async function load(g: Gender): Promise<ModelBody | null> {
   }
   const body = analyse(geo, texture, pins);
   body.natural = natural && !!texture;
+  body.texLum = texture ? meanLum(texture) : 0.7;
   body.rig = skinned ? gltf.scene : null;
   if (skinned) return body;
   // the painted reference only adds detail to the simpler v2 meshes; the v3 models carry their own
@@ -119,6 +121,20 @@ async function load(g: Gender): Promise<ModelBody | null> {
     body.reference = tex;
   }
   return body;
+}
+
+function meanLum(tex: THREE.Texture) {
+  try {
+    const img = tex.image as CanvasImageSource & { width: number; height: number };
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const g = c.getContext("2d", { willReadFrequently: true })!;
+    g.drawImage(img, 0, 0, 64, 64);
+    const d = g.getImageData(0, 0, 64, 64).data;
+    let s = 0, n = 0;
+    for (let i = 0; i < d.length; i += 4) { if (d[i + 3] < 128) continue; s += (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255; n++; }
+    return n ? s / n : 0.7;
+  } catch { return 0.7; }
 }
 
 function smoothNormals(geo: THREE.BufferGeometry) {
@@ -333,7 +349,7 @@ function analyse(geo: THREE.BufferGeometry, texture: THREE.Texture | null, pins?
   }
   geo.setAttribute("aSlot", new THREE.BufferAttribute(slot, 1));
   geo.computeBoundingSphere();
-  return { geometry: geo, texture, natural: false, reference: null, rig: null, bones, joint: m.joint, armDir: m.armDir, height: m.H, fit: m.fit, measure: m };
+  return { geometry: geo, texture, natural: false, texLum: 0.7, reference: null, rig: null, bones, joint: m.joint, armDir: m.armDir, height: m.H, fit: m.fit, measure: m };
 }
 
 // ---- reference projection ----------------------------------------------------------
