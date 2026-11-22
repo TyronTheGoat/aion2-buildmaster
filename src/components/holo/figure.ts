@@ -3,6 +3,8 @@ import type { Grade } from "@/lib/types";
 import { GRADE_HEX, GRADE_LEVEL, type Gender, type WeaponKind } from "@/lib/hologram";
 import { bodyGeometry, bodySkeleton, buildBody, SKIN_SLOTS, type BoneName } from "./body";
 import type { ModelBody } from "./model-body";
+import { holdOffset, holdQuaternion, LOADOUTS, type Hold, type LoadedLoadout, type WeaponModel } from "./weapons";
+import { INTROS, sample, samplePose, sampleRot, type Effect, type Key } from "./intro";
 
 /**
  * Hologram figure: the supplied Bildmaster character model (model-body.ts), shown unchanged with its
@@ -47,12 +49,13 @@ uniform vec3 uSlotColor[${SKIN_SLOTS.length}];
 uniform float uSlotLevel[${SKIN_SLOTS.length}];
 uniform float uSlotFocus[${SKIN_SLOTS.length}];
 uniform float uInflate; uniform float uBreath; uniform vec3 uChest;
-varying vec2 vUv;
+attribute vec2 uvRef;
+varying vec2 vUv; varying vec2 vUvRef; varying float vFront;
 ${VARY}
 void main() {
   int s = int(aSlot + 0.5);
   vAura = uSlotColor[s]; vLevel = uSlotLevel[s]; vFocus = uSlotFocus[s];
-  vUv = uv;
+  vUv = uv; vUvRef = uvRef; vFront = normal.z;
   vec3 p = position;
   // breathing: the rib cage widens by a few millimetres, nothing else of the model moves
   float chestW = smoothstep(uChest.x, uChest.x + 0.12, p.y) * (1.0 - smoothstep(uChest.y - 0.08, uChest.y, p.y))
@@ -67,13 +70,24 @@ void main() {
 
 const MODEL_FRAG = /* glsl */ `
 uniform vec3 uColor; uniform float uTime; uniform float uReveal; uniform sampler2D uMap; uniform float uTexGain;
-varying vec2 vUv;
+uniform sampler2D uRef; uniform float uRefOn;
+varying vec2 vUv; varying vec2 vUvRef; varying float vFront;
 ${VARY}
 void main() {
   if (vW.y > uReveal) discard;
   vec3 v = normalize(cameraPosition - vW);
   float fres = pow(1.0 - abs(dot(normalize(vN), v)), 2.6);
   vec3 tex = texture2D(uMap, vUv).rgb;
+  if (uRefOn > 0.5) {
+    // detailed reference on the front; the back (a front projection would show the face there) gets a clean scan
+    vec4 ref = texture2D(uRef, vUvRef);
+    vec3 front = mix(tex, ref.rgb, ref.a);
+    float k = vW.y * 88.0;
+    float fw = max(fwidth(k), 1e-4);
+    float line = (1.0 - min(abs(fract(k) - 0.5) / fw, 1.0)) * clamp(1.6 - 2.0 * fw, 0.0, 1.0);
+    vec3 plain = uColor * (0.09 + 0.2 * line);
+    tex = mix(plain, front, smoothstep(-0.35, 0.2, vFront));
+  }
   float scanY = fract(uTime * 0.14) * 2.6 - 0.2;
   float band = exp(-pow((vW.y - scanY) * 12.0, 2.0));
   float edge = smoothstep(0.08, 0.0, uReveal - vW.y);
@@ -144,6 +158,8 @@ type V3 = [number, number, number];
 
 export interface Figure {
   root: THREE.Group;
+  /** platform rings on the floor (scaled to sit on the painted platform of the backdrop) */
+  platform: THREE.Object3D;
   anchors: Record<string, THREE.Object3D>;
   slotIds: string[];
   hitTargets: THREE.Object3D[];
@@ -202,7 +218,15 @@ function presentPose(weapon: WeaponKind): Pose {
 
 const ease3 = (k: number) => k * k * (3 - 2 * k);
 
-export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean, model?: ModelBody | null): Figure {
+export interface FigureOptions {
+  /** the supplied character model; without it the built-in MakeHuman body is used */
+  model?: ModelBody | null;
+  /** loaded class weapon models (weapons.ts) */
+  weapons?: LoadedLoadout | null;
+}
+
+export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean, opts: FigureOptions = {}): Figure {
+  const { model, weapons } = opts;
   const root = new THREE.Group();
   const geos = new Set<THREE.BufferGeometry>();
   const mats: THREE.Material[] = [];
@@ -243,6 +267,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
   const modelU = {
     uBreath: { value: 0 }, uTexGain: { value: 1.0 },
     uMap: { value: model?.texture ?? null },
+    uRef: { value: model?.reference ?? null }, uRefOn: { value: model?.reference ? 1 : 0 },
     uChest: { value: new THREE.Vector3(...(model ? [model.fit.chest[0], model.fit.chest[1], model.joint.chest[0]] : [0, 0, 0])) },
   };
   const modelMat = (frag: string, inflate: number) => {
@@ -418,110 +443,129 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
   capeGeo.translate(0, -capeLen / 2, 0.075);
   part(capePivot, capeGeo, "cape:0", { side: THREE.DoubleSide, strength: 0.45 });
   marker(capePivot, [0, -0.4, -0.15], "cape:0");
-  // offhand guard on the left forearm
-  const shield = new THREE.Shape();
-  shield.moveTo(0, 0.13); shield.quadraticCurveTo(0.1, 0.12, 0.1, 0.02); shield.quadraticCurveTo(0.08, -0.1, 0, -0.16);
-  shield.quadraticCurveTo(-0.08, -0.1, -0.1, 0.02); shield.quadraticCurveTo(-0.1, 0.12, 0, 0.13);
-  const shieldGeo = new THREE.ExtrudeGeometry(shield, { depth: 0.012, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 3, curveSegments: 16 });
-  shieldGeo.center();
-  if (weapon === "sword" || weapon === "mace") {
-    // only shield classes carry the offhand visibly; for everyone else it stays in the gear list
-    const E = J["elbow.L"], W = J["wrist.L"];
-    const mid = rel("foreArm.L", [(E[0] + W[0]) / 2 + 0.05, (E[1] + W[1]) / 2, (E[2] + W[2]) / 2]);
-    const guard = part(bones["foreArm.L"], shieldGeo, "offhand:0", { p: mid, r: [0, Math.PI / 2, -0.75] });
-    marker(guard, [0, 0, 0], "offhand:0");
-  } else {
-    geos.add(shieldGeo);
+  // ---- weapons (GLB pack, see weapons.ts) ------------------------------------------
+  const WID = "weapon:0";
+  const lo = LOADOUTS[weapon];
+  const bp = INTROS[lo.intro];
+  const animatable = !model; // the built-in body has bones that move; the Bildmaster models are not rigged
+  const sideSign = (s: "L" | "R") => (s === "L" ? 1 : -1);
+  interface Mounted { id: string; hold: Hold; rest: THREE.Group; holder: THREE.Group; tip: THREE.Object3D; keys?: Key[]; introOnly?: boolean; spin?: boolean }
+  const mounted: Mounted[] = [];
+  const forearmMid = (s: "L" | "R") => {
+    const E = J[`elbow.${s}`], W = J[`wrist.${s}`];
+    return marker(bones[`foreArm.${s}`], rel(`foreArm.${s}`, [(E[0] + W[0]) / 2, (E[1] + W[1]) / 2, (E[2] + W[2]) / 2]));
+  };
+  function mount(wm: WeaponModel | null, hold: Hold, id: string, keys?: Key[], introOnly = false) {
+    const rest = new THREE.Group(), holder = new THREE.Group();
+    rest.add(holder);
+    let h = hold;
+    if (hold.socket === "forearm") {
+      // shields lie along the forearm, top towards the elbow
+      const d = data.armDir[hold.side];
+      h = { ...hold, dir: [-d[0] * sideSign(hold.side), -d[1], -d[2]] };
+      forearmMid(hold.side).add(rest);
+    } else if (hold.socket === "hand") palm[hold.side].add(rest);
+    else root.add(rest); // floats beside the palm, placed every frame
+    rest.quaternion.copy(holdQuaternion(h));
+    if (hold.socket !== "float") rest.position.copy(holdOffset(h));
+    rest.scale.setScalar(hold.scale);
+    const tip = new THREE.Object3D();
+    holder.add(tip);
+    if (wm) {
+      for (const p of wm.parts) part(holder, p.geometry, id, { strength: p.strength });
+      const size = wm.box.getSize(new THREE.Vector3()), c = wm.box.getCenter(new THREE.Vector3());
+      part(holder, new THREE.BoxGeometry(Math.max(size.x, 0.1), size.y, Math.max(size.z, 0.1)), id, { p: c.toArray() as V3, hitOnly: true });
+      tip.position.set(0, wm.box.max.y * 0.92, 0);
+      marker(holder, (introOnly ? [0, 0, 0] : c.toArray()) as V3, introOnly ? undefined : id);
+    } else {
+      gearMats(id, THREE.FrontSide, 1);
+      if (!introOnly) marker(holder, [0, 0, 0], id);
+    }
+    const m: Mounted = { id, hold, rest, holder, tip, keys, introOnly, spin: id === WID && weapon === "orb" };
+    mounted.push(m);
+    return m;
+  }
+  const mainW = mount(weapons?.main ?? null, lo.hold, WID, bp.weapon);
+  const secondW = lo.second ? mount(weapons?.main ?? null, lo.second.hold, WID, bp.second ?? bp.weapon, lo.second.introOnly) : undefined;
+  let offW: Mounted | undefined;
+  if (lo.offhand && weapons?.offhand) offW = mount(weapons.offhand, lo.offhand.hold, "offhand:0", bp.offhand);
+  else {
+    // no visible offhand (not equipped, or not a shield class): it stays reachable from the gear list
     gearMats("offhand:0", THREE.FrontSide, 1);
     marker(palm.L, [0, 0, 0], "offhand:0");
   }
+  const chestFront = marker(bones.chest, [0, 0.06, (model ? model.fit.neckFront : 0.08) + 0.22]);
 
-  // ---- weapon -----------------------------------------------------------------
-  const WID = "weapon:0";
-  const holdSide: "L" | "R" = weapon === "bow" ? "L" : "R";
-  let floating: THREE.Group | undefined;
-  const spinners: THREE.Object3D[] = [];
-  const wGroup = new THREE.Group();
-  const blade = (len: number, width: number) => {
-    const s = new THREE.Shape();
-    s.moveTo(-width / 2, 0); s.lineTo(width / 2, 0); s.lineTo(width * 0.42, -len * 0.85); s.lineTo(0, -len); s.lineTo(-width * 0.42, -len * 0.85); s.lineTo(-width / 2, 0);
-    const g = new THREE.ExtrudeGeometry(s, { depth: 0.006, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.004, bevelSegments: 2 });
-    g.translate(0, 0, -0.003);
-    return g;
+  // ---- intro effects (light only: flashes, rune rings, spark bursts) --------------------
+  const ringCanvas = document.createElement("canvas");
+  ringCanvas.width = ringCanvas.height = 128;
+  {
+    const c = ringCanvas.getContext("2d")!;
+    const g = c.createRadialGradient(64, 64, 40, 64, 64, 62);
+    g.addColorStop(0, "rgba(255,255,255,0)"); g.addColorStop(0.55, "rgba(255,255,255,0.9)"); g.addColorStop(1, "rgba(255,255,255,0)");
+    c.fillStyle = g; c.fillRect(0, 0, 128, 128);
+    c.strokeStyle = "rgba(255,255,255,0.5)"; c.lineWidth = 1.5;
+    for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; c.beginPath(); c.moveTo(64 + Math.cos(a) * 44, 64 + Math.sin(a) * 44); c.lineTo(64 + Math.cos(a) * 52, 64 + Math.sin(a) * 52); c.stroke(); }
+  }
+  const ringTex = new THREE.CanvasTexture(ringCanvas); textures.push(ringTex);
+  const FX_COLOR = new THREE.Color(0.35, 0.8, 1);
+  interface Fx { obj: THREE.Object3D; mat: THREE.SpriteMaterial | THREE.MeshBasicMaterial; t0: number; dur: number; size: number; kind: Effect["kind"] }
+  const fxs: Fx[] = [];
+  const fired = new Set<number>();
+  const fxPos = (at: Effect["at"], out: THREE.Vector3) => {
+    if (at === "weapon") return mainW.holder.getWorldPosition(out);
+    if (at === "tip") return mainW.tip.getWorldPosition(out);
+    if (at === "second") return (secondW ?? mainW).holder.getWorldPosition(out);
+    if (at === "offhand") return (offW ?? mainW).holder.getWorldPosition(out);
+    if (at === "chest") return chestFront.getWorldPosition(out);
+    return out.set(J.hips[0], 0.012, J.hips[2]);
   };
-  const cyl = (r: number, len: number) => new THREE.CylinderGeometry(r, r, len, 16);
-  let weaponCore: THREE.Mesh | undefined;
-  const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-  mats.push(coreMat);
-  if (weapon === "orb") {
-    floating = wGroup; root.add(wGroup);
-    part(wGroup, new THREE.SphereGeometry(0.085, 48, 32), WID);
-    const cg = new THREE.IcosahedronGeometry(0.036, 2); geos.add(cg);
-    weaponCore = new THREE.Mesh(cg, coreMat); weaponCore.renderOrder = 4; wGroup.add(weaponCore);
-    for (const [i, tilt] of [[0, 0.5], [1, -0.9]] as const) {
-      const ring = part(wGroup, new THREE.TorusGeometry(0.125, 0.0035, 8, 96), WID, { r: [Math.PI / 2 + tilt, 0, 0] });
-      ring.userData.spin = i ? -1.2 : 0.8;
-      spinners.push(ring);
+  function fire(e: Effect, t: number) {
+    const p = fxPos(e.at, new THREE.Vector3());
+    const size = e.size ?? 1;
+    if (e.kind === "burst") {
+      for (let i = 0; i < 18; i++) {
+        const m = new THREE.SpriteMaterial({ map: haloTex, color: FX_COLOR, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+        const s = new THREE.Sprite(m);
+        s.position.copy(p);
+        s.userData.v = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).normalize().multiplyScalar(0.5 + Math.random() * 0.6);
+        root.add(s);
+        fxs.push({ obj: s, mat: m, t0: t, dur: 0.8, size: 0.05, kind: "burst" });
+      }
+      return;
     }
-    marker(wGroup, [0, 0, 0], WID);
-  } else if (weapon === "spellbook") {
-    floating = wGroup; root.add(wGroup);
-    const page = new THREE.BoxGeometry(0.15, 0.2, 0.012);
-    part(wGroup, page, WID, { p: [-0.072, 0, 0.012], r: [0, 0.35, 0] });
-    part(wGroup, page, WID, { p: [0.072, 0, 0.012], r: [0, -0.35, 0] });
-    const cg = new THREE.OctahedronGeometry(0.03); geos.add(cg);
-    weaponCore = new THREE.Mesh(cg, coreMat); weaponCore.position.z = 0.09; wGroup.add(weaponCore);
-    marker(wGroup, [0, 0, 0], WID);
-  } else {
-    hands[holdSide].add(wGroup);
-    const d = new THREE.Vector3(...data.armDir[holdSide]);
-    wGroup.position.copy(d.clone().multiplyScalar(0.075));
-    wGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), d);
-    const daggerish = weapon === "dagger";
-    if (weapon === "sword" || weapon === "greatsword" || daggerish) {
-      const L = weapon === "greatsword" ? 1.15 : daggerish ? 0.32 : 0.8;
-      const Wd = weapon === "greatsword" ? 0.085 : daggerish ? 0.04 : 0.055;
-      const sword = new THREE.Group(); sword.rotation.set(-Math.PI / 2, 0, 0); wGroup.add(sword);
-      part(sword, cyl(0.014, 0.15), WID, { p: [0, 0.03, 0] });
-      part(sword, new THREE.BoxGeometry(Wd * 2.6, 0.022, 0.035), WID, { p: [0, -0.05, 0] });
-      part(sword, blade(L, Wd), WID, { p: [0, -0.06, 0] });
-      part(sword, new THREE.BoxGeometry(Wd * 1.6, L, 0.09), WID, { p: [0, -0.06 - L / 2, 0], hitOnly: true });
-      marker(sword, [0, -0.06 - L * 0.45, 0], WID);
-      if (daggerish) {
-        const off = new THREE.Group();
-        const dl = new THREE.Vector3(...data.armDir.L);
-        off.position.copy(dl.clone().multiplyScalar(0.075));
-        off.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dl);
-        hands.L.add(off);
-        const s2 = new THREE.Group(); s2.rotation.set(-Math.PI / 2, 0, 0); off.add(s2);
-        part(s2, cyl(0.012, 0.12), WID, { p: [0, 0.02, 0] });
-        part(s2, blade(L, Wd), WID, { p: [0, -0.05, 0] });
+    if (e.kind === "groundRing") {
+      const g = new THREE.PlaneGeometry(1, 1); geos.add(g);
+      const m = new THREE.MeshBasicMaterial({ map: ringTex, color: FX_COLOR, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const mesh = new THREE.Mesh(g, m);
+      mesh.rotation.x = -Math.PI / 2; mesh.position.copy(p);
+      root.add(mesh);
+      fxs.push({ obj: mesh, mat: m, t0: t, dur: 0.9, size: size * 2.2, kind: e.kind });
+      return;
+    }
+    const m = new THREE.SpriteMaterial({ map: e.kind === "ring" ? ringTex : haloTex, color: FX_COLOR, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const s = new THREE.Sprite(m);
+    s.position.copy(p);
+    root.add(s);
+    fxs.push({ obj: s, mat: m, t0: t, dur: e.kind === "ring" ? 0.75 : 0.5, size: e.kind === "ring" ? size * 0.9 : size * 0.45, kind: e.kind });
+  }
+  function updateFx(it: number, dt: number) {
+    bp.effects.forEach((e, i) => { if (!fired.has(i) && it >= e.t) { fired.add(i); if (!reduce) fire(e, it); } });
+    for (let i = fxs.length - 1; i >= 0; i--) {
+      const f = fxs[i];
+      const k = (it - f.t0) / f.dur;
+      if (k >= 1 || it < f.t0) {
+        root.remove(f.obj); f.mat.dispose(); fxs.splice(i, 1);
+        continue;
       }
-    } else if (weapon === "staff" || weapon === "polearm") {
-      const st = new THREE.Group(); st.rotation.set(-Math.PI / 2, 0, 0); wGroup.add(st);
-      part(st, cyl(0.016, 1.75), WID, { p: [0, -0.3, 0] });
-      if (weapon === "staff") {
-        part(st, new THREE.TorusGeometry(0.07, 0.008, 8, 48), WID, { p: [0, -1.2, 0] });
-        const cg = new THREE.OctahedronGeometry(0.045); geos.add(cg);
-        weaponCore = new THREE.Mesh(cg, coreMat); weaponCore.position.y = -1.2; st.add(weaponCore);
+      if (f.kind === "burst") {
+        f.obj.position.addScaledVector(f.obj.userData.v as THREE.Vector3, dt);
+        f.obj.scale.setScalar(f.size * (1 - k));
       } else {
-        part(st, blade(0.32, 0.07), WID, { p: [0, -1.15, 0] });
+        const grow = f.kind === "flash" ? Math.sin(Math.min(1, k * 1.4) * Math.PI * 0.5) : k;
+        f.obj.scale.set(f.size * (0.2 + grow), f.size * (0.2 + grow), 1);
       }
-      part(st, new THREE.BoxGeometry(0.12, 1.9, 0.12), WID, { p: [0, -0.3, 0], hitOnly: true });
-      marker(st, [0, -0.85, 0], WID);
-    } else if (weapon === "bow") {
-      const bow = new THREE.Group(); bow.rotation.set(-Math.PI / 2, 0, Math.PI / 2); wGroup.add(bow);
-      const arc = new THREE.TorusGeometry(0.55, 0.012, 8, 64, 1.9);
-      arc.rotateZ(-0.95); arc.translate(-0.55, 0, 0);
-      part(bow, arc, WID);
-      part(bow, cyl(0.0025, 0.9), WID, { p: [-0.23, 0, 0], strength: 0.8, noAura: true });
-      part(bow, new THREE.BoxGeometry(0.12, 1.0, 0.12), WID, { p: [-0.05, 0, 0], hitOnly: true });
-      marker(bow, [0, 0, 0], WID);
-    } else if (weapon === "mace") {
-      const m = new THREE.Group(); m.rotation.set(-Math.PI / 2, 0, 0); wGroup.add(m);
-      part(m, cyl(0.015, 0.5), WID, { p: [0, -0.18, 0] });
-      part(m, new THREE.IcosahedronGeometry(0.075, 0), WID, { p: [0, -0.46, 0] });
-      marker(m, [0, -0.36, 0], WID);
+      f.mat.opacity = (1 - k) * (1 - k) * (f.kind === "flash" ? 1.4 : 1);
     }
   }
 
@@ -620,18 +664,23 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
   refreshFocus();
 
   const combat = combatPose(weapon), pres = presentPose(weapon);
+  const INTRO_T0 = 0.15; // the intro starts right after the hologram begins to materialise
+  const glowMul: Record<string, number> = {};
+  let lastT = 0;
+  let introPose: ReturnType<typeof samplePose> = {};
   const bind: Record<string, THREE.Vector3> = {};
   for (const b of boneList) bind[b.name] = b.position.clone();
   const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
   const rot = (name: BoneName, x: number, y: number, z: number) => {
     const c = combat[name] ?? [0, 0, 0], p = pres[name] ?? c;
     const k = ease3(present);
-    bones[name].rotation.set(c[0] + (p[0] - c[0]) * k + x, c[1] + (p[1] - c[1]) * k + y, c[2] + (p[2] - c[2]) * k + z);
+    const ip = introPose[name] ?? [0, 0, 0];
+    bones[name].rotation.set(c[0] + (p[0] - c[0]) * k + x + ip[0], c[1] + (p[1] - c[1]) * k + y + ip[1], c[2] + (p[2] - c[2]) * k + z + ip[2]);
   };
 
   function update(t: number) {
     shared.uTime.value = t;
-    if (shared.uReveal.value < 3) shared.uReveal.value = -0.1 + t * 1.0;
+    if (shared.uReveal.value < 3) shared.uReveal.value = -0.1 + t * 1.6;
     const amp = reduce ? 0.3 : 1;
     present += (presentTo - present) * 0.06;
 
@@ -647,7 +696,11 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
       modelU.uBreath.value = br;
       figure.position.set(0.004 * ws, 0.016 + 0.012 * Math.sin(t * 0.9) * amp, 0);
       figure.rotation.set(0, 0, 0.005 * ws);
-    } else poseBody(t, br, ws, bob, mic, look, amp);
+    } else {
+      // bodies with bones also play the arm choreography of the class intro
+      introPose = !reduce && t - INTRO_T0 < bp.duration ? samplePose(bp, Math.max(0, t - INTRO_T0)) : {};
+      poseBody(t, br, ws, bob, mic, look, amp);
+    }
     capePivot.rotation.set(0.12 + 0.03 * Math.sin(t * 1.1) * amp + 0.02 * ws, 0, 0.02 * ws);
     root.updateMatrixWorld(true);
     animate(t);
@@ -676,21 +729,35 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
 
   function animate(t: number) {
 
-    if (floating) {
-      palm[holdSide].getWorldPosition(tmp);
-      if (model) {
-        // beside the open hand; it rises a little while the camera looks at it
-        const sx = holdSide === "L" ? 1 : -1;
-        tmp2.set(sx * 0.07, 0.11, 0.08).lerp(new THREE.Vector3(sx * 0.05, 0.2, 0.11), ease3(present));
-      } else tmp2.set(0.0, 0.1, 0.07).lerp(new THREE.Vector3(0, 0.14, 0.04), ease3(present));
-      tmp.add(tmp2);
-      tmp.y += 0.016 * Math.sin(t * 2.1);
-      if (floating.position.lengthSq() === 0) floating.position.copy(tmp);
-      floating.position.lerp(tmp, 0.14);
-      floating.rotation.y = t * 0.6;
-      floating.updateMatrixWorld(true);
+    // weapons: hold + intro tracks; floating ones (orb, book) follow their palm
+    const it = reduce ? 99 : t - INTRO_T0;
+    const playing = it < bp.duration;
+    const dt = Math.min(0.05, Math.max(0, t - lastT)); lastT = t;
+    for (const m of mounted) {
+      const keys = playing ? m.keys : undefined;
+      const sc = keys ? sample(keys, it, "s", 1) : 1;
+      m.holder.scale.setScalar(Math.max(1e-4, sc));
+      const r = keys ? sampleRot(keys, it) : [0, 0, 0];
+      m.holder.rotation.set(r[0], r[1] + (m.spin ? t * 0.6 : 0), r[2]);
+      m.holder.visible = !(m.introOnly && (!playing || sc < 0.01));
+      glowMul[m.id] = keys ? sample(keys, it, "glow", 1) : 1;
+      if (m.hold.socket !== "float") continue;
+      const sx = sideSign(m.hold.side);
+      palm[m.hold.side].getWorldPosition(tmp);
+      tmp.add(holdOffset(m.hold));
+      // while the camera looks at it, the weapon rises a little
+      tmp.y += 0.07 * ease3(present) + 0.016 * Math.sin(t * 2.1 + (sx > 0 ? 1.3 : 0));
+      if (keys) {
+        tmp.y += sample(keys, it, "y", 0);
+        // without a rig the hands cannot carry it: the weapon itself glides to the chest and crosses
+        const c = animatable ? 0 : sample(keys, it, "c", 0);
+        if (c > 0) tmp.lerp(chestFront.getWorldPosition(tmp2), c);
+        tmp.x += -sx * sample(keys, it, "x", 0);
+      }
+      if (m.rest.position.lengthSq() === 0 || playing) m.rest.position.copy(tmp);
+      else m.rest.position.lerp(tmp, 0.14);
     }
-    for (const s of spinners) s.rotation.z = t * (s.userData.spin as number);
+    updateFx(it, dt);
     for (const r of rings) r.rotation.z = t * 0.05;
     tickMesh.rotation.z = -t * 0.08;
     const arr = pGeo.attributes.position.array as Float32Array;
@@ -709,7 +776,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
         slotUniforms.uSlotFocus.value[si] = focusCur[id];
         slotUniforms.uSlotLevel.value[si] = levelCur[id];
       }
-      if (gearU[id]) { gearU[id].uFocus.value = focusCur[id]; gearU[id].uLevel.value = levelCur[id]; }
+      if (gearU[id]) { gearU[id].uFocus.value = focusCur[id] * (glowMul[id] ?? 1); gearU[id].uLevel.value = levelCur[id]; }
     }
 
     // weapon status effects
@@ -731,9 +798,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
         sparkPos.set([tmp.x + Math.cos(a) * r, tmp.y - 0.05 + life * (0.25 + 0.2 * wl), tmp.z + Math.sin(a) * r], i * 3);
       }
       sparkGeo.attributes.position.needsUpdate = true;
-      sparkMat.uniforms.uColor.value.copy(weaponColor).multiplyScalar(wf);
-      if (wl > 0.001) coreMat.color.copy(weaponColor).multiplyScalar(0.25 + 1.4 * wl);
-      else coreMat.color.setHex(0x2a6fd6);
+      sparkMat.uniforms.uColor.value.copy(weaponColor).multiplyScalar(wf * Math.min(1, mainW.holder.scale.x));
     }
   }
 
@@ -750,7 +815,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
   }
 
   return {
-    root, anchors, slotIds, hitTargets,
+    root, platform: plat, anchors, slotIds, hitTargets,
     slotOf(hit) {
       if (hit.object.userData.slot) return hit.object.userData.slot as string;
       if (hit.object.userData.skin && hit.face) {

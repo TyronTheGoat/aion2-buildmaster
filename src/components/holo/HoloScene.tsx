@@ -10,6 +10,8 @@ import type { Grade, SlotKind } from "@/lib/types";
 import type { Gender, WeaponKind } from "@/lib/hologram";
 import { buildFigure, type Figure } from "./figure";
 import { loadModelBody, type ModelBody } from "./model-body";
+import { loadLoadout, type LoadedLoadout } from "./weapons";
+import { createLeaves, loadBackdrop, type Backdrop } from "./backdrop";
 
 export interface HoloSceneProps {
   gender: Gender;
@@ -24,6 +26,10 @@ export interface HoloSceneProps {
   onError?: (msg: string) => void;
   /** "hero": showcase on the start page (slow turn, no orbit controls, tap opens the character) */
   mode?: "full" | "hero";
+  /** an offhand item is equipped (shield classes show it on the arm) */
+  offhand?: boolean;
+  /** width of the side panel in px; the focused part is centred in the space left of it */
+  panelWidth?: number;
 }
 
 /** How the camera frames each slot: distance and view direction (world space, character faces +z). */
@@ -60,22 +66,24 @@ export default function HoloScene(props: HoloSceneProps) {
     api.current?.apply();
   });
 
-  const { gender, weapon } = props;
+  const { gender, weapon, offhand = false } = props;
   const [ready, setReady] = useState(false);
   useEffect(() => {
     // load the character model (falls back to the built-in body), then build after the first paint
     let cancelled = false;
     let cleanup: (() => void) | undefined;
     const id = setTimeout(() => {
-      loadModelBody(gender).then((model) => {
-        if (cancelled) return;
-        cleanup = init(model);
+      const el = host.current!;
+      const tall = el.clientWidth / Math.max(1, el.clientHeight) < 0.8;
+      Promise.all([loadModelBody(gender), loadLoadout(weapon, offhand), loadBackdrop(tall)]).then(([model, weapons, backdrop]) => {
+        if (cancelled) { backdrop?.dispose(); return; }
+        cleanup = init(model, weapons, backdrop);
         setReady(true);
       });
     }, 40);
     return () => { cancelled = true; clearTimeout(id); cleanup?.(); };
 
-  function init(model: ModelBody | null): (() => void) | undefined {
+  function init(model: ModelBody | null, weapons: LoadedLoadout, backdrop: Backdrop | null): (() => void) | undefined {
     const el = host.current!;
     const hero = latest.current.mode === "hero";
     let renderer: THREE.WebGLRenderer;
@@ -97,8 +105,12 @@ export default function HoloScene(props: HoloSceneProps) {
     const camera = new THREE.PerspectiveCamera(34, 1, 0.05, 60);
     camera.position.set(0, 1.7, 8.5);
 
-    const fig: Figure = buildFigure(gender, weapon, reduce, model);
+    const fig: Figure = buildFigure(gender, weapon, reduce, { model, weapons });
     scene.add(fig.root);
+    // the backdrop painting is composited after bloom, so the 3D scene renders on black
+    if (backdrop) scene.background = new THREE.Color(0x000000);
+    const leaves = backdrop ? createLeaves(16, reduce) : undefined;
+    if (leaves) scene.add(leaves.points);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -120,6 +132,7 @@ export default function HoloScene(props: HoloSceneProps) {
     composer.addPass(new RenderPass(scene, camera));
     const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.7, 0.3, 0.14);
     composer.addPass(bloom);
+    if (backdrop) composer.addPass(backdrop.pass);
     composer.addPass(new OutputPass());
 
     // ---- camera moves -------------------------------------------------------
@@ -198,7 +211,7 @@ export default function HoloScene(props: HoloSceneProps) {
     setGrades(latest.current.grades);
 
     // intro: camera glides in while the hologram materialises
-    startTween(() => overviewTarget.clone(), overviewOffset.clone(), hero ? 2.2 : 2.6);
+    startTween(() => overviewTarget.clone(), overviewOffset.clone(), hero ? 2.2 : 2.1);
     if (latest.current.focus) setFocus(latest.current.focus);
 
     // ---- picking --------------------------------------------------------------
@@ -258,6 +271,19 @@ export default function HoloScene(props: HoloSceneProps) {
       // keep the whole figure in view on narrow phones
       camera.fov = w / h < 0.62 ? 44 : 34;
       camera.updateProjectionMatrix();
+      if (backdrop) {
+        // where feet and platform appear in the overview, so the painted platform lines up with ours
+        const cam = camera.clone();
+        cam.position.copy(overviewTarget).add(overviewOffset);
+        cam.lookAt(overviewTarget);
+        cam.clearViewOffset();
+        cam.updateMatrixWorld(true);
+        const px = (v: THREE.Vector3) => v.project(cam);
+        const feet = px(new THREE.Vector3(0, 0, 0)), edge = px(new THREE.Vector3(0.88, 0, 0));
+        const feetY = (1 - (feet.y + 1) / 2) * h, ours = Math.abs(edge.x - feet.x) / 2 * w;
+        const painted = backdrop.layout(w, h, feetY, ours);
+        fig.platform.scale.setScalar(THREE.MathUtils.clamp(painted / ours, 1, 1.7));
+      }
     };
     const ro = new ResizeObserver(resize);
     ro.observe(el);
@@ -267,10 +293,16 @@ export default function HoloScene(props: HoloSceneProps) {
     let raf = 0, running = true;
     const t00 = performance.now() / 1000;
     const followed = new THREE.Vector3();
+    const tmpSph = new THREE.Spherical();
     const frame = () => {
       const now = performance.now() / 1000;
       const t = now - t00;
       fig.update(t);
+      leaves?.update(t);
+      if (backdrop) {
+        const sph = tmpSph.setFromVector3(tmp.copy(camera.position).sub(controls.target));
+        backdrop.update(t, sph.theta, sph.phi, THREE.MathUtils.clamp(1 - sph.radius / 4.8, 0, 1), !!focusId);
+      }
 
       if (tw.active) {
         const k = ease(Math.min(1, (now - tw.t0) / tw.dur));
@@ -299,7 +331,10 @@ export default function HoloScene(props: HoloSceneProps) {
       shift += (shiftTo - shift) * 0.08;
       if (shift > 0.002) {
         const side = latest.current.panel;
-        camera.setViewOffset(w, h, side === "right" ? w * 0.2 * shift : 0, side === "bottom" ? h * 0.2 * shift : 0, w, h);
+        // centre the part in the free space beside the panel
+        const pw = latest.current.panelWidth;
+        const dx = pw ? Math.min(pw, w * 0.6) / 2 : w * 0.2;
+        camera.setViewOffset(w, h, side === "right" ? dx * shift : 0, side === "bottom" ? h * 0.2 * shift : 0, w, h);
       } else if (camera.view?.enabled) camera.clearViewOffset();
 
       composer.render();
@@ -324,13 +359,15 @@ export default function HoloScene(props: HoloSceneProps) {
       renderer.domElement.removeEventListener("pointermove", onMove);
       controls.dispose();
       fig.dispose();
+      leaves?.dispose();
+      backdrop?.dispose();
       composer.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       api.current = null;
     };
   }
-  }, [gender, weapon]);
+  }, [gender, weapon, offhand]);
 
   return (
     <div ref={host} className="absolute inset-0">

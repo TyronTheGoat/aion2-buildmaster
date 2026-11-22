@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { Gender } from "@/lib/hologram";
 import { distSeg, S, type BoneDef, type BoneName } from "./body";
+import { fetchAsset, loadImage } from "./assets";
 
 /**
  * The supplied Bildmaster character models (GLB, not rigged, texture embedded).
@@ -14,16 +15,14 @@ import { distSeg, S, type BoneDef, type BoneName } from "./body";
 
 type V = [number, number, number];
 
-declare global {
-  // offline build: data URIs of the models, injected before the app script
-  var __BM_MODELS__: Partial<Record<Gender, string>> | undefined;
-}
-
 const FILE: Record<Gender, string> = { m: "bildmaster_male_v2_WEB.glb", f: "bildmaster_female_v2_WEB.glb" };
+const REF: Record<Gender, string> = { m: "hologram_male_detailed_ref.webp", f: "hologram_female_detailed_ref.webp" };
 
 export interface ModelBody {
   geometry: THREE.BufferGeometry;
   texture: THREE.Texture | null;
+  /** detailed front reference projected onto the mesh (uvRef attribute), if installed */
+  reference: THREE.Texture | null;
   bones: BoneDef[];
   joint: Record<string, V>;
   armDir: Record<"L" | "R", V>;
@@ -34,6 +33,7 @@ export interface ModelBody {
     waist: { y: number; rx: number; rz: number; cz: number };
     backZ: number; chest: [number, number];
   };
+  measure: { H: number; bones: BoneDef[] };
 }
 
 const cache = new Map<Gender, Promise<ModelBody | null>>();
@@ -49,13 +49,8 @@ export function loadModelBody(g: Gender): Promise<ModelBody | null> {
 }
 
 async function load(g: Gender): Promise<ModelBody | null> {
-  // the offline file carries the models inline (or none at all); the web app serves them from /models
-  const inline = globalThis.__BM_MODELS__;
-  const url = inline ? inline[g] : `/models/${FILE[g]}`;
-  if (!url) return null;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const buf = await res.arrayBuffer();
+  const buf = await fetchAsset(`models/${FILE[g]}`);
+  if (!buf) return null;
   const gltf = await new GLTFLoader().parseAsync(buf, "");
   let mesh: THREE.Mesh | undefined;
   gltf.scene.updateMatrixWorld(true);
@@ -65,7 +60,16 @@ async function load(g: Gender): Promise<ModelBody | null> {
   geo.applyMatrix4(mesh.matrixWorld);
   const mat = mesh.material as THREE.MeshStandardMaterial;
   const texture = mat.map ?? null;
-  return analyse(geo, texture);
+  const body = analyse(geo, texture);
+  const img = await loadImage(`hero/${REF[g]}`);
+  if (img && projectReference(body, img)) {
+    const tex = new THREE.Texture(img);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    tex.needsUpdate = true;
+    body.reference = tex;
+  }
+  return body;
 }
 
 function smoothNormals(geo: THREE.BufferGeometry) {
@@ -98,9 +102,12 @@ function smoothNormals(geo: THREE.BufferGeometry) {
   geo.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
 }
 
-function analyse(geo: THREE.BufferGeometry, texture: THREE.Texture | null): ModelBody {
-  smoothNormals(geo);
-  const P = geo.getAttribute("position").array as Float32Array;
+/**
+ * Measures joints on a standing figure in A-pose (feet on y = 0, facing +z): either the mesh vertices,
+ * or the opaque pixels of a front image (flat: z = 0). Both give the same bone layout, which is what
+ * lets a reference image be projected onto the mesh.
+ */
+function measure(P: Float32Array, flat = false) {
   const n = P.length / 3;
   let H = 0;
   for (let i = 0; i < n; i++) H = Math.max(H, P[i * 3 + 1]);
@@ -208,8 +215,8 @@ function analyse(geo: THREE.BufferGeometry, texture: THREE.Texture | null): Mode
     const hip: V = [cx + s * 0.058 * H, 0.505 * H, pelvis[2]];
     const knee = leg(0.285 * H), ankle = leg(0.05 * H);
     let toe: V = [ankle[0], 0.01 * H, ankle[2] + 0.08 * H];
-    let toeZ = -Infinity;
-    for (let i = 0; i < n; i++) {
+    let toeZ = flat ? Infinity : -Infinity;
+    for (let i = 0; i < n && !flat; i++) {
       const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
       if (y < 0.05 * H && s * (x - cx) > 0 && z > toeZ) { toeZ = z; toe = [x, y, z]; }
     }
@@ -236,6 +243,25 @@ function analyse(geo: THREE.BufferGeometry, texture: THREE.Texture | null): Mode
     );
   }
 
+  const waistY = spine[1] - 0.03 * H;
+  const waist = at(waistY, 0.2 * H);
+  const back = at(shoulderY - 0.03 * H, 0.15 * H);
+  const fit: ModelBody["fit"] = {
+    earX: (earS.x1 - earS.x0) / 2, earY: neckY + 0.06 * H, neckR: (neckS.x1 - neckS.x0) / 2, neckFront: neckS.z1 - neck[2], wristR,
+    waist: { y: waistY, rx: (waist.x1 - waist.x0) / 2, rz: (waist.z1 - waist.z0) / 2, cz: waist.mz },
+    backZ: back.z0, chest: [0.6 * H, 0.8 * H],
+  };
+  return { H, cx, bones, joint, armDir, fit };
+}
+
+
+function analyse(geo: THREE.BufferGeometry, texture: THREE.Texture | null): ModelBody {
+  smoothNormals(geo);
+  const P = geo.getAttribute("position").array as Float32Array;
+  const n = P.length / 3;
+  const m = measure(P);
+  const { bones } = m;
+
   // slot of each vertex = nearest body part
   const slot = new Float32Array(n);
   const p: V = [0, 0, 0];
@@ -250,16 +276,105 @@ function analyse(geo: THREE.BufferGeometry, texture: THREE.Texture | null): Mode
   }
   geo.setAttribute("aSlot", new THREE.BufferAttribute(slot, 1));
   geo.computeBoundingSphere();
+  return { geometry: geo, texture, reference: null, bones, joint: m.joint, armDir: m.armDir, height: m.H, fit: m.fit, measure: m };
+}
 
-  const waistY = spine[1] - 0.03 * H;
-  const waist = at(waistY, 0.2 * H);
-  const back = at(shoulderY - 0.03 * H, 0.15 * H);
-  return {
-    geometry: geo, texture, bones, joint, armDir, height: H,
-    fit: {
-      earX: (earS.x1 - earS.x0) / 2, earY: neckY + 0.06 * H, neckR: (neckS.x1 - neckS.x0) / 2, neckFront: neckS.z1 - neck[2], wristR,
-      waist: { y: waistY, rx: (waist.x1 - waist.x0) / 2, rz: (waist.z1 - waist.z0) / 2, cz: waist.mz },
-      backZ: back.z0, chest: [0.6 * H, 0.8 * H],
-    },
-  };
+// ---- reference projection ----------------------------------------------------------
+
+/** Width of the part of a point set across the segment a→b, measured in the front plane at its middle. */
+function crossWidth(P: Float32Array, a: V, b: V, maxR: number) {
+  const ux = b[0] - a[0], uy = b[1] - a[1];
+  const L = Math.hypot(ux, uy) || 1;
+  const dx = ux / L, dy = uy / L;
+  const qs: number[] = [];
+  for (let i = 0; i < P.length; i += 3) {
+    const px = P[i] - a[0], py = P[i + 1] - a[1];
+    const t = (px * dx + py * dy) / L;
+    if (t < 0.4 || t > 0.6) continue;
+    const q = -px * dy + py * dx;
+    if (Math.abs(q) < maxR) qs.push(q);
+  }
+  if (qs.length < 4) return 0;
+  qs.sort((x, y) => x - y);
+  // connected run around the axis
+  let lo = qs[0], hi = qs[qs.length - 1];
+  for (let k = 1; k < qs.length; k++) {
+    if (qs[k] - qs[k - 1] < maxR * 0.08) continue;
+    if (qs[k] <= 0) lo = qs[k]; else if (qs[k - 1] >= 0) { hi = qs[k - 1]; break; }
+  }
+  return hi - lo;
+}
+
+/**
+ * Projects a front reference image onto the mesh: every vertex is carried from its body part in the
+ * mesh to the same body part in the image (blend of per-bone mappings, so joints stay smooth).
+ * Adds the "uvRef" attribute. The reference only needs a transparent background and the same A-pose idea.
+ */
+export function projectReference(body: ModelBody, img: HTMLImageElement) {
+  const scale = Math.min(1, 640 / img.naturalHeight);
+  const w = Math.round(img.naturalWidth * scale), h = Math.round(img.naturalHeight * scale);
+  const cv = document.createElement("canvas");
+  cv.width = w; cv.height = h;
+  const ctx = cv.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return false;
+  ctx.drawImage(img, 0, 0, w, h);
+  const px = ctx.getImageData(0, 0, w, h).data;
+  let top = h, bottom = 0, left = w, right = 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (px[(y * w + x) * 4 + 3] > 200) { top = Math.min(top, y); bottom = Math.max(bottom, y); left = Math.min(left, x); right = Math.max(right, x); }
+  }
+  const xc = (left + right) / 2;
+  if (bottom - top < 50) return false;
+  // image pixels → metres with feet on y = 0, same height as the mesh
+  const k = body.height / (bottom - top);
+  const pts: number[] = [];
+  for (let y = top; y <= bottom; y++) for (let x = 0; x < w; x++) {
+    if (px[(y * w + x) * 4 + 3] > 200) pts.push((x - xc) * k, (bottom - y) * k, 0);
+  }
+  const R = measure(new Float32Array(pts), true);
+  const G = body.measure;
+  const P = body.geometry.getAttribute("position").array as Float32Array;
+  const RP = new Float32Array(pts);
+
+  // per bone: GLB segment → reference segment, stretched along and across the limb
+  const maps = G.bones.map((gb, i) => {
+    const rb = R.bones[i];
+    const [a, b] = gb.seg, [ra, rbb] = rb.seg;
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, RL = Math.hypot(rbb[0] - ra[0], rbb[1] - ra[1]) || 1;
+    const maxR = gb.name.startsWith("hips") || gb.name.startsWith("spine") || gb.name.startsWith("chest") ? 0.2 * G.H : 0.07 * G.H;
+    const gw = crossWidth(P, a, b, maxR), rw = crossWidth(RP, ra, rbb, maxR);
+    const across = gw > 0 && rw > 0 ? Math.min(1.6, Math.max(0.6, rw / gw)) : RL / L;
+    return { a, u: [(b[0] - a[0]) / L, (b[1] - a[1]) / L], ra, ru: [(rbb[0] - ra[0]) / RL, (rbb[1] - ra[1]) / RL], along: RL / L, across };
+  });
+
+  const n = P.length / 3;
+  const uv = new Float32Array(n * 2);
+  const wts = new Float32Array(G.bones.length);
+  const p: V = [0, 0, 0];
+  for (let i = 0; i < n; i++) {
+    p[0] = P[i * 3]; p[1] = P[i * 3 + 1]; p[2] = P[i * 3 + 2];
+    let sum = 0;
+    for (let b = 0; b < G.bones.length; b++) {
+      const bd = G.bones[b];
+      const d = Math.max(0, distSeg(p, bd.seg[0], bd.seg[1], bd.sx ?? 1) - bd.rad) + 0.012;
+      wts[b] = 1 / (d * d * d * d);
+      sum += wts[b];
+    }
+    let mx = 0, my = 0;
+    for (let b = 0; b < G.bones.length; b++) {
+      const wb = wts[b] / sum;
+      if (wb < 1e-3) continue;
+      const m = maps[b];
+      const rx = p[0] - m.a[0], ry = p[1] - m.a[1];
+      const t = (rx * m.u[0] + ry * m.u[1]) * m.along;
+      const q = (-rx * m.u[1] + ry * m.u[0]) * m.across;
+      mx += wb * (m.ra[0] + m.ru[0] * t - m.ru[1] * q);
+      my += wb * (m.ra[1] + m.ru[1] * t + m.ru[0] * q);
+    }
+    // metres → image uv (three flips images, so v = 0 is the bottom)
+    uv[i * 2] = (mx / k + xc) / w;
+    uv[i * 2 + 1] = 1 - (bottom - my / k) / h;
+  }
+  body.geometry.setAttribute("uvRef", new THREE.BufferAttribute(uv, 2));
+  return true;
 }
