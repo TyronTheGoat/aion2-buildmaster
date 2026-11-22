@@ -15,7 +15,7 @@ describe("crafted best in slot (Global)", () => {
   it("covers armour and jewellery, but not slots without a recipe", () => {
     expect(craftedBis(asmo, "helmet")!.name).toBe("Splendent Ebony Dragon Lord Helm");
     expect(craftedBis(asmo, "ring")!.name).toBe("Splendent Ebony Dragon Lord Ring");
-    expect(craftedBis(asmo, "ring")!.icon).toBe(""); // no verified original icon yet
+    expect(craftedBis(asmo, "ring")!.icon).toContain("Icon_ACC_Ring_0047.png"); // by item ID 310330040
     expect(craftedBis(asmo, "belt")).toBeUndefined();
     expect(craftedBis(asmo, "arcana")).toBeUndefined();
   });
