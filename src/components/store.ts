@@ -2,6 +2,7 @@
 import { useSyncExternalStore } from "react";
 import type { Character } from "@/lib/types";
 import { FLORENTINA } from "@/lib/fixtures/florentina";
+import { ODAR_CHARS } from "@/lib/fixtures/odar-chars";
 
 export interface SavedChar {
   region: string;
@@ -15,6 +16,7 @@ export interface SavedChar {
 
 const KEY = "bm:chars";
 const SEEDED = "bm:seeded";
+const SEED_VERSION = "2";
 /** Gender per character, kept separately so it stays even if the character is removed and added again */
 const GENDER = "bm:gender";
 const listeners = new Set<() => void>();
@@ -23,7 +25,9 @@ let cache: SavedChar[] = [];
 
 /** Portrait of a character: from its data, or the known one for the demo character (older saved copies lack it). */
 export function portraitOf(c: { region: string; server: string; name: string; portrait?: string; snapshot?: Character }): string | undefined {
-  return c.portrait ?? c.snapshot?.portrait ?? (charKey(c) === charKey(FLORENTINA) ? FLORENTINA.portrait : undefined);
+  if (c.portrait ?? c.snapshot?.portrait) return c.portrait ?? c.snapshot?.portrait;
+  const known = [FLORENTINA, ...ODAR_CHARS].find((k) => charKey(k) === charKey(c));
+  return known?.portrait;
 }
 
 export const charKey = (c: { region: string; server: string; name: string }) =>
@@ -31,9 +35,16 @@ export const charKey = (c: { region: string; server: string; name: string }) =>
 
 function read(): SavedChar[] {
   if (typeof window === "undefined") return cache;
-  if (!localStorage.getItem(SEEDED)) {
-    localStorage.setItem(SEEDED, "1");
-    localStorage.setItem(KEY, JSON.stringify([{ region: "eu", server: "odar", name: "Florentina", snapshot: FLORENTINA }]));
+  const seeded = localStorage.getItem(SEEDED);
+  if (seeded !== SEED_VERSION) {
+    // Version 1 seeded Florentina only; version 2 adds the five Odar characters without touching existing entries.
+    const list: SavedChar[] = seeded ? JSON.parse(localStorage.getItem(KEY) ?? "[]") : [];
+    const seeds = seeded ? ODAR_CHARS : [FLORENTINA, ...ODAR_CHARS];
+    for (const s of seeds) {
+      if (!list.some((x) => charKey(x) === charKey(s))) list.push({ region: s.region, server: s.server, name: s.name, snapshot: s });
+    }
+    localStorage.setItem(KEY, JSON.stringify(list));
+    localStorage.setItem(SEEDED, SEED_VERSION);
   }
   const raw = (localStorage.getItem(KEY) ?? "[]") + (localStorage.getItem(GENDER) ?? "");
   if (raw !== cacheRaw) {
