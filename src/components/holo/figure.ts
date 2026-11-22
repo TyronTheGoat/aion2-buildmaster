@@ -2,10 +2,13 @@ import * as THREE from "three";
 import type { Grade } from "@/lib/types";
 import { GRADE_HEX, GRADE_LEVEL, type Gender, type WeaponKind } from "@/lib/hologram";
 import { bodyGeometry, bodySkeleton, buildBody, SKIN_SLOTS, type BoneName } from "./body";
+import type { ModelBody } from "./model-body";
 
 /**
- * Hologram figure: one smooth skinned body (see body.ts) in a combat-ready idle,
- * plus gear pieces (weapon, offhand, cape, jewellery) attached to its bones.
+ * Hologram figure: the supplied Bildmaster character model (model-body.ts), shown unchanged with its
+ * own texture, breathing and floating gently. Without the model files it falls back to the built-in
+ * MakeHuman body (body.ts), which is skinned and stands in a combat-ready idle.
+ * Gear pieces (weapon, offhand, cape, jewellery) are attached to the (invisible) bones.
  * Every equipment slot has a status aura whose colour AND strength follow the grade.
  */
 
@@ -36,6 +39,49 @@ void main() {
   vW = w.xyz;
   vN = normalize((modelMatrix * vec4(objectNormal, 0.0)).xyz);
   gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+
+const MODEL_VERT = /* glsl */ `
+attribute float aSlot;
+uniform vec3 uSlotColor[${SKIN_SLOTS.length}];
+uniform float uSlotLevel[${SKIN_SLOTS.length}];
+uniform float uSlotFocus[${SKIN_SLOTS.length}];
+uniform float uInflate; uniform float uBreath; uniform vec3 uChest;
+varying vec2 vUv;
+${VARY}
+void main() {
+  int s = int(aSlot + 0.5);
+  vAura = uSlotColor[s]; vLevel = uSlotLevel[s]; vFocus = uSlotFocus[s];
+  vUv = uv;
+  vec3 p = position;
+  // breathing: the rib cage widens by a few millimetres, nothing else of the model moves
+  float chestW = smoothstep(uChest.x, uChest.x + 0.12, p.y) * (1.0 - smoothstep(uChest.y - 0.08, uChest.y, p.y))
+    * (1.0 - smoothstep(0.13, 0.2, abs(p.x - uChest.z)));
+  p += normal * chestW * 0.0045 * uBreath;
+  p += normal * uInflate * (0.003 + 0.015 * vLevel);
+  vec4 w = modelMatrix * vec4(p, 1.0);
+  vW = w.xyz;
+  vN = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+  gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+
+const MODEL_FRAG = /* glsl */ `
+uniform vec3 uColor; uniform float uTime; uniform float uReveal; uniform sampler2D uMap; uniform float uTexGain;
+varying vec2 vUv;
+${VARY}
+void main() {
+  if (vW.y > uReveal) discard;
+  vec3 v = normalize(cameraPosition - vW);
+  float fres = pow(1.0 - abs(dot(normalize(vN), v)), 2.6);
+  vec3 tex = texture2D(uMap, vUv).rgb;
+  float scanY = fract(uTime * 0.14) * 2.6 - 0.2;
+  float band = exp(-pow((vW.y - scanY) * 12.0, 2.0));
+  float edge = smoothstep(0.08, 0.0, uReveal - vW.y);
+  float flicker = 0.97 + 0.03 * sin(uTime * 29.0 + vW.y * 7.0);
+  vec3 rimCol = mix(uColor, vAura * (0.6 + 0.5 * vLevel), 0.85 * vLevel * vLevel);
+  vec3 c = tex * uTexGain * (1.0 + 0.5 * band) + uColor * (0.03 + 0.1 * band) + rimCol * 0.75 * fres;
+  c += vec3(0.55, 0.85, 1.0) * edge * 1.2;
+  gl_FragColor = vec4(c * vFocus * flicker, 1.0);
 }`;
 
 const GEAR_VERT = /* glsl */ `
@@ -156,7 +202,7 @@ function presentPose(weapon: WeaponKind): Pose {
 
 const ease3 = (k: number) => k * k * (3 - 2 * k);
 
-export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean): Figure {
+export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean, model?: ModelBody | null): Figure {
   const root = new THREE.Group();
   const geos = new Set<THREE.BufferGeometry>();
   const mats: THREE.Material[] = [];
@@ -164,12 +210,15 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean)
   const shared = { uTime: { value: 0 }, uReveal: { value: reduce ? 3 : -0.1 } };
 
   // ---- body -----------------------------------------------------------------
-  const data = buildBody(gender);
+  // everything that belongs to the character floats together; the platform stays on the floor
+  const figure = new THREE.Group();
+  root.add(figure);
+  const data = model ?? buildBody(gender);
   const { map: bones, list: boneList, skeleton } = bodySkeleton(data);
-  root.add(bones.hips);
+  figure.add(bones.hips);
   root.updateMatrixWorld(true);
   skeleton.calculateInverses();
-  const bodyGeo = bodyGeometry(data);
+  const bodyGeo = model ? model.geometry : bodyGeometry(buildBody(gender));
   geos.add(bodyGeo);
   const n = SKIN_SLOTS.length;
   const slotUniforms = {
@@ -191,17 +240,37 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean)
   const hiddenMat = new THREE.MeshBasicMaterial({ visible: false });
   mats.push(prepass, prepassDouble, hiddenMat);
 
-  const skinned = (mat: THREE.Material, order: number) => {
-    const m = new THREE.SkinnedMesh(bodyGeo, mat);
-    m.bind(skeleton);
-    m.frustumCulled = false;
-    m.renderOrder = order;
-    root.add(m);
+  const modelU = {
+    uBreath: { value: 0 }, uTexGain: { value: 1.0 },
+    uMap: { value: model?.texture ?? null },
+    uChest: { value: new THREE.Vector3(...(model ? [model.fit.chest[0], model.fit.chest[1], model.joint.chest[0]] : [0, 0, 0])) },
+  };
+  const modelMat = (frag: string, inflate: number) => {
+    const m = new THREE.ShaderMaterial({
+      uniforms: { ...shared, ...slotUniforms, ...modelU, uColor: { value: HOLO_BLUE }, uInflate: { value: inflate } },
+      vertexShader: MODEL_VERT, fragmentShader: frag,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    mats.push(m);
     return m;
   };
-  skinned(prepass, 1);
-  const bodyMesh = skinned(skinMat(HOLO_FRAG, 0), 2);
-  skinned(skinMat(AURA_FRAG, 1), 3);
+  const bodyPart = (mat: THREE.Material, order: number) => {
+    const m = model ? new THREE.Mesh(bodyGeo, mat) : new THREE.SkinnedMesh(bodyGeo, mat);
+    if (m instanceof THREE.SkinnedMesh) m.bind(skeleton);
+    m.frustumCulled = false;
+    m.renderOrder = order;
+    figure.add(m);
+    return m;
+  };
+  if (model) {
+    // the depth prepass must see the same breathing surface as the hologram
+    const pre = modelMat(MODEL_FRAG, 0);
+    pre.colorWrite = false; pre.depthWrite = true; pre.transparent = false; pre.blending = THREE.NormalBlending;
+    pre.polygonOffset = true; pre.polygonOffsetFactor = 1; pre.polygonOffsetUnits = 1;
+    bodyPart(pre, 1);
+  } else bodyPart(prepass, 1);
+  const bodyMesh = bodyPart(model ? modelMat(MODEL_FRAG, 0) : skinMat(HOLO_FRAG, 0), 2);
+  bodyPart(model ? modelMat(AURA_FRAG, 1) : skinMat(AURA_FRAG, 1), 3);
   bodyMesh.userData.skin = true;
 
   // ---- gear parts (non-skinned, attached to bones) -----------------------------
@@ -302,7 +371,8 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean)
     // bracelet near the wrist
     const W = J[`wrist.${side}`], E = J[`elbow.${side}`];
     const wristOff = rel(`foreArm.${side}`, [E[0] + (W[0] - E[0]) * 0.86, E[1] + (W[1] - E[1]) * 0.86, E[2] + (W[2] - E[2]) * 0.86]);
-    const br = part(bones[`foreArm.${side}`], new THREE.TorusGeometry(f ? 0.03 : 0.035, 0.006, 8, 40), `bracelet:${idx}`, { p: wristOff, q: qArm });
+    const brR = model ? model.fit.wristR[side] * 1.2 + 0.006 : f ? 0.03 : 0.035;
+    const br = part(bones[`foreArm.${side}`], new THREE.TorusGeometry(brR, 0.006, 8, 40), `bracelet:${idx}`, { p: wristOff, q: qArm });
     part(br, new THREE.SphereGeometry(0.055, 10, 8), `bracelet:${idx}`, { hitOnly: true });
     marker(br, [0, 0, 0], `bracelet:${idx}`);
     // ring
@@ -311,22 +381,41 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean)
     marker(rg, [0, 0, 0], `ring:${idx}`);
     // earring
     const sx = side === "L" ? 1 : -1;
-    const er = part(bones.head, new THREE.SphereGeometry(0.01, 16, 12), `earring:${idx}`, { p: [sx * 0.071 * hs, 0.03, -0.015] });
+    const earP: V3 = model ? [sx * (model.fit.earX + 0.004), model.fit.earY - J.head[1], -0.005] : [sx * 0.071 * hs, 0.03, -0.015];
+    const er = part(bones.head, new THREE.SphereGeometry(0.01, 16, 12), `earring:${idx}`, { p: earP });
     part(er, new THREE.SphereGeometry(0.034, 10, 8), `earring:${idx}`, { hitOnly: true });
     marker(er, [0, 0, 0], `earring:${idx}`);
   }
   // necklace
-  part(bones.neck, new THREE.TorusGeometry(f ? 0.058 : 0.066, 0.005, 8, 56), "necklace:0", { p: [0, 0.0, 0.012], r: [Math.PI / 2 - 0.45, 0, 0] });
-  part(bones.neck, new THREE.OctahedronGeometry(0.014), "necklace:0", { p: [0, -0.04, f ? 0.07 : 0.08] });
+  const neckR = model ? model.fit.neckR + 0.012 : f ? 0.058 : 0.066;
+  if (model) {
+    // rests on the base of the neck and dips towards the collarbones at the front
+    const ny = -0.035 * model.height;
+    part(bones.neck, new THREE.TorusGeometry(neckR, 0.005, 8, 56), "necklace:0", { p: [0, ny, 0.0], r: [Math.PI / 2 - 0.6, 0, 0] });
+    part(bones.neck, new THREE.OctahedronGeometry(0.014), "necklace:0", { p: [0, ny - 0.06, model.fit.neckFront + 0.022] });
+  } else {
+    part(bones.neck, new THREE.TorusGeometry(neckR, 0.005, 8, 56), "necklace:0", { p: [0, 0, 0.012], r: [Math.PI / 2 - 0.45, 0, 0] });
+    part(bones.neck, new THREE.OctahedronGeometry(0.014), "necklace:0", { p: [0, -0.04, f ? 0.07 : 0.08] });
+  }
   // belt
-  part(bones.hips, new THREE.TorusGeometry(f ? 0.128 : 0.145, 0.011, 10, 64), "belt:0", { p: rel("hips", [0, J.spine[1] - 0.055, -0.005]), r: [Math.PI / 2, 0, 0], s: [1, 0.72, 1] });
-  marker(bones.hips, rel("hips", [0, J.spine[1] - 0.055, 0.1]), "belt:0");
+  if (model) {
+    const wz = model.fit.waist, rx = wz.rx + 0.007, rz = wz.rz + 0.007;
+    part(bones.hips, new THREE.TorusGeometry(rx, 0.011, 10, 64), "belt:0", { p: rel("hips", [J.spine[0], wz.y, wz.cz]), r: [Math.PI / 2, 0, 0], s: [1, rz / rx, 1] });
+    marker(bones.hips, rel("hips", [J.spine[0], wz.y, wz.cz + rz]), "belt:0");
+  } else {
+    part(bones.hips, new THREE.TorusGeometry(f ? 0.128 : 0.145, 0.011, 10, 64), "belt:0", { p: rel("hips", [0, J.spine[1] - 0.055, -0.005]), r: [Math.PI / 2, 0, 0], s: [1, 0.72, 1] });
+    marker(bones.hips, rel("hips", [0, J.spine[1] - 0.055, 0.1]), "belt:0");
+  }
   // cape
   const capePivot = new THREE.Group();
-  capePivot.position.set(...rel("chest", [0, J["shoulder.L"][1] + 0.02, -0.075]));
+  // the cape hangs from just behind the shoulders
+  const capeTop = model ? Math.max(f ? 0.17 : 0.2, (J["shoulder.L"][0] - J["shoulder.R"][0]) * 0.62) : f ? 0.17 : 0.2;
+  const capeLen = model ? model.height * 0.58 : 1.0;
+  const capeZ = model ? model.fit.backZ - 0.012 + capeTop - 0.075 : -0.075;
+  capePivot.position.set(...rel("chest", [J.chest[0], J["shoulder.L"][1] + 0.02, capeZ]));
   bones.chest.add(capePivot);
-  const capeGeo = new THREE.CylinderGeometry(f ? 0.17 : 0.2, f ? 0.3 : 0.34, 1.0, 40, 24, true, Math.PI - 0.95, 1.9);
-  capeGeo.translate(0, -0.5, 0.075);
+  const capeGeo = new THREE.CylinderGeometry(capeTop, capeTop * 1.7, capeLen, 40, 24, true, Math.PI - 0.95, 1.9);
+  capeGeo.translate(0, -capeLen / 2, 0.075);
   part(capePivot, capeGeo, "cape:0", { side: THREE.DoubleSide, strength: 0.45 });
   marker(capePivot, [0, -0.4, -0.15], "cape:0");
   // offhand guard on the left forearm
@@ -553,6 +642,18 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean)
     const mic = Math.sin(t * 2.3 + 0.7) * amp;           // micro motion
     const look = Math.sin(t * 0.31) * amp;
 
+    if (model) {
+      // no rig: breathing (vertex shader), a gentle hover and a slow shift of weight of the whole figure
+      modelU.uBreath.value = br;
+      figure.position.set(0.004 * ws, 0.016 + 0.012 * Math.sin(t * 0.9) * amp, 0);
+      figure.rotation.set(0, 0, 0.005 * ws);
+    } else poseBody(t, br, ws, bob, mic, look, amp);
+    capePivot.rotation.set(0.12 + 0.03 * Math.sin(t * 1.1) * amp + 0.02 * ws, 0, 0.02 * ws);
+    root.updateMatrixWorld(true);
+    animate(t);
+  }
+
+  function poseBody(t: number, br: number, ws: number, bob: number, mic: number, look: number, amp: number) {
     bones.hips.position.set(bind.hips.x + 0.016 * ws, bind.hips.y - 0.018 - 0.005 * bob, bind.hips.z + 0.01);
     rot("hips", 0, 0.03 * ws, 0.016 * ws);
     rot("spine", 0.01 * br, 0, -0.01 * ws);
@@ -571,12 +672,17 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean)
     rot("upperArm.L", -0.03 * br, -0.02 * mic, -0.02 * br);
     rot("foreArm.L", -0.05 * Math.sin(t * 1.35 + 1.4) * amp, 0, 0);
     rot("hand.L", -0.04 * mic, 0, -0.03 * Math.sin(t * 1.9) * amp);
-    capePivot.rotation.set(0.12 + 0.03 * Math.sin(t * 1.1) * amp + 0.02 * ws, 0, 0.02 * ws);
-    root.updateMatrixWorld(true);
+  }
+
+  function animate(t: number) {
 
     if (floating) {
       palm[holdSide].getWorldPosition(tmp);
-      tmp2.set(0.0, 0.1, 0.07).lerp(new THREE.Vector3(0, 0.14, 0.04), ease3(present));
+      if (model) {
+        // beside the open hand; it rises a little while the camera looks at it
+        const sx = holdSide === "L" ? 1 : -1;
+        tmp2.set(sx * 0.07, 0.11, 0.08).lerp(new THREE.Vector3(sx * 0.05, 0.2, 0.11), ease3(present));
+      } else tmp2.set(0.0, 0.1, 0.07).lerp(new THREE.Vector3(0, 0.14, 0.04), ease3(present));
       tmp.add(tmp2);
       tmp.y += 0.016 * Math.sin(t * 2.1);
       if (floating.position.lengthSq() === 0) floating.position.copy(tmp);

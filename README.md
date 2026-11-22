@@ -6,8 +6,10 @@ jeden Slot bewertet, die BiS-Linien pro Slot zeigt und einen priorisierten Upgra
 
 ## Funktionen
 - Startseite mit Charakterauswahl, neue Charaktere über **+** und kisk.app-Link
-- 3D-Hologramm je Charakter: menschlicher Körper aus dem MakeHuman-Basismodell (CC0, weiblich/männlich,
-  erzeugt mit `node scripts/build-human-mesh.mjs`), Skelett mit ruhiger Bereitschafts-Idle, drehen/zoomen.
+- 3D-Hologramm je Charakter: die Bildmaster-Charaktermodelle (GLB, weiblich/männlich) unverändert mit ihrer
+  eingebetteten Textur; Idle nur durch Atmen, leichtes Schweben und Gewichtsverlagerung (kein Rig), drehen/zoomen.
+  Slot-Bereiche, Klickflächen und Ankerpunkte für Schmuck und Waffe werden beim Laden aus der Geometrie gemessen.
+  Fehlen die Modelldateien, nutzt die App den eingebauten MakeHuman-Körper (CC0, `node scripts/build-human-mesh.mjs`).
   Aura je Teil in Farbe UND Stärke nach Note (BiS gold mit Funken, S+ pink, S violett, A grün, B lime, C grau, D schwach rot);
   die Waffe bekommt zusätzlich Halo und Funken. Nur die echte Klassenwaffe wird gezeigt (Schild nur bei Schwert/Streitkolben).
   Reiter „Ausrüstung“ rechts listet alle Teile (Ring 1/2, Armband 1/2 …); Tippen auf Teil oder Eintrag fliegt die Kamera hin
@@ -31,6 +33,11 @@ jeden Slot bewertet, die BiS-Linien pro Slot zeigt und einen priorisierten Upgra
 - Nach dem Lauf von `download_icons.py`: `node scripts/import-icons.mjs <assetpack-ordner>` kopiert `icons/` nach `public/item-icons/`
   (per .gitignore nicht im öffentlichen Repo) und trägt sie ein; die Offline-Datei bettet sie ein
 - Fehlt ein Bild, zeigt die App „Bild fehlt“ statt eines Ersatzbildes
+
+## Charaktermodelle
+- `node scripts/import-models.mjs <entpacktes-modellpaket>` kopiert `models/bildmaster_{male,female}_v2_WEB.glb` nach `public/models/`
+- Die Modelle sind aus einem Referenzbild abgeleitet, dessen Rechte nicht geklärt sind: `public/models/` ist per .gitignore
+  nicht im öffentlichen Repo. `npm run offline` bettet sie in die Offline-Datei ein, wenn sie installiert sind.
 
 ## Entwicklung
 ```bash

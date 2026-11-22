@@ -34,10 +34,19 @@ const cssDir = path.join(root, ".next/static/chunks");
 const css = readdirSync(cssDir, { recursive: true }).filter((f) => String(f).endsWith(".css"))
   .map((f) => readFileSync(path.join(cssDir, String(f)), "utf8")).join("\n");
 const icon = readFileSync(path.join(root, "public/icon.svg"), "utf8");
+// Embed the character models (public/models, see scripts/import-models.mjs) when they are installed.
+const models = {};
+for (const [g, name] of [["m", "male"], ["f", "female"]]) {
+  try {
+    models[g] = `data:model/gltf-binary;base64,${readFileSync(path.join(root, `public/models/bildmaster_${name}_v2_WEB.glb`)).toString("base64")}`;
+  } catch { /* not installed: the app uses its built-in body */ }
+}
+console.log(`Charaktermodelle eingebettet: ${Object.keys(models).join(", ") || "keine"}`);
 const html = `<!DOCTYPE html><html lang="de" class="h-full antialiased"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#03070f">
 <title>Aion 2 BuildMaster (offline)</title><link rel="icon" href="data:image/svg+xml,${encodeURIComponent(icon)}">
 <style>${css}</style></head><body class="min-h-full"><div id="root" class="min-h-full"></div>
+<script>window.__BM_MODELS__=${JSON.stringify(models)}</script>
 <script>${js.outputFiles[0].text.replace(/<\/script/g, "<\\/script")}</script></body></html>`;
 mkdirSync(path.join(root, "dist"), { recursive: true });
 writeFileSync(path.join(root, "dist/aion2-buildmaster-offline.html"), html);

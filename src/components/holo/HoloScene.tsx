@@ -9,6 +9,7 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import type { Grade, SlotKind } from "@/lib/types";
 import type { Gender, WeaponKind } from "@/lib/hologram";
 import { buildFigure, type Figure } from "./figure";
+import { loadModelBody, type ModelBody } from "./model-body";
 
 export interface HoloSceneProps {
   gender: Gender;
@@ -62,17 +63,19 @@ export default function HoloScene(props: HoloSceneProps) {
   const { gender, weapon } = props;
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    // build after the first paint so the loading state is visible while the body mesh is generated
+    // load the character model (falls back to the built-in body), then build after the first paint
     let cancelled = false;
     let cleanup: (() => void) | undefined;
     const id = setTimeout(() => {
-      if (cancelled) return;
-      cleanup = init();
-      setReady(true);
+      loadModelBody(gender).then((model) => {
+        if (cancelled) return;
+        cleanup = init(model);
+        setReady(true);
+      });
     }, 40);
     return () => { cancelled = true; clearTimeout(id); cleanup?.(); };
 
-  function init(): (() => void) | undefined {
+  function init(model: ModelBody | null): (() => void) | undefined {
     const el = host.current!;
     const hero = latest.current.mode === "hero";
     let renderer: THREE.WebGLRenderer;
@@ -94,7 +97,7 @@ export default function HoloScene(props: HoloSceneProps) {
     const camera = new THREE.PerspectiveCamera(34, 1, 0.05, 60);
     camera.position.set(0, 1.7, 8.5);
 
-    const fig: Figure = buildFigure(gender, weapon, reduce);
+    const fig: Figure = buildFigure(gender, weapon, reduce, model);
     scene.add(fig.root);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -253,7 +256,7 @@ export default function HoloScene(props: HoloSceneProps) {
       bloom.resolution.set(w / 2, h / 2);
       camera.aspect = w / h;
       // keep the whole figure in view on narrow phones
-      camera.fov = w / h < 0.62 ? 40 : 34;
+      camera.fov = w / h < 0.62 ? 44 : 34;
       camera.updateProjectionMatrix();
     };
     const ro = new ResizeObserver(resize);

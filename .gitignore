@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Original AION 2 icons (NCSOFT): keep out of the public repo
 /public/item-icons/
+
+# Hologram character models derived from a reference image: keep out of the public repo
+/public/models/

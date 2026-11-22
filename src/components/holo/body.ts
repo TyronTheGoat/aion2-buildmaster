@@ -13,14 +13,14 @@ type V = [number, number, number];
 
 /** Body regions that map to an equipment slot on the skin mesh (index = aSlot attribute). */
 export const SKIN_SLOTS = ["helmet:0", "necklace:0", "torso:0", "shoulders:0", "gloves:0", "pants:0", "boots:0"] as const;
-const S = { helmet: 0, necklace: 1, torso: 2, shoulders: 3, gloves: 4, pants: 5, boots: 6 };
+export const S = { helmet: 0, necklace: 1, torso: 2, shoulders: 3, gloves: 4, pants: 5, boots: 6 };
 
 export type BoneName =
   | "hips" | "spine" | "chest" | "neck" | "head"
   | "upperArm.L" | "foreArm.L" | "hand.L" | "upperArm.R" | "foreArm.R" | "hand.R"
   | "thigh.L" | "shin.L" | "foot.L" | "thigh.R" | "shin.R" | "foot.R";
 
-interface BoneDef {
+export interface BoneDef {
   name: BoneName; parent?: BoneName; pos: V; slot: number;
   /** segment used for skin weights, its radius and an x-squash for the wide torso */
   seg: [V, V]; rad: number; sx?: number;
@@ -49,7 +49,7 @@ function b64(s: string) {
   return out.buffer;
 }
 
-function distSeg(p: V, a: V, b: V, sx: number) {
+export function distSeg(p: V, a: V, b: V, sx: number) {
   const ax = (p[0] - a[0]) * sx, ay = p[1] - a[1], az = p[2] - a[2];
   const bx = (b[0] - a[0]) * sx, by = b[1] - a[1], bz = b[2] - a[2];
   const l2 = bx * bx + by * by + bz * bz;
@@ -148,7 +148,7 @@ export function bodyGeometry(d: BodyData) {
 }
 
 /** Bones in bind pose (local offsets from their parents). */
-export function bodySkeleton(d: BodyData) {
+export function bodySkeleton(d: { bones: BoneDef[] }) {
   const map = {} as Record<BoneName, THREE.Bone>;
   const list: THREE.Bone[] = [];
   for (const b of d.bones) {
