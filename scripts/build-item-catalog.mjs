@@ -94,8 +94,9 @@ for (const s of items(read("data/gear-catalog.json"))) {
     itemId: String(s.item_id), name: s.name_en, slot: s.slot, category: CATEGORY[s.group] ?? SLOT_CATEGORY[s.slot] ?? "",
     rarity: RARITY[s.rarity] ?? s.rarity, level: s.item_level ?? s.required_level ?? undefined, faction: s.faction || undefined,
     itemPage: s.item_page,
-    icon: s.icon_file ? "/item-icons/" + String(s.icon_file).replace(/^icons\//, "") : s.icon_url || "",
-    iconSource: s.icon_file || s.icon_url ? "NCSOFT (Original-Icon)" : "",
+    // canonical original URL (works on the web); the offline build inlines the downloaded file for it
+    icon: s.icon_url || (s.icon_file ? "/item-icons/" + String(s.icon_file).replace(/^icons\//, "") : ""),
+    iconSource: s.icon_file ? "NCSOFT (Original-Icon, heruntergeladen + SHA-256 geprüft)" : s.icon_url ? "NCSOFT (Original-Icon)" : "",
     regions: [eu ? { region: "EU", source: String(s.region_status), url: s.source_index } : { region: "TW", source: "NCSOFT TW-Itemdictionary", url: s.source_index }],
   });
 }
@@ -117,7 +118,19 @@ for (const it of items(read("data/item-catalog.source.json"))) {
 // 4) items seen on the EU character: EU evidence + official icon
 for (const [name, file] of Object.entries(OFFICIAL_ICONS)) {
   const slot = slotFromName(name);
-  const it = upsert({ name, slot, category: SLOT_CATEGORY[slot] ?? "", regions: [KISK_EVIDENCE] });
+  // kisk shows the name, not the item ID: merge only when the name belongs to exactly one ID,
+  // otherwise keep a separate EU entry so no single TW ID is wrongly marked as EU
+  const ids = [...merged.values()].filter((m) => m.itemId && norm(m.name) === norm(name));
+  const rec = { name, slot, category: SLOT_CATEGORY[slot] ?? "", regions: [KISK_EVIDENCE] };
+  let it;
+  if (ids.length === 1) it = upsert({ ...rec, itemId: ids[0].itemId });
+  else if (ids.length === 0) it = upsert(rec);
+  else {
+    const key = `name:${norm(name)}`;
+    it = merged.get(key) ?? { key, ...rec, source: ids[0].source, rarity: ids[0].rarity, level: ids[0].level, regions: [] };
+    if (!it.regions.length) it.regions.push(KISK_EVIDENCE);
+    merged.set(key, it);
+  }
   if (!it.icon) { it.icon = CDN + file; it.iconSource = "kisk.app (NCSOFT CDN)"; }
 }
 
@@ -127,6 +140,11 @@ const out = [...merged.values()].map((i) => ({
   itemPage: i.itemPage ?? "", regions: i.regions,
 }));
 writeFileSync(path.join(root, "src/lib/knowledge/item-catalog.json"), JSON.stringify(out));
+// original icon file name → downloaded local copy (only names/hashes, no images: the icons stay git-ignored)
+const iconFiles = {};
+for (const s of items(read("data/gear-catalog.json")))
+  if (s.icon_url && s.icon_file) iconFiles[s.icon_url.split("/").pop()] = "/item-icons/" + String(s.icon_file).replace(/^icons\//, "");
+writeFileSync(path.join(root, "data/icon-files.json"), JSON.stringify(iconFiles, null, 1));
 
 const status = (i) => (i.regions.some((r) => r.region === "EU") ? "eu" : i.regions.some((r) => r.region === "TW") ? "tw" : "unclear");
 const count = (f) => out.filter(f).length;

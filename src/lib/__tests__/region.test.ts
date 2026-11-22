@@ -17,14 +17,22 @@ describe("EU / Global filter", () => {
   });
 
   it("marks gear seen on the EU character as EU with evidence", () => {
-    const orb = findCatalogItem("Splendent Ebony Dragon Lord Orb")!;
+    // kisk shows only the name; it belongs to two TW item IDs, so the EU evidence stays on a separate name entry
+    const orb = PUBLIC_ITEMS.find((i) => i.name === "Splendent Ebony Dragon Lord Orb")!;
     expect(regionStatus(orb)).toBe("eu");
     expect(orb.regions[0].source).toContain("kisk.app");
+    const ids = ALL_ITEMS.filter((i) => i.name === orb.name && i.itemId);
+    expect(ids.length).toBeGreaterThan(1);
+    expect(ids.every((i) => regionStatus(i) === "tw")).toBe(true);
   });
 
   it("does not match ambiguous names to an icon", () => {
     // "Fierce Battle Amulet" exists with several item IDs (rarities)
     expect(findCatalogItem("Fierce Battle Amulet")).toBeUndefined();
-    expect(iconFor({ name: "Nuakum Guard" })).toContain("Icon_Weapon_Guarder_L_012.png");
+    expect(iconFor({ name: "Nuakum Guard" })).toBeUndefined();
+    // the icon kisk.app delivers is still used
+    expect(iconFor({ name: "Nuakum Guard", icon: "https://x/Icon_Weapon_Guarder_L_012.png" })).toContain("Icon_Weapon_Guarder_L_012.png");
+    // by ID it is unambiguous
+    expect(iconFor({ name: "?", itemId: "115030051" })).toContain("Icon_Weapon_Guarder_L_012.png");
   });
 });
