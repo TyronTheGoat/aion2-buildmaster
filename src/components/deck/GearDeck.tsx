@@ -53,7 +53,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
   };
   useEffect(() => {
     if (!leaving) return;
-    const t = setTimeout(() => { setLeaving(undefined); setLockH(undefined); }, 1450);
+    const t = setTimeout(() => { setLeaving(undefined); setLockH(undefined); }, 1550);
     return () => clearTimeout(t);
   }, [leaving, tab]);
   const deck = useMemo(() => all.filter((d) => (tab === "arcana") === (d.item.slot === "arcana")), [all, tab]);
@@ -126,7 +126,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
       </div>
       {note}
 
-      {/* one switch: Ausrüstung ⇄ Arcana; both views ride an invisible ring that always turns the same way */}
+      {/* one switch: Ausrüstung ⇄ Arcana; both views ride an invisible flat ring in depth that always turns the same way */}
       <button type="button" role="switch" aria-checked={tab === "arcana"} onClick={switchTab}
         aria-label={`Umschalten auf ${tab === "gear" ? "Arcana" : "Ausrüstung"}`}
         className="relative grid grid-cols-2 rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_3px_0_-0.5px_#06070a] hover:border-[#d9c58f]/45">
