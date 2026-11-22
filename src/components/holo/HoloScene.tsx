@@ -34,7 +34,7 @@ export interface HoloSceneProps {
 
 /** How the camera frames each slot: distance and view direction (world space, character faces +z). */
 const FOCUS: Partial<Record<SlotKind, { dist: number; dir: [number, number, number] }>> = {
-  weapon: { dist: 1.3, dir: [-1, 0.45, 0.75] },
+  weapon: { dist: 1.7, dir: [-1, 0.35, 0.9] },
   offhand: { dist: 1.2, dir: [0.6, 0.15, 1] },
   helmet: { dist: 1.3, dir: [0.3, 0.12, 1] },
   shoulders: { dist: 1.5, dir: [0.45, 0.3, 1] },

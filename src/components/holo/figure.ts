@@ -81,7 +81,7 @@ void main() {
   if (uRefOn > 0.5) {
     // detailed reference on the front; the back (a front projection would show the face there) gets a clean scan
     vec4 ref = texture2D(uRef, vUvRef);
-    vec3 front = mix(tex, ref.rgb, ref.a);
+    vec3 front = mix(tex, ref.rgb * 0.8, ref.a);
     float k = vW.y * 88.0;
     float fw = max(fwidth(k), 1e-4);
     float line = (1.0 - min(abs(fract(k) - 0.5) / fw, 1.0)) * clamp(1.6 - 2.0 * fw, 0.0, 1.0);
@@ -93,7 +93,7 @@ void main() {
   float edge = smoothstep(0.08, 0.0, uReveal - vW.y);
   float flicker = 0.97 + 0.03 * sin(uTime * 29.0 + vW.y * 7.0);
   vec3 rimCol = mix(uColor, vAura * (0.6 + 0.5 * vLevel), 0.85 * vLevel * vLevel);
-  vec3 c = tex * uTexGain * (1.0 + 0.5 * band) + uColor * (0.03 + 0.1 * band) + rimCol * 0.75 * fres;
+  vec3 c = tex * uTexGain * (1.0 + 0.5 * band) + uColor * (0.03 + 0.1 * band) + rimCol * 0.6 * fres;
   c += vec3(0.55, 0.85, 1.0) * edge * 1.2;
   gl_FragColor = vec4(c * vFocus * flicker, 1.0);
 }`;
@@ -664,7 +664,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
   refreshFocus();
 
   const combat = combatPose(weapon), pres = presentPose(weapon);
-  const INTRO_T0 = 0.15; // the intro starts right after the hologram begins to materialise
+  const INTRO_T0 = 0.3; // the intro starts right after the hologram begins to materialise
   const glowMul: Record<string, number> = {};
   let lastT = 0;
   let introPose: ReturnType<typeof samplePose> = {};
@@ -680,7 +680,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean,
 
   function update(t: number) {
     shared.uTime.value = t;
-    if (shared.uReveal.value < 3) shared.uReveal.value = -0.1 + t * 1.6;
+    if (shared.uReveal.value < 3) shared.uReveal.value = -0.1 + t * 2.2;
     const amp = reduce ? 0.3 : 1;
     present += (presentTo - present) * 0.06;
 
