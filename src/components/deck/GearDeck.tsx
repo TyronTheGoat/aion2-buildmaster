@@ -48,7 +48,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
   };
   useEffect(() => {
     if (!leaving) return;
-    const t = setTimeout(() => setLeaving(undefined), 700);
+    const t = setTimeout(() => setLeaving(undefined), 750);
     return () => clearTimeout(t);
   }, [leaving, tab]);
   const deck = useMemo(() => all.filter((d) => (tab === "arcana") === (d.item.slot === "arcana")), [all, tab]);
@@ -134,11 +134,11 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
         ))}
       </button>
 
-      <div className="wheel relative">
+      <div className="wheel relative -mx-4 overflow-x-clip px-4">
         {leaving && <Tiles key={`out-${leaving}`} deck={all.filter((d) => (leaving === "arcana") === (d.item.slot === "arcana"))} onOpen={setOpen}
-          className={`pointer-events-none absolute inset-x-0 top-0 ${leaving === "gear" ? "wheel-out-down" : "wheel-out-up"}`} />}
+          className={`pointer-events-none absolute inset-x-0 top-0 ${leaving === "gear" ? "wheel-out-left" : "wheel-out-right"}`} />}
         <Tiles key={`in-${tab}`} deck={deck} onOpen={setOpen}
-          className={leaving ? (tab === "arcana" ? "wheel-in-top" : "wheel-in-bottom") : ""} />
+          className={leaving ? (tab === "arcana" ? "wheel-in-right" : "wheel-in-left") : ""} />
       </div>
     </div>
   );

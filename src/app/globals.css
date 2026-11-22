@@ -35,21 +35,28 @@ body {
 .card-tilt:active { transform: perspective(900px) translateY(1px) scale(0.985); }
 .card-tilt .card-sheen { transition: transform 180ms ease-out; transform: rotate(12deg) translate(var(--sx, 0px), var(--sy, 0px)); }
 
-/* gear / Arcana switch: the views turn like a big wheel seen from the front, around an axis behind the screen */
+/* gear / Arcana switch: the views turn sideways like a big wheel, around an axis far behind the screen */
 .wheel { perspective: 1600px; }
-.wheel > * { transform-origin: 50% 50% -420px; backface-visibility: hidden; }
-.wheel-in-top { animation: wheel-in-top 650ms cubic-bezier(.3,.7,.2,1) both; }
-.wheel-in-bottom { animation: wheel-in-bottom 650ms cubic-bezier(.3,.7,.2,1) both; }
-.wheel-out-down { animation: wheel-out-down 650ms cubic-bezier(.5,0,.6,.4) both; }
-.wheel-out-up { animation: wheel-out-up 650ms cubic-bezier(.5,0,.6,.4) both; }
-@keyframes wheel-in-top { from { transform: rotateX(80deg); opacity: 0; } 40% { opacity: 1; } to { transform: none; opacity: 1; } }
-@keyframes wheel-in-bottom { from { transform: rotateX(-80deg); opacity: 0; } 40% { opacity: 1; } to { transform: none; opacity: 1; } }
-@keyframes wheel-out-down { from { transform: none; opacity: 1; } 60% { opacity: 1; } to { transform: rotateX(-80deg); opacity: 0; } }
-@keyframes wheel-out-up { from { transform: none; opacity: 1; } 60% { opacity: 1; } to { transform: rotateX(80deg); opacity: 0; } }
+.wheel > * { transform-origin: 50% 50% -900px; backface-visibility: hidden; }
+.wheel-in-right { animation: wheel-in-right 700ms cubic-bezier(.3,.7,.2,1) both; }
+.wheel-in-left { animation: wheel-in-left 700ms cubic-bezier(.3,.7,.2,1) both; }
+.wheel-out-left { animation: wheel-out-left 700ms cubic-bezier(.5,0,.6,.4) both; }
+.wheel-out-right { animation: wheel-out-right 700ms cubic-bezier(.5,0,.6,.4) both; }
+@keyframes wheel-in-right { from { transform: rotateY(70deg); opacity: 0; } 35% { opacity: 0; } 70% { opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes wheel-in-left { from { transform: rotateY(-70deg); opacity: 0; } 35% { opacity: 0; } 70% { opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes wheel-out-left { from { transform: none; opacity: 1; } 20% { opacity: 1; } 55% { opacity: 0; } to { transform: rotateY(-70deg); opacity: 0; } }
+@keyframes wheel-out-right { from { transform: none; opacity: 1; } 20% { opacity: 1; } 55% { opacity: 0; } to { transform: rotateY(70deg); opacity: 0; } }
+
+/* comparison arrows: the line grows out of the Ist card, the glow follows a little later */
+.arrow-line { stroke-dasharray: 1 1; stroke-dashoffset: 1; animation: arrow-draw 520ms cubic-bezier(.4,0,.2,1) var(--d, 0ms) forwards; }
+.arrow-glow { stroke-dasharray: 1 1; stroke-dashoffset: 1; opacity: 0.28; filter: blur(3px); animation: arrow-draw 900ms cubic-bezier(.4,0,.2,1) calc(var(--d, 0ms) + 260ms) forwards; }
+@keyframes arrow-draw { to { stroke-dashoffset: 0; } }
+
 @media (prefers-reduced-motion: reduce) {
   .card-tilt, .card-tilt:hover { transform: none; transition: none; }
-  .wheel-in-top, .wheel-in-bottom, .wheel-out-down, .wheel-out-up { animation: none; }
-  .wheel-out-down, .wheel-out-up { display: none; }
+  .wheel-in-right, .wheel-in-left, .wheel-out-left, .wheel-out-right { animation: none; }
+  .wheel-out-left, .wheel-out-right { display: none; }
+  .arrow-line, .arrow-glow { animation: none; stroke-dashoffset: 0; }
 }
 
 .bm-backdrop {

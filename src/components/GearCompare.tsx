@@ -2,7 +2,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { Character, Grade, Item } from "@/lib/types";
 import { compareIdeal } from "@/lib/compare";
-import { slotLines, statLinks, type LinePair, type LinkColor, type Verdict } from "@/lib/slot-lines";
+import { isSkillValue, statLinks, type LinkColor } from "@/lib/slot-lines";
 import type { StatLine } from "@/lib/types";
 import { buildPlan } from "@/lib/advisor";
 import { iconFor, localIcon, type CatalogItem, ALL_ITEMS } from "@/lib/knowledge/item-catalog";
@@ -22,23 +22,15 @@ const LINK: Record<LinkColor, { hex: string; dot: string; mark: string; markCls:
   red: { hex: "#ff3b3b", dot: "bg-rose-400", mark: "✕", markCls: "text-rose-300" },
 };
 
-const VERDICT: Record<Verdict, { dot: string; mark: string; markCls: string; arrow?: string }> = {
-  right: { dot: "bg-emerald-400", mark: "✓", markCls: "text-emerald-300", arrow: "#34d399" },
-  half: { dot: "bg-orange-400", mark: "Platz", markCls: "text-orange-300", arrow: "#ff9a2e" },
-  wrong: { dot: "bg-rose-400", mark: "✕", markCls: "text-rose-300", arrow: "#ff3b3b" },
-  empty: { dot: "bg-rose-400", mark: "Leer", markCls: "text-zinc-500", arrow: "#ff3b3b" },
-  none: { dot: "bg-zinc-500", mark: "", markCls: "text-zinc-500" },
-};
 
-type Side = "ist" | "soll";
 
 /** One arrow between the cards: from a row on the Ist card to a row on the Soll card. */
 interface Link { key: string; from: string; to: string; color: string }
 
 /**
- * Ist vs. Soll for one gear piece as two cards side by side. Skills sit at the same height on both cards.
- * Stats keep their own order on each card (Ist as on the item, Soll in BiS order); arrows connect them:
- * green = right stat, orange = unlock stat not on the last line, red = wrong stat (points to a missing BiS stat).
+ * Ist vs. Soll for one gear piece as two cards side by side. All lines (stats and skills) keep their own order
+ * on each card (Ist as on the item, Soll in BiS order). Once both cards stand, arrows grow out of the Ist lines:
+ * green = right, orange = wrong place (only the last place matters), red = wrong line (points to a missing BiS line).
  * "Noch zu tun" follows in full width.
  */
 export function GearCompare({ char, item, slotId }: {
@@ -48,8 +40,9 @@ export function GearCompare({ char, item, slotId }: {
   const [stage, setStage] = useState(0);
   const gridRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const t = setTimeout(() => setStage(1), 220);
-    return () => clearTimeout(t);
+    const t1 = setTimeout(() => setStage(1), 220);
+    const t2 = setTimeout(() => setStage(2), 220 + 560);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
   const charKey = `${char.region}/${char.server}/${char.name}`.toLowerCase();
   const { planned, setPlanned } = usePlanned(charKey);
@@ -62,13 +55,10 @@ export function GearCompare({ char, item, slotId }: {
   const wearsBisCraft = !!bisCraft && bisCraft.name.toLowerCase() === item.name.toLowerCase();
 
   const cmp = compareIdeal(item);
-  const skills = useMemo(() => slotLines(item).skills, [item]);
   const stats = useMemo(() => statLinks(item), [item]);
-  const istStats = useMemo(() => stats?.ist ?? item.lines.filter((l) => !/^\+\d+$/.test(l.value.trim())), [stats, item]);
-  const links = useMemo<Link[]>(() => [
-    ...skills.flatMap((p) => VERDICT[p.verdict].arrow ? [{ key: `k:${p.key}`, from: `k:${p.key}`, to: `k:${p.key}`, color: VERDICT[p.verdict].arrow! }] : []),
-    ...(stats?.links ?? []).filter((l) => l.to >= 0).map((l) => ({ key: `s:${l.from}`, from: `s:${l.from}`, to: `s:${l.to}`, color: LINK[l.color].hex })),
-  ], [skills, stats]);
+  const istStats = stats?.ist ?? item.lines;
+  const links = useMemo<Link[]>(() => (stats?.links ?? []).filter((l) => l.to >= 0)
+    .map((l) => ({ key: `s:${l.from}`, from: `s:${l.from}`, to: `s:${l.to}`, color: LINK[l.color].hex })), [stats]);
   const step = buildPlan(char).steps.find((s) => s.item === item);
   const isBis = item.grade === "BiS";
   const todo = [
@@ -85,16 +75,15 @@ export function GearCompare({ char, item, slotId }: {
       : isBis ? { icon: iconFor(item), name: item.name, meta: "Schon BiS", grade: "BiS" } : undefined;
 
   const istColor = (i: number) => stats?.links.find((l) => l.from === i)?.color;
-  const section = (side: Side) => (
+  const section = (side: "ist" | "soll") => (
     <>
-      {skills.length > 0 && <RowList title="Fähigkeiten" pairs={skills} side={side} skill />}
       <div className="relative mt-3">
-        <div className="mb-1.5 text-[10px] uppercase tracking-[0.22em] text-zinc-500">Werte / Stats</div>
+        <div className="mb-1.5 text-[10px] uppercase tracking-[0.22em] text-zinc-500"><span className="sm:hidden">Werte</span><span className="hidden sm:inline">Werte / Fähigkeiten</span></div>
         <div className="space-y-1">
           {side === "ist"
             ? (istStats.length ? istStats.map((l, i) => <IstStat key={i} id={`s:${i}`} line={l} color={stats ? istColor(i) : undefined} unlockSlot={!!stats && i === istStats.length - 1} />)
               : <EmptyRow>Leer</EmptyRow>)
-            : (stats?.bis.length ? stats.bis.map((b, i) => <BisStat key={i} id={`s:${i}`} name={b.name} missing={b.missing} unlock={i === stats.bis.length - 1} />)
+            : (stats?.bis.length ? stats.bis.map((b, i) => <BisStat key={i} id={`s:${i}`} name={b.name} skill={b.skill} missing={b.missing} unlock={i === stats.bis.length - 1} />)
               : <EmptyRow>Offen</EmptyRow>)}
         </div>
       </div>
@@ -111,10 +100,10 @@ export function GearCompare({ char, item, slotId }: {
   return (
     <div className="space-y-5">
       <div ref={gridRef} className="relative grid grid-cols-2 gap-10 [--gap:2.5rem] sm:gap-20 sm:[--gap:5rem]">
-        {stage === 1 && <Arrows container={gridRef} links={links} />}
+        {stage === 2 && <Arrows container={gridRef} links={links} />}
         {/* Ist-Stand */}
         <div className="transition-transform duration-500 ease-out motion-reduce:transition-none"
-          style={{ transform: stage ? "none" : "translateX(calc(50% + var(--gap) / 2))" }}>
+          style={{ transform: stage >= 1 ? "none" : "translateX(calc(50% + var(--gap) / 2))" }}>
           <Card grade={item.grade} className="flex h-full flex-col p-3 sm:p-5">
             <CardHead title="Ist-Stand" rank={item.grade} />
             <ItemBlock icon={SHOW_ITEM_ICONS ? iconFor(item) : undefined} grade={item.grade} name={item.name} info={istInfo} sub={istSub} />
@@ -125,7 +114,7 @@ export function GearCompare({ char, item, slotId }: {
 
         {/* Soll-Stand / BiS */}
         <div className="transition-all duration-500 ease-out motion-reduce:transition-none"
-          style={{ opacity: stage ? 1 : 0, transform: stage ? "none" : "translateX(1.5rem)" }}>
+          style={{ opacity: stage >= 1 ? 1 : 0, transform: stage >= 1 ? "none" : "translateX(1.5rem)" }}>
           <Card grade={soll?.grade ?? "?"} className="flex h-full flex-col p-3 sm:p-5">
             <CardHead title="Soll-Stand / BiS" short="Soll / BiS" rank={soll ? "BiS" : undefined} />
             {soll ? (
@@ -143,10 +132,10 @@ export function GearCompare({ char, item, slotId }: {
       </div>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
-        <span className="flex items-center gap-1.5"><Arrowlet color="#34d399" />richtiger Stat</span>
-        <span className="flex items-center gap-1.5"><Arrowlet color="#ff9a2e" />richtiger Stat, falscher Slot (Freischalt-Stat nicht auf dem letzten Platz)</span>
-        <span className="flex items-center gap-1.5"><Arrowlet color="#ff3b3b" />falscher Stat (zeigt auf den fehlenden BiS-Stat)</span>
-        <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-violet-500/50" />Freischalt-Stat (gehört auf den letzten Platz)</span>
+        <span className="flex items-center gap-1.5"><Arrowlet color="#34d399" />richtig</span>
+        <span className="flex items-center gap-1.5"><Arrowlet color="#ff9a2e" />richtig, aber falscher Platz (nur der letzte Platz zählt)</span>
+        <span className="flex items-center gap-1.5"><Arrowlet color="#ff3b3b" />falsch (zeigt auf das, was fehlt)</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-violet-500/50" />Freischalt-Zeile (gehört auf den letzten Platz)</span>
       </div>
 
       <Card grade="?" className="p-4 sm:p-5">
@@ -202,66 +191,34 @@ function CardFoot({ children }: { children: React.ReactNode }) {
   return <div className="relative mt-auto border-t border-white/[0.07] pt-2.5 text-[11px] text-zinc-500">{children}</div>;
 }
 
-function RowList({ title, pairs, side, skill }: { title: string; pairs: LinePair[]; side: Side; skill?: boolean }) {
-  return (
-    <div className="relative mt-3">
-      <div className="mb-1.5 text-[10px] uppercase tracking-[0.22em] text-zinc-500">{title}</div>
-      <div className="space-y-1">
-        {pairs.length ? pairs.map((p) => <CompareRow key={p.key} pair={p} side={side} skill={skill} />)
-          : <div className="flex h-9 items-center rounded-lg bg-white/[0.035] px-2.5 text-[12px] text-zinc-500">{side === "ist" ? "Leer" : "Offen"}</div>}
-      </div>
-    </div>
-  );
-}
-
-/** One line. Ist shows the stat that sits on the item at this height, Soll the BiS stat; skills keep their level. */
-function CompareRow({ pair, side, skill }: { pair: LinePair; side: Side; skill?: boolean }) {
-  const v = VERDICT[pair.verdict];
-  const line = side === "ist" ? pair.ist : pair.bis;
-  const label = line ? (skill ? line.name : statLabel(line.name)) : side === "ist" ? "Leer" : "Offen";
-  const mark = side === "ist"
-    ? (skill && pair.ist ? pair.ist.value : pair.ist ? v.mark : "")
-    : (skill && pair.bis ? pair.bis.value : pair.bis ? "◆" : "–");
-  const markCls = side === "ist" ? (skill && pair.ist ? "text-white" : v.markCls) : pair.bis ? (skill ? "text-white" : "text-[#ffd54a]") : "text-zinc-500";
-  const bg = pair.unlock ? "bg-gradient-to-r from-violet-500/35 via-violet-500/20 to-violet-500/5 ring-1 ring-violet-300/30" : "bg-white/[0.035]";
-  return (
-    <div data-pair={`${side}:k:${pair.key}`} className={`flex h-9 items-center justify-between gap-1.5 rounded-lg px-2 text-[12px] sm:px-2.5 sm:text-[13px] ${bg}`}>
-      <span className="flex min-w-0 items-center gap-1.5">
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${side === "ist" ? v.dot : "bg-[#ffd54a]/70"}`} />
-        {skill && line && <SkillIcon name={line.name} size={16} />}
-        <span className={`truncate font-medium ${line ? (pair.unlock ? "text-violet-50" : "text-zinc-100") : "text-zinc-500"}`}>{label}</span>
-      </span>
-      <span className={`shrink-0 text-[11px] font-semibold tabular-nums ${markCls}`}>{mark}</span>
-    </div>
-  );
-}
-
 function EmptyRow({ children }: { children: React.ReactNode }) {
   return <div className="flex h-9 items-center rounded-lg bg-white/[0.035] px-2.5 text-[12px] text-zinc-500">{children}</div>;
 }
 
-/** A stat line of the current item, in the order it sits on the item. The last row is the unlock slot. */
+/** A line (stat or skill) of the current item, in the order it sits on the item. The last row is the unlock slot. */
 function IstStat({ id, line, color, unlockSlot }: { id: string; line: StatLine; color?: LinkColor; unlockSlot: boolean }) {
   const v = color ? LINK[color] : undefined;
   return (
     <div data-pair={`ist:${id}`} className={`flex h-9 items-center justify-between gap-1.5 rounded-lg bg-white/[0.035] px-2 text-[12px] sm:px-2.5 sm:text-[13px] ${unlockSlot ? "ring-1 ring-violet-300/30" : ""}`}>
       <span className="flex min-w-0 items-center gap-1.5">
         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${v?.dot ?? "bg-zinc-500"}`} />
-        <span className="truncate font-medium text-zinc-100">{statLabel(line.name)}</span>
+        {isSkillValue(line.value) && <SkillIcon name={line.name} size={16} />}
+        <span className="truncate font-medium text-zinc-100">{isSkillValue(line.value) ? line.name : statLabel(line.name)}</span>
       </span>
       {v && <span className={`shrink-0 text-[11px] font-semibold ${v.markCls}`}>{v.mark}</span>}
     </div>
   );
 }
 
-/** A BiS stat line, in BiS order. The last one is the unlockable stat. */
-function BisStat({ id, name, missing, unlock }: { id: string; name: string; missing: boolean; unlock: boolean }) {
+/** A BiS line, in BiS order. The last one is the unlockable line. */
+function BisStat({ id, name, skill, missing, unlock }: { id: string; name: string; skill: boolean; missing: boolean; unlock: boolean }) {
   const bg = unlock ? "bg-gradient-to-r from-violet-500/35 via-violet-500/20 to-violet-500/5 ring-1 ring-violet-300/30" : "bg-white/[0.035]";
   return (
     <div data-pair={`soll:${id}`} className={`flex h-9 items-center justify-between gap-1.5 rounded-lg px-2 text-[12px] sm:px-2.5 sm:text-[13px] ${bg}`}>
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ffd54a]/70" />
-        <span className={`truncate font-medium ${unlock ? "text-violet-50" : "text-zinc-100"}`}>{statLabel(name)}</span>
+        {skill && <SkillIcon name={name} size={16} />}
+        <span className={`truncate font-medium ${unlock ? "text-violet-50" : "text-zinc-100"}`}>{skill ? name : statLabel(name)}</span>
       </span>
       <span className={`shrink-0 text-[11px] font-semibold ${missing ? "text-rose-300/80" : "text-[#ffd54a]"}`}>{missing ? "fehlt" : "◆"}</span>
     </div>
@@ -272,9 +229,12 @@ function Arrowlet({ color }: { color: string }) {
   return <svg width="18" height="8" viewBox="0 0 18 8" aria-hidden><path d="M0 4h14" stroke={color} strokeWidth="1.6" /><path d="M12 1l4 3-4 3" fill="none" stroke={color} strokeWidth="1.6" /></svg>;
 }
 
-/** Arrows in the gap between the cards, from an Ist row to a Soll row. Rows at different heights get a curve. */
+/**
+ * Arrows in the gap between the cards, from an Ist line to a Soll line, one smooth curve each with the head
+ * drawn in the same stroke. They grow out of the Ist card one after another; a soft glow follows a little later.
+ */
 function Arrows({ container, links }: { container: RefObject<HTMLDivElement | null>; links: Link[] }) {
-  const [paths, setPaths] = useState<{ key: string; d: string; head: string; color: string }[]>([]);
+  const [paths, setPaths] = useState<{ key: string; d: string; color: string }[]>([]);
   useLayoutEffect(() => {
     const root = container.current;
     if (!root) return;
@@ -286,14 +246,14 @@ function Arrows({ container, links }: { container: RefObject<HTMLDivElement | nu
         const b = root.querySelector<HTMLElement>(`[data-pair="soll:${CSS.escape(l.to)}"]`);
         if (!a || !b) continue;
         const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-        const x1 = ra.right - box.left + 3, x2 = rb.left - box.left - 4;
+        const x1 = ra.right - box.left + 2, x2 = rb.left - box.left - 3;
         const y1 = ra.top + ra.height / 2 - box.top, y2 = rb.top + rb.height / 2 - box.top;
-        const c = (x2 - x1) * 0.55;
-        // the line ends where the arrow head starts, the head points straight right into the BiS row
+        const c = (x2 - x1) * 0.5;
+        const f = (n: number) => n.toFixed(1);
+        // curve to the tip, then the two wings of the head in one continuous stroke (no sub-paths, so the dash grows in one piece)
         out.push({
           key: l.key, color: l.color,
-          d: Math.abs(y2 - y1) < 1 ? `M${x1} ${y1}H${x2 - 1}` : `M${x1} ${y1}C${x1 + c} ${y1} ${x2 - c} ${y2} ${x2 - 1} ${y2}`,
-          head: `M${x2 - 5} ${y2 - 3.5}L${x2} ${y2}L${x2 - 5} ${y2 + 3.5}`,
+          d: `M${f(x1)} ${f(y1)}C${f(x1 + c)} ${f(y1)} ${f(x2 - c)} ${f(y2)} ${f(x2)} ${f(y2)}L${f(x2 - 6)} ${f(y2 - 4)}L${f(x2)} ${f(y2)}L${f(x2 - 6)} ${f(y2 + 4)}`,
         });
       }
       setPaths(out);
@@ -301,15 +261,14 @@ function Arrows({ container, links }: { container: RefObject<HTMLDivElement | nu
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(root);
-    const t = setTimeout(measure, 600); // after the cards have settled
-    return () => { ro.disconnect(); clearTimeout(t); };
+    return () => ro.disconnect();
   }, [container, links]);
   return (
     <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible" aria-hidden>
-      {paths.map((p) => (
-        <g key={p.key} stroke={p.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" style={{ filter: `drop-shadow(0 0 3px ${p.color})` }}>
-          <path d={p.d} />
-          <path d={p.head} />
+      {paths.map((p, i) => (
+        <g key={p.key} stroke={p.color} strokeLinecap="round" strokeLinejoin="round" fill="none" style={{ "--d": `${i * 110}ms` } as React.CSSProperties}>
+          <path d={p.d} pathLength={1} strokeWidth="6" className="arrow-glow" />
+          <path d={p.d} pathLength={1} strokeWidth="1.8" className="arrow-line" />
         </g>
       ))}
     </svg>

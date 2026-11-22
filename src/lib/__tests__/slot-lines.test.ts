@@ -1,34 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { slotLines } from "../slot-lines";
+import { statLinks } from "../slot-lines";
 import { FLORENTINA as florentina } from "../fixtures/florentina";
+import type { Item } from "../types";
 
 const weapon = florentina.gear.find((i) => i.slot === "weapon")!;
+const item = (lines: string[], ideal: string[]): Item =>
+  ({ ...weapon, lines: lines.map((name) => ({ name, value: "1" })), ideal: ideal.map((name) => ({ name, value: "1" })) });
 
-describe("slot lines aligned with BiS", () => {
-  it("shows exactly as many stat lines as the BiS target", () => {
-    const { stats } = slotLines(weapon);
-    expect(stats.length).toBe(weapon.ideal!.filter((l) => !/^\+\d+$/.test(l.value)).length);
-  });
-  it("fills missing BiS stats with wrong current stats and marks them wrong", () => {
-    const { stats } = slotLines(weapon);
-    const missing = stats.filter((p) => p.verdict === "wrong");
-    expect(missing.every((p) => p.ist && p.ist.name !== p.bis!.name)).toBe(true);
-  });
-  it("the last BiS stat must sit on the last line, also on the highest craft", () => {
-    const last = slotLines(weapon).stats.at(-1)!;
-    expect(last.unlock).toBe(true);
-    if (last.ist && last.ist.name === last.bis!.name && last.ist !== weapon.lines.at(-1)) expect(last.verdict).toBe("half");
-  });
-});
-
-import { statLinks } from "../slot-lines";
-describe("stat links (Ist order kept)", () => {
-  it("keeps the current order and marks the unlock line on the wrong place orange", () => {
+describe("stat links (Ist order kept, only the last place matters)", () => {
+  it("keeps the current order and never shows more lines than BiS", () => {
     const r = statLinks(weapon)!;
-    expect(r.ist.map((l) => l.name)).toEqual(weapon.lines.filter((l) => !/^\+\d+$/.test(l.value)).map((l) => l.name));
-    const unlock = r.links.find((l) => l.to === r.bis.length - 1)!;
-    // Multi-hit Chance sits on line 5 of 6 on Florentina's orb
-    expect(unlock.color).toBe("orange");
+    expect(r.ist.length).toBeLessThanOrEqual(r.bis.length);
+    expect(r.ist.map((l) => weapon.lines.indexOf(l))).toEqual([...r.ist.map((l) => weapon.lines.indexOf(l))].sort((a, b) => a - b));
+  });
+  it("marks the last BiS stat orange when it is not on the last place (Florentina's orb)", () => {
+    const r = statLinks(weapon)!;
+    expect(r.links.find((l) => l.to === r.bis.length - 1)!.color).toBe("orange");
     expect(r.links.filter((l) => l.color === "red").every((l) => r.bis[l.to]?.missing)).toBe(true);
+  });
+  it("other BiS stats may sit anywhere except the last place", () => {
+    const r = statLinks(item(["C", "A", "B"], ["A", "B", "C"]))!;
+    expect(r.links.map((l) => l.color)).toEqual(["orange", "green", "orange"]);
+    const ok = statLinks(item(["B", "A", "C"], ["A", "B", "C"]))!;
+    expect(ok.links.map((l) => l.color)).toEqual(["green", "green", "green"]);
+  });
+  it("wrong lines point to missing BiS lines", () => {
+    const r = statLinks(item(["X", "A", "C"], ["A", "B", "C"]))!;
+    expect(r.links[0]).toEqual({ from: 0, to: 1, color: "red" });
   });
 });
