@@ -7,6 +7,7 @@ import { GRADE_HEX_CSS } from "@/lib/grades";
 import { Card, CardArt, Filler, Portrait, SHOW_ITEM_ICONS } from "./Card";
 import { portraitOf } from "../store";
 import { GearCompare } from "../GearCompare";
+import { CraftingView } from "../crafting/CraftingView";
 
 /** Order of the cards: weapon first, then armour, jewellery, the rest and Arcana last. */
 const ORDER: Item["slot"][] = [
@@ -64,6 +65,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
   }, [leaving, tab]);
   const deck = useMemo(() => all.filter((d) => (tab === "arcana") === (d.item.slot === "arcana")), [all, tab]);
   const [open, setOpen] = useState<string>();
+  const [crafting, setCrafting] = useState(false);
   const entry = all.find((d) => d.id === open);
 
   useEffect(() => {
@@ -79,6 +81,8 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
       <h1 className="truncate text-lg font-semibold tracking-tight text-[#f4eed7] sm:text-2xl">{title}</h1>
     </div>
   );
+
+  if (crafting) return <CraftingView char={char} onBack={() => setCrafting(false)} />;
 
   // 3 / slot comparison: slot list left, Ist card, BiS card
   if (entry) {
@@ -126,6 +130,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
           </div>
         </div>
         <div className="relative flex shrink-0 gap-1.5 text-xs">
+          <button onClick={() => setCrafting(true)} className="rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-[#efe6cc] hover:border-[#d9c58f]/45">Crafting</button>
           <button onClick={onRefresh} className="rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-[#efe6cc] hover:border-[#d9c58f]/45">{t("Aktualisieren", "Refresh")}</button>
           <button onClick={onBack} className="rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-[#efe6cc] hover:border-[#d9c58f]/45">{t("Charakter wechseln", "Switch character")}</button>
           <button onClick={onRemove} className="rounded-lg px-2 py-1.5 text-zinc-500 hover:text-zinc-300">{t("Entfernen", "Remove")}</button>
