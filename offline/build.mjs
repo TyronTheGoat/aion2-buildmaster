@@ -61,7 +61,7 @@ for (const dir of ["class-icons"]) {
   }
 }
 console.log(`Eingebettet: ${Object.keys(assets).length} Dateien (${Object.keys(assets).join(", ") || "keine"})`);
-const html = `<!DOCTYPE html><html lang="de" class="h-full antialiased"><head><meta charset="utf-8">
+const html = `<!DOCTYPE html><html lang="en" class="h-full antialiased"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b0c10">
 <title>Aion 2 BuildMaster (offline)</title><link rel="icon" href="data:image/svg+xml,${encodeURIComponent(icon)}">
 <style>${css}</style></head><body class="min-h-full"><div id="root" class="min-h-full"></div>

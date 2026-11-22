@@ -11,6 +11,7 @@ import { GearDeck, deckOf } from "./deck/GearDeck";
 import { Filler, Portrait, SHOW_ITEM_ICONS } from "./deck/Card";
 import { iconFor } from "@/lib/knowledge/item-catalog";
 import { charKey, parseKiskLink, portraitOf, useCharacters, type SavedChar } from "./store";
+import { numberLocale, useLang, useT } from "@/lib/i18n";
 
 function useHashRoute(): [string | undefined, (k?: string) => void] {
   const [route, setRoute] = useState<string>();
@@ -34,7 +35,7 @@ async function fetchLive(c: SavedChar): Promise<Character> {
   const q = new URLSearchParams({ region: c.region, server: c.server, name: c.name });
   const res = await fetch(`/api/character?${q}`);
   const body = await res.json();
-  if (!res.ok) throw new Error(body.error ?? "Laden fehlgeschlagen");
+  if (!res.ok) throw new Error(body.error ?? "Loading failed / Laden fehlgeschlagen");
   return body as Character;
 }
 
@@ -45,12 +46,14 @@ export function BuildMasterApp() {
   const [query, setQuery] = useState("");
   const shown = chars.filter((c) => !query || c.name.toLowerCase().includes(query.trim().toLowerCase()));
   const selected = chars.find((c) => charKey(c) === route);
+  const t = useT();
+  const lang = useLang();
 
   if (route === "katalog") return <ItemCatalog onBack={() => go()} />;
 
   if (route && selected) {
     return <CharacterScreen key={route} saved={selected} onBack={() => go()} upsert={upsert}
-      onRemove={() => { if (confirm(`${selected.name} entfernen?`)) { remove(route); go(); } }} />;
+      onRemove={() => { if (confirm(t(`${selected.name} entfernen?`, `Remove ${selected.name}?`))) { remove(route); go(); } }} />;
   }
 
   return (
@@ -59,14 +62,14 @@ export function BuildMasterApp() {
       {/* title, search, new character */}
       <div className="flex flex-col gap-3 pt-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-[#f4eed7]">Charakterauswahl</h1>
-          <p className="mt-1 text-sm text-[#efe6cc]/50">Charakter öffnen oder neuen Charakter anlegen</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-[#f4eed7]">{t("Charakterauswahl", "Character selection")}</h1>
+          <p className="mt-1 text-sm text-[#efe6cc]/50">{t("Charakter öffnen oder neuen Charakter anlegen", "Open a character or add a new one")}</p>
         </div>
         <div className="flex gap-2 md:w-[520px]">
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Suche: Charaktername …" aria-label="Charakter suchen"
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Suche: Charaktername …", "Search: character name …")} aria-label={t("Charakter suchen", "Search characters")}
             className="min-w-0 flex-1 rounded-xl border border-[#d9c58f]/20 bg-white/[0.03] px-3.5 py-2.5 text-base text-[#f4eed7] outline-none placeholder:text-zinc-500 focus:border-[#d9c58f]/50" />
           <button onClick={() => setAdding(true)}
-            className="shrink-0 rounded-xl border border-[#d9c58f]/30 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-[#efe6cc] hover:border-[#d9c58f]/60">+ Neuer Charakter</button>
+            className="shrink-0 rounded-xl border border-[#d9c58f]/30 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-[#efe6cc] hover:border-[#d9c58f]/60">{t("+ Neuer Charakter", "+ New character")}</button>
         </div>
       </div>
 
@@ -75,7 +78,7 @@ export function BuildMasterApp() {
         {shown.map((c) => {
           const s = c.snapshot;
           const grade = s?.gearGrade ?? "?";
-          const preview = s ? deckOf(s).slice(0, 6) : [];
+          const preview = s ? deckOf(s, lang).slice(0, 6) : [];
           return (
             <li key={charKey(c)}>
               <button onClick={() => go(charKey(c))}
@@ -90,12 +93,12 @@ export function BuildMasterApp() {
                       {[s?.className, s?.race, `${c.server} · ${c.region.toUpperCase()}`].filter(Boolean).join(" · ")}
                     </div>
                     <div className="mt-0.5 text-xs text-[#99e4e2]/60">
-                      {[s?.combatPower && `CP ${s.combatPower.toLocaleString("de-DE")}`, s?.gearGrade && `Gear-Rang ${s.gearGrade}`].filter(Boolean).join(" · ") || "Noch keine Daten"}
+                      {[s?.combatPower && `CP ${s.combatPower.toLocaleString(numberLocale(lang))}`, s?.gearGrade && `${t("Gear-Rang", "Gear rank")} ${s.gearGrade}`].filter(Boolean).join(" · ") || t("Noch keine Daten", "No data yet")}
                     </div>
                   </div>
                 </div>
                 <div className="relative border-t border-white/[0.07] pt-3">
-                  <div className="mb-2 text-[10px] uppercase tracking-[0.2em] text-zinc-500">Gear-Schnellübersicht</div>
+                  <div className="mb-2 text-[10px] uppercase tracking-[0.2em] text-zinc-500">{t("Gear-Schnellübersicht", "Gear at a glance")}</div>
                   <div className="grid grid-cols-6 gap-1.5">
                     {(preview.length ? preview : Array.from({ length: 6 }, () => undefined)).map((d, i) => {
                       const icon = d && SHOW_ITEM_ICONS ? iconFor(d.item) : undefined;
@@ -116,15 +119,15 @@ export function BuildMasterApp() {
           <button onClick={() => setAdding(true)}
             className="flex h-full min-h-[200px] w-full flex-col items-center justify-center gap-2 rounded-[20px] border border-dashed border-[#d9c58f]/25 bg-white/[0.02] p-6 text-center hover:border-[#d9c58f]/50">
             <span className="text-3xl font-light text-[#d9c58f]">+</span>
-            <span className="font-semibold text-[#f4eed7]">Neuen Charakter hinzufügen</span>
-            <span className="text-xs text-zinc-500">kisk.app-Link eingeben oder Seiteninhalt einfügen</span>
+            <span className="font-semibold text-[#f4eed7]">{t("Neuen Charakter hinzufügen", "Add a new character")}</span>
+            <span className="text-xs text-zinc-500">{t("kisk.app-Link eingeben oder Seiteninhalt einfügen", "Enter a kisk.app link or paste the page content")}</span>
           </button>
         </li>
       </ul>
-      {query && shown.length === 0 && <p className="text-sm text-zinc-400">Kein Charakter mit „{query}“ gefunden.</p>}
+      {query && shown.length === 0 && <p className="text-sm text-zinc-400">{t(`Kein Charakter mit „${query}“ gefunden.`, `No character named “${query}” found.`)}</p>}
 
       <button onClick={() => go("katalog")} className="text-sm text-[#efe6cc]/50 underline-offset-4 hover:text-[#efe6cc]/80 hover:underline">
-        Item-Katalog öffnen
+        {t("Item-Katalog öffnen", "Open item catalog")}
       </button>
 
       <AddCharacterSheet open={adding} onClose={() => setAdding(false)}
@@ -137,6 +140,7 @@ function AddCharacterSheet({ open, onClose, onAdd }: { open: boolean; onClose: (
   const [link, setLink] = useState("");
   const [text, setText] = useState("");
   const parsed = parseKiskLink(link);
+  const t = useT();
   const input = "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-base outline-none focus:border-amber-400";
 
   function submit() {
@@ -149,19 +153,19 @@ function AddCharacterSheet({ open, onClose, onAdd }: { open: boolean; onClose: (
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title={<h2 className="text-lg font-semibold">Charakter hinzufügen</h2>}>
+    <Sheet open={open} onClose={onClose} title={<h2 className="text-lg font-semibold">{t("Charakter hinzufügen", "Add character")}</h2>}>
       <div className="space-y-3">
-        <label className="block text-sm text-zinc-400">kisk.app-Link
+        <label className="block text-sm text-zinc-400">{t("kisk.app-Link", "kisk.app link")}
           <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://kisk.app/c/eu/odar/Name" className={`${input} mt-1`} autoCapitalize="none" inputMode="url" />
         </label>
-        {link && !parsed && <p className="text-xs text-red-300">Das sieht nicht wie ein kisk.app-Charakterlink aus.</p>}
+        {link && !parsed && <p className="text-xs text-red-300">{t("Das sieht nicht wie ein kisk.app-Charakterlink aus.", "That does not look like a kisk.app character link.")}</p>}
         {parsed && <p className="text-xs text-emerald-300">{parsed.name} · {parsed.server} · {parsed.region.toUpperCase()}</p>}
         <details className="rounded-lg border border-white/10 p-3 text-sm" open={isOffline()}>
-          <summary className="cursor-pointer text-zinc-300">Seiteninhalt einfügen {isOffline() ? "(nötig in der Offline-Version)" : "(optional)"}</summary>
-          <p className="mt-2 text-xs text-zinc-500">Öffne die Gear-Seite auf kisk.app, markiere alles, kopiere es und füge es hier ein.</p>
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} className={`${input} mt-2`} placeholder="Seiteninhalt…" />
+          <summary className="cursor-pointer text-zinc-300">{t("Seiteninhalt einfügen", "Paste page content")} {isOffline() ? t("(nötig in der Offline-Version)", "(required in the offline version)") : "(optional)"}</summary>
+          <p className="mt-2 text-xs text-zinc-500">{t("Öffne die Gear-Seite auf kisk.app, markiere alles, kopiere es und füge es hier ein.", "Open the gear page on kisk.app, select everything, copy it and paste it here.")}</p>
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} className={`${input} mt-2`} placeholder={t("Seiteninhalt…", "Page content…")} />
         </details>
-        <button onClick={submit} disabled={!parsed} className="w-full rounded-lg bg-amber-400 py-3 font-semibold text-black disabled:opacity-40">Hinzufügen</button>
+        <button onClick={submit} disabled={!parsed} className="w-full rounded-lg bg-amber-400 py-3 font-semibold text-black disabled:opacity-40">{t("Hinzufügen", "Add")}</button>
       </div>
     </Sheet>
   );
@@ -175,6 +179,8 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
   const [pasting, setPasting] = useState(false);
   const [text, setText] = useState("");
   const [view, setView] = useState<"deck" | "list">("deck");
+  const t = useT();
+  const lang = useLang();
 
   const refresh = useCallback(async () => {
     if (isOffline()) { setPasting(true); return; }
@@ -184,10 +190,10 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
       upsert({ ...saved, snapshot: { ...char, portrait: char.portrait ?? portraitOf(saved) } });
       setStatus("idle");
     } catch (e) {
-      setError(e instanceof TypeError ? "kisk.app gerade nicht erreichbar" : e instanceof Error ? e.message : String(e));
+      setError(e instanceof TypeError ? t("kisk.app gerade nicht erreichbar", "kisk.app is not reachable right now") : e instanceof Error ? e.message : String(e));
       setStatus("error");
     }
-  }, [saved, upsert]);
+  }, [saved, upsert, t]);
 
   // Load live data once when opened (online only) if we have nothing or only an old snapshot.
   useEffect(() => {
@@ -208,28 +214,28 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
 
   const input = "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-base outline-none focus:border-amber-400";
   const pasteSheet = (
-    <Sheet open={pasting} onClose={() => setPasting(false)} title={<h2 className="text-lg font-semibold">Neuen Stand einfügen</h2>}>
+    <Sheet open={pasting} onClose={() => setPasting(false)} title={<h2 className="text-lg font-semibold">{t("Neuen Stand einfügen", "Paste a new snapshot")}</h2>}>
       <p className="mb-2 text-sm text-zinc-400">
-        Öffne <a className="underline" target="_blank" rel="noreferrer" href={`https://kisk.app/c/${saved.region}/${saved.server}/${encodeURIComponent(saved.name)}/gear`}>{saved.name} auf kisk.app</a>,
-        markiere alles, kopiere es und füge es hier ein.
+        {t("Öffne", "Open")} <a className="underline" target="_blank" rel="noreferrer" href={`https://kisk.app/c/${saved.region}/${saved.server}/${encodeURIComponent(saved.name)}/gear`}>{saved.name} {t("auf", "on")} kisk.app</a>,
+        {" "}{t("markiere alles, kopiere es und füge es hier ein.", "select everything, copy it and paste it here.")}
       </p>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={8} className={input} />
-      <button onClick={applyPaste} disabled={!text.trim()} className="mt-3 w-full rounded-lg bg-amber-400 py-3 font-semibold text-black disabled:opacity-40">Übernehmen</button>
+      <button onClick={applyPaste} disabled={!text.trim()} className="mt-3 w-full rounded-lg bg-amber-400 py-3 font-semibold text-black disabled:opacity-40">{t("Übernehmen", "Apply")}</button>
     </Sheet>
   );
 
   if (!saved.snapshot) {
     return (
       <div className="space-y-4">
-        <button onClick={onBack} className="text-sm text-zinc-400">‹ Charaktere</button>
+        <button onClick={onBack} className="text-sm text-zinc-400">‹ {t("Charaktere", "Characters")}</button>
         <div className="rounded-2xl border border-white/10 p-5">
           <h1 className="text-xl font-bold">{saved.name}</h1>
-          {status === "loading" && <p className="mt-2 animate-pulse text-sm text-zinc-400">Lade Build von kisk.app…</p>}
+          {status === "loading" && <p className="mt-2 animate-pulse text-sm text-zinc-400">{t("Lade Build von kisk.app…", "Loading build from kisk.app…")}</p>}
           {status !== "loading" && (
             <>
-              <p className="mt-2 text-sm text-zinc-400">{error ?? (isOffline() ? "In der Offline-Version kann ich kisk.app nicht direkt abrufen." : "Noch keine Daten.")}</p>
-              <button onClick={() => setPasting(true)} className="mt-4 w-full rounded-lg bg-amber-400 py-3 font-semibold text-black">Seiteninhalt einfügen</button>
-              <button onClick={onRemove} className="mt-2 w-full rounded-lg bg-white/5 py-3 text-sm text-zinc-300">Entfernen</button>
+              <p className="mt-2 text-sm text-zinc-400">{error ?? (isOffline() ? t("In der Offline-Version kann ich kisk.app nicht direkt abrufen.", "The offline version cannot load kisk.app directly.") : t("Noch keine Daten.", "No data yet."))}</p>
+              <button onClick={() => setPasting(true)} className="mt-4 w-full rounded-lg bg-amber-400 py-3 font-semibold text-black">{t("Seiteninhalt einfügen", "Paste page content")}</button>
+              <button onClick={onRemove} className="mt-2 w-full rounded-lg bg-white/5 py-3 text-sm text-zinc-300">{t("Entfernen", "Remove")}</button>
             </>
           )}
         </div>
@@ -240,13 +246,13 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
 
   const offlineNote = isOffline() && saved.snapshot ? (
     <p className="rounded-lg bg-white/[0.03] px-3 py-2 text-xs text-zinc-400">
-      Offline-Version: Stand vom {new Date(saved.snapshot.source.fetchedAt).toLocaleString("de-DE")}. Neuen Stand über „Aktualisieren“ einfügen.
+      {t("Offline-Version: Stand vom", "Offline version: data from")} {new Date(saved.snapshot.source.fetchedAt).toLocaleString(numberLocale(lang))}. {t("Neuen Stand über „Aktualisieren“ einfügen.", "Paste a new snapshot via “Refresh”.")}
     </p>
   ) : null;
   const statusNote = status === "loading"
-    ? <p className="animate-pulse text-center text-xs text-zinc-400">Aktualisiere von kisk.app…</p>
+    ? <p className="animate-pulse text-center text-xs text-zinc-400">{t("Aktualisiere von kisk.app…", "Refreshing from kisk.app…")}</p>
     : status === "error"
-      ? <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">Aktualisieren hat nicht geklappt ({error}). Du siehst den letzten Stand.</p>
+      ? <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">{t("Aktualisieren hat nicht geklappt", "Refresh failed")} ({error}). {t("Du siehst den letzten Stand.", "You are seeing the last snapshot.")}</p>
       : null;
 
   if (view === "deck") {

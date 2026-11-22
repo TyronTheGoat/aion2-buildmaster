@@ -88,7 +88,7 @@ export function Portrait({ src, name, className = "" }: { src?: string; name: st
   if (!src || failed === src) return <Filler className={className} />;
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt={`Profilbild von ${name}`} referrerPolicy="no-referrer" onError={() => setFailed(src)}
+    <img src={src} alt={name} referrerPolicy="no-referrer" onError={() => setFailed(src)}
       className={`shrink-0 rounded-xl object-cover ring-1 ring-[#d9c58f]/30 ${className}`} />
   );
 }

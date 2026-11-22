@@ -5,6 +5,14 @@ import { CLASSES, fitsClass } from "@/lib/slot-map";
 import { Sheet } from "./ui";
 import { Card, CardArt } from "./deck/Card";
 import { ALL_ITEMS, localIcon, type CatalogItem } from "@/lib/knowledge/item-catalog";
+import { useLang, useT, type Lang } from "@/lib/i18n";
+
+/** English display names for the German catalog values (the stored data stays unchanged). */
+const EN: Record<string, string> = {
+  Alle: "All", Schmuck: "Accessories", Waffen: "Weapons", Rüstung: "Armor", Beide: "Both", Asmodier: "Asmodians",
+  "EU / Global bestätigt": "Confirmed for EU / Global", "Nur Taiwan bestätigt": "Confirmed for Taiwan only", "EU / Global unbestätigt": "Not confirmed for EU / Global",
+};
+const show = (v: string, lang: Lang) => (lang === "en" ? EN[v] ?? v.replace(/\(Stufe (\d+)\)/, "(Level $1)") : v);
 
 const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))].sort((a, b) => a.localeCompare(b, "de"));
 function optionsOf(list: CatalogItem[]) {
@@ -27,12 +35,13 @@ const BADGE: Record<RegionStatus, string> = {
 };
 
 function Chips({ value, options, onChange }: { value: string; options: readonly string[]; onChange: (v: string) => void }) {
+  const lang = useLang();
   if (options.length < 2) return null;
   return (
     <div className="flex gap-1.5 overflow-x-auto pb-1">
       {["Alle", ...options].map((o) => (
         <button key={o} onClick={() => onChange(o)}
-          className={`shrink-0 rounded-full px-3 py-1 text-xs ${value === o ? "bg-amber-400 text-black" : "bg-white/5 text-zinc-300"}`}>{o}</button>
+          className={`shrink-0 rounded-full px-3 py-1 text-xs ${value === o ? "bg-amber-400 text-black" : "bg-white/5 text-zinc-300"}`}>{show(o, lang)}</button>
       ))}
     </div>
   );
@@ -52,6 +61,8 @@ export function ItemCatalog({ onBack }: { onBack: () => void }) {
   const [shown, setShown] = useState<CatalogItem>();
   const [limit, setLimit] = useState(PAGE);
   const opts = internal ? ALL_OPTS : PUBLIC_OPTS;
+  const t = useT();
+  const lang = useLang();
 
   const items = useMemo(() => (internal ? ALL_ITEMS : PUBLIC_ITEMS).filter((i) =>
     (source === "Alle" || i.source.startsWith(source)) &&
@@ -68,18 +79,18 @@ export function ItemCatalog({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="space-y-4">
-      <button onClick={onBack} className="text-sm text-zinc-400 hover:text-white">‹ Charaktere</button>
+      <button onClick={onBack} className="text-sm text-zinc-400 hover:text-white">‹ {t("Charaktere", "Characters")}</button>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Item-Katalog</h1>
-        <p className="text-sm text-zinc-400">{items.length} Items · {withIcon} mit Originalbild · {internal ? "inkl. interner Daten" : REGION_LABEL.eu}</p>
-        <p className="text-[11px] text-zinc-500">{internal ? "Intern" : "Intern ausgeblendet"}: {hidden.tw} nur Taiwan · {hidden.unclear} {REGION_LABEL.unclear}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("Item-Katalog", "Item catalog")}</h1>
+        <p className="text-sm text-zinc-400">{items.length} Items · {withIcon} {t("mit Originalbild", "with original icon")} · {internal ? t("inkl. interner Daten", "incl. internal data") : show(REGION_LABEL.eu, lang)}</p>
+        <p className="text-[11px] text-zinc-500">{internal ? t("Intern", "Internal") : t("Intern ausgeblendet", "Hidden internally")}: {hidden.tw} {t("nur Taiwan", "Taiwan only")} · {hidden.unclear} {show(REGION_LABEL.unclear, lang)}</p>
         <label className="mt-2 flex items-center gap-2 text-xs text-zinc-300">
           <input type="checkbox" checked={internal} onChange={(e) => { setInternal(e.target.checked); setLimit(PAGE); }} className="accent-amber-400" />
-          Interne Daten zeigen (nur Taiwan / unbestätigt, nicht für die Planung)
+          {t("Interne Daten zeigen (nur Taiwan / unbestätigt, nicht für die Planung)", "Show internal data (Taiwan only / unconfirmed, not used for planning)")}
         </label>
       </div>
       <div className="space-y-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Item suchen…"
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Item suchen…", "Search items…")}
           className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-base outline-none focus:border-amber-400" />
         <Chips value={cat} options={opts.categories} onChange={(v) => { setCat(v); setSlot("Alle"); }} />
         <Chips value={slot} options={cat === "Alle" ? opts.slots : uniq((internal ? ALL_ITEMS : PUBLIC_ITEMS).filter((i) => i.category === cat).map((i) => i.slot))} onChange={setSlot} />
@@ -96,7 +107,7 @@ export function ItemCatalog({ onBack }: { onBack: () => void }) {
               <div className="relative mt-2 line-clamp-2 min-h-[2.5em] text-[12px] font-medium leading-tight text-[#f4eed7]">{i.name}</div>
               <div className="relative mt-0.5 flex items-center gap-1.5 text-[10px] text-zinc-500">
                 <span className="truncate">{[i.slot, i.level && `IL ${i.level}`].filter(Boolean).join(" · ")}</span>
-                {internal && <span className={`shrink-0 rounded px-1.5 py-px text-[9px] ${BADGE[regionStatus(i)]}`}>{regionStatus(i) === "eu" ? "EU" : regionStatus(i) === "tw" ? "nur TW" : "unbestätigt"}</span>}
+                {internal && <span className={`shrink-0 rounded px-1.5 py-px text-[9px] ${BADGE[regionStatus(i)]}`}>{regionStatus(i) === "eu" ? "EU" : regionStatus(i) === "tw" ? t("nur TW", "TW only") : t("unbestätigt", "unconfirmed")}</span>}
               </div>
             </Card>
           </li>
@@ -108,26 +119,26 @@ export function ItemCatalog({ onBack }: { onBack: () => void }) {
             <div className="mx-auto w-48"><CardArt src={localIcon(shown.icon)} alt={shown.name} grade={shown.crafted ? "BiS" : "?"} /></div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
               {([
-                ["Slot", shown.slot], ["Kategorie", shown.category], ["Item-Level", shown.level], ["Seltenheit", shown.rarity],
-                ["Quelle", shown.source], ["Fraktion", shown.faction !== "Beide" ? shown.faction : ""], ["Item-ID", shown.itemId],
-                ["Region", REGION_LABEL[regionStatus(shown)]],
+                ["Slot", shown.slot], [t("Kategorie", "Category"), show(shown.category, lang)], ["Item-Level", shown.level], [t("Seltenheit", "Rarity"), shown.rarity],
+                [t("Quelle", "Source"), show(shown.source, lang)], [t("Fraktion", "Faction"), shown.faction !== "Beide" ? show(shown.faction ?? "", lang) : ""], ["Item-ID", shown.itemId],
+                ["Region", show(REGION_LABEL[regionStatus(shown)], lang)],
               ] as [string, string | number | null][]).filter(([, v]) => v).map(([k, v]) => (
                 <div key={k} className="contents"><dt className="text-zinc-500">{k}</dt><dd className="text-zinc-200">{v}</dd></div>
               ))}
             </dl>
             {shown.regions.length > 0 && (
-              <div className="text-[11px] text-zinc-500">Nachweis: {shown.regions.map((r) => r.source).join(" · ")}</div>
+              <div className="text-[11px] text-zinc-500">{t("Nachweis", "Evidence")}: {shown.regions.map((r) => r.source).join(" · ")}</div>
             )}
-            {!shown.icon && <p className="text-xs text-zinc-500">Für dieses Item liegt noch kein Original-Icon vor.</p>}
+            {!shown.icon && <p className="text-xs text-zinc-500">{t("Für dieses Item liegt noch kein Original-Icon vor.", "There is no original icon for this item yet.")}</p>}
           </div>
         )}
       </Sheet>
       {items.length > limit && (
         <button onClick={() => setLimit((l) => l + PAGE * 2)} className="w-full rounded-lg bg-white/5 py-2.5 text-sm text-zinc-300">
-          Weitere anzeigen ({items.length - limit})
+          {t("Weitere anzeigen", "Show more")} ({items.length - limit})
         </button>
       )}
-      {items.length === 0 && <p className="text-sm text-zinc-400">Keine bestätigten EU / Global Items für diese Filter.</p>}
+      {items.length === 0 && <p className="text-sm text-zinc-400">{t("Keine bestätigten EU / Global Items für diese Filter.", "No confirmed EU / Global items for these filters.")}</p>}
     </div>
   );
 }

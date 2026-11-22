@@ -62,7 +62,7 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
-      <button className="absolute inset-0 bg-black/70" aria-label="Schließen" onClick={onClose} />
+      <button className="absolute inset-0 bg-black/70" aria-label="Close / Schließen" onClick={onClose} />
       <div className="relative max-h-[88vh] w-full overflow-y-auto rounded-t-2xl border border-white/10 bg-[#13131c] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:max-w-lg sm:rounded-2xl">
         <div className="mx-auto mb-3 h-1 w-10 rounded bg-white/20 sm:hidden" />
         <div className="mb-3 flex items-start justify-between gap-3">

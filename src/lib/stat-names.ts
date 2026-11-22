@@ -7,4 +7,5 @@ const DE: Record<string, string> = {
   "Multi-hit Chance": "Mehrfachtreffer",
   "Critical Attack": "Krit.-Angriffskraft",
 };
-export const statLabel = (name: string) => DE[name] ?? name;
+/** In English the name stays as kisk.app delivers it (the game's English name). */
+export const statLabel = (name: string, lang: "en" | "de" = "de") => (lang === "en" ? name : DE[name] ?? name);
