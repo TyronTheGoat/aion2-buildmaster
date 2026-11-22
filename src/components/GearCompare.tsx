@@ -9,6 +9,7 @@ import { CATALOG_SLOTS, fitsClass } from "@/lib/slot-map";
 import { GradeBadge } from "./GradeBadge";
 import { ItemIcon, SkillIcon, Sheet, isSkillLine } from "./ui";
 import { usePlanned } from "./plan-store";
+import { craftedBis } from "@/lib/crafted-bis";
 import { statLabel } from "@/lib/stat-names";
 
 type Row = { name: string; have?: StatLine; target?: string; state: MatchState | "extra" };
@@ -43,6 +44,9 @@ export function GearCompare({ char, item, slotId, label, wide, onClose }: {
   // a stored choice that is not (or no longer) released for EU / Global is not shown
   const target = plannedItem && regionStatus(plannedItem) === "eu" ? plannedItem : undefined;
   const [picking, setPicking] = useState(false);
+  // default target: the highest crafted piece in Global for this slot (class weapon, faction line)
+  const bisCraft = craftedBis(char, item.slot);
+  const wearsBisCraft = !!bisCraft && bisCraft.name.toLowerCase() === item.name.toLowerCase();
 
   const cmp = compareIdeal(item);
   const rows = rowsFor(item);
@@ -80,6 +84,10 @@ export function GearCompare({ char, item, slotId, label, wide, onClose }: {
           {target ? (
             <ItemCell icon={localIcon(target.icon)} name={target.name} meta={[target.source, target.rarity].filter(Boolean).join(" · ")}
               action={<button onClick={() => setPicking(true)} className="text-[11px] text-amber-200/80 underline-offset-2 hover:underline">ändern</button>} />
+          ) : bisCraft ? (
+            <ItemCell icon={localIcon(bisCraft.icon)} name={bisCraft.name} grade="BiS"
+              meta={wearsBisCraft ? "Schon BiS · höchstes Crafting" : `Höchstes Crafting · IL ${bisCraft.level}`}
+              action={<button onClick={() => setPicking(true)} className="text-[11px] text-amber-200/80 underline-offset-2 hover:underline">anderes Ziel</button>} />
           ) : isBis ? (
             <ItemCell icon={iconFor(item)} name={item.name} grade="BiS" enhance={item.enhance} meta="Schon BiS"
               action={<button onClick={() => setPicking(true)} className="text-[11px] text-amber-200/80 underline-offset-2 hover:underline">anderes Ziel</button>} />

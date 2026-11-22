@@ -134,10 +134,35 @@ for (const [name, file] of Object.entries(OFFICIAL_ICONS)) {
   if (!it.icon) { it.icon = CDN + file; it.iconSource = "kisk.app (NCSOFT CDN)"; }
 }
 
+// 5) highest crafted gear in Global (Splendent Wise / Ebony Dragon Lord, IL 102): EU / Global evidence by name.
+//    Each name belongs to two TW item IDs, so the evidence stays on a name entry; the icon is taken only
+//    when every ID of that name carries the same original icon.
+const crafted = read("data/crafted-bis.json");
+if (crafted) {
+  for (const [piece, slot] of Object.entries(crafted.slots)) {
+    for (const line of ["Wise", "Ebony"]) {
+      const name = `Splendent ${line} Dragon Lord ${piece}`;
+      const ids = [...merged.values()].filter((m) => m.itemId && norm(m.name) === norm(name));
+      const icons = [...new Set(ids.map((m) => m.icon).filter(Boolean))];
+      const key = `name:${norm(name)}`;
+      const prev = merged.get(key) ?? byName.get(norm(name));
+      const it = prev && !prev.itemId ? prev : { key, name, regions: [] };
+      Object.assign(it, {
+        key: it.key ?? key, slot: it.slot || slot, category: it.category || SLOT_CATEGORY[slot] || "",
+        source: `Crafted Gear (Stufe ${crafted.level})`, level: crafted.level, rarity: crafted.rarity,
+        faction: line === "Wise" ? "Elyos" : "Asmodier", crafted: true,
+      });
+      if (!it.icon && icons.length === 1) { it.icon = icons[0]; it.iconSource = `NCSOFT (Original-Icon, gleich für IDs ${ids.map((m) => m.itemId).join(", ")})`; }
+      for (const ev of crafted.evidence) if (!it.regions.some((e) => e.source === ev.source)) it.regions.push(ev);
+      merged.set(it.key, it);
+    }
+  }
+}
+
 const out = [...merged.values()].map((i) => ({
   key: i.key, name: i.name, itemId: i.itemId ?? "", source: i.source ?? "", category: i.category ?? "", slot: i.slot ?? "",
   level: i.level ?? null, rarity: i.rarity ?? "", faction: i.faction ?? "Beide", icon: i.icon ?? "", iconSource: i.iconSource ?? "",
-  itemPage: i.itemPage ?? "", regions: i.regions,
+  itemPage: i.itemPage ?? "", regions: i.regions, ...(i.crafted ? { crafted: true } : {}),
 }));
 writeFileSync(path.join(root, "src/lib/knowledge/item-catalog.json"), JSON.stringify(out));
 // original icon file name → downloaded local copy (only names/hashes, no images: the icons stay git-ignored)

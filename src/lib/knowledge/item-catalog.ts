@@ -26,6 +26,8 @@ export interface CatalogItem {
   iconSource: string;
   itemPage: string;
   regions: RegionEvidence[];
+  /** highest crafted tier in Global (best in slot) */
+  crafted?: boolean;
 }
 
 /** Every item, including internal Taiwan-only and unclear ones. Use the region helpers for public views. */
