@@ -4,35 +4,29 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
-// Inline local original icons (public/item-icons) so the offline file shows them without a server.
-const inlineIcons = {
-  name: "inline-item-icons",
-  setup(b) {
-    b.onLoad({ filter: /item-catalog\.json$/ }, (args) => {
-      const items = JSON.parse(readFileSync(args.path, "utf8"));
-      let iconFiles = {};
-      try { iconFiles = JSON.parse(readFileSync(path.join(root, "data/icon-files.json"), "utf8")); } catch { /* no download imported */ }
-      const cache = new Map();
-      let inlined = 0;
-      for (const it of items) {
-        // only the released EU / Global selection is visible, so only those icons are embedded (keeps the file small)
-        const visible = it.regions?.some((r) => r.region === "EU");
-        const local = it.icon?.startsWith("/item-icons/") ? it.icon : iconFiles[it.icon?.split("/").pop()];
-        if (!local) continue;
-        if (!visible) { if (it.icon.startsWith("/item-icons/")) it.icon = ""; continue; }
-        const file = path.join(root, "public", decodeURIComponent(local));
-        try {
-          if (!cache.has(file)) cache.set(file, `data:image/${path.extname(file).slice(1).replace("jpg", "jpeg")};base64,${readFileSync(file).toString("base64")}`);
-          it.icon = cache.get(file); inlined++;
-        } catch { /* keep the original URL */ }
-      }
-      console.log(`Icons eingebettet: ${inlined} Items, ${cache.size} Dateien`);
-      return { contents: JSON.stringify(items), loader: "json" };
-    });
-  },
-};
+// Original icons: every downloaded icon (public/item-icons, see scripts/import-icons.mjs) is embedded once,
+// shrunk to 96 px WebP, under its original NCSOFT file name and its local file name. The app resolves any
+// icon URL (equipped gear from kisk.app, catalog, BiS) by file name, so icons show without network.
+import sharp from "sharp";
+let iconFiles = {};
+try { iconFiles = JSON.parse(readFileSync(path.join(root, "data/icon-files.json"), "utf8")); } catch { /* no download imported */ }
+const shrunk = new Map();
+const icons = {};
+async function shrink(local) {
+  if (!shrunk.has(local)) {
+    try {
+      const buf = await sharp(path.join(root, "public", local)).resize(96, 96, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } }).webp({ quality: 82 }).toBuffer();
+      shrunk.set(local, `data:image/webp;base64,${buf.toString("base64")}`);
+    } catch { shrunk.set(local, ""); }
+  }
+  return shrunk.get(local);
+}
+for (const [name, local] of Object.entries(iconFiles)) {
+  const data = await shrink(local);
+  if (data) { icons[name] = data; icons[local.split("/").pop()] = data; }
+}
+console.log(`Original-Icons eingebettet: ${shrunk.size} Dateien, ${Object.keys(iconFiles).length} Namen`);
 const js = await build({
-  plugins: [inlineIcons],
   entryPoints: [path.join(root, "offline/main.tsx")],
   bundle: true, minify: true, write: false, format: "iife", jsx: "automatic",
   alias: { "@": path.join(root, "src") },
@@ -59,7 +53,7 @@ const html = `<!DOCTYPE html><html lang="de" class="h-full antialiased"><head><m
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#03070f">
 <title>Aion 2 BuildMaster (offline)</title><link rel="icon" href="data:image/svg+xml,${encodeURIComponent(icon)}">
 <style>${css}</style></head><body class="min-h-full"><div id="root" class="min-h-full"></div>
-<script>window.__BM_ASSETS__=${JSON.stringify(assets)}</script>
+<script>window.__BM_ASSETS__=${JSON.stringify(assets)};window.__BM_ICONS__=${JSON.stringify(icons)}</script>
 <script>${js.outputFiles[0].text.replace(/<\/script/g, "<\\/script")}</script></body></html>`;
 mkdirSync(path.join(root, "dist"), { recursive: true });
 writeFileSync(path.join(root, "dist/aion2-buildmaster-offline.html"), html);

@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import type { Character, Item, StatLine } from "@/lib/types";
 import { compareIdeal, toNum, type MatchState } from "@/lib/compare";
 import { buildPlan } from "@/lib/advisor";
-import { iconFor, type CatalogItem, ALL_ITEMS } from "@/lib/knowledge/item-catalog";
+import { iconFor, localIcon, type CatalogItem, ALL_ITEMS } from "@/lib/knowledge/item-catalog";
 import { PUBLIC_ITEMS, REGION_LABEL, regionStatus } from "@/lib/region";
 import { CATALOG_SLOTS, fitsClass } from "@/lib/slot-map";
 import { GradeBadge } from "./GradeBadge";
@@ -85,7 +85,7 @@ export function GearCompare({ char, item, slotId, label, wide, onClose }: {
         <div className="grid grid-cols-2 gap-3">
           <ItemCell icon={iconFor(item)} name={item.name} grade={item.grade} score={item.score} enhance={item.enhance} />
           {target ? (
-            <ItemCell icon={target.icon || undefined} name={target.name} meta={[target.source, target.rarity].filter(Boolean).join(" · ")}
+            <ItemCell icon={localIcon(target.icon)} name={target.name} meta={[target.source, target.rarity].filter(Boolean).join(" · ")}
               action={<button onClick={() => setPicking(true)} className="text-[11px] text-amber-200/80 underline-offset-2 hover:underline">ändern</button>} />
           ) : isBis ? (
             <ItemCell icon={iconFor(item)} name={item.name} grade="BiS" enhance={item.enhance} meta="Schon BiS"
@@ -243,7 +243,7 @@ function ItemPicker({ open, onClose, slot, className, current, onPick }: {
           <li key={i.key}>
             <button onClick={() => onPick(i.key)}
               className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left hover:bg-white/[0.06] ${current === i.key ? "border-amber-300/50 bg-amber-300/[0.06]" : "border-white/10"}`}>
-              <ItemIcon src={i.icon || undefined} name={i.name} size={36} />
+              <ItemIcon src={localIcon(i.icon)} name={i.name} size={36} />
               <span className="min-w-0">
                 <span className="block truncate text-sm font-medium">{i.name}</span>
                 <span className="block truncate text-[11px] text-zinc-500">{[i.source, i.slot, i.level && `Lv ${i.level}`, i.rarity].filter(Boolean).join(" · ")}</span>
