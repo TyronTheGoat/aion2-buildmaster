@@ -88,7 +88,8 @@ async function load(g: Gender): Promise<ModelBody | null> {
   // a skinned mesh stays in its bind space (the skeleton places it)
   if (!skinned) geo.applyMatrix4(mesh.matrixWorld);
   const mat = mesh.material as THREE.MeshStandardMaterial;
-  const texture = mat.map ?? null;
+  // rigged models are shown untextured so both genders share the same surface-lit hologram look
+  const texture = skinned ? null : mat.map ?? null;
   // limb joints of a rig come from its bones, so gear rotates around the same pivots as the mesh
   let pins: Record<string, V> | undefined;
   if (skinned) {
