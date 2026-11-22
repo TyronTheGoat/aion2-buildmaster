@@ -16,7 +16,9 @@ export interface SavedChar {
 
 const KEY = "bm:chars";
 const SEEDED = "bm:seeded";
-const SEED_VERSION = "2";
+const SEED_VERSION = "3";
+/** fetchedAt of the short version-2 snapshots (no stat lines), replaced by the full ones in version 3 */
+const SHORT_SNAPSHOT = "2026-11-22T13:50:00Z";
 /** Gender per character, kept separately so it stays even if the character is removed and added again */
 const GENDER = "bm:gender";
 const listeners = new Set<() => void>();
@@ -37,9 +39,14 @@ function read(): SavedChar[] {
   if (typeof window === "undefined") return cache;
   const seeded = localStorage.getItem(SEEDED);
   if (seeded !== SEED_VERSION) {
-    // Version 1 seeded Florentina only; version 2 adds the five Odar characters without touching existing entries.
-    const list: SavedChar[] = seeded ? JSON.parse(localStorage.getItem(KEY) ?? "[]") : [];
+    // Version 1 seeded Florentina only; version 2 added the five Odar characters as short data;
+    // version 3 brings their full data. Entries the user refreshed or added are not touched.
+    let list: SavedChar[] = seeded ? JSON.parse(localStorage.getItem(KEY) ?? "[]") : [];
     const seeds = seeded ? ODAR_CHARS : [FLORENTINA, ...ODAR_CHARS];
+    list = list.map((x) => {
+      const full = ODAR_CHARS.find((s) => charKey(s) === charKey(x));
+      return full && x.snapshot?.source.fetchedAt === SHORT_SNAPSHOT ? { ...x, snapshot: full } : x;
+    });
     for (const s of seeds) {
       if (!list.some((x) => charKey(x) === charKey(s))) list.push({ region: s.region, server: s.server, name: s.name, snapshot: s });
     }
