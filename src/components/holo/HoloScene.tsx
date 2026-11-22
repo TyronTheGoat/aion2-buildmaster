@@ -34,7 +34,7 @@ export interface HoloSceneProps {
 
 /** How the camera frames each slot: distance and view direction (world space, character faces +z). */
 const FOCUS: Partial<Record<SlotKind, { dist: number; dir: [number, number, number] }>> = {
-  weapon: { dist: 1.7, dir: [-1, 0.35, 0.9] },
+  weapon: { dist: 2.0, dir: [-1, 0.35, 0.9] },
   offhand: { dist: 1.2, dir: [0.6, 0.15, 1] },
   helmet: { dist: 1.3, dir: [0.3, 0.12, 1] },
   shoulders: { dist: 1.5, dir: [0.45, 0.3, 1] },
@@ -282,7 +282,7 @@ export default function HoloScene(props: HoloSceneProps) {
         const feet = px(new THREE.Vector3(0, 0, 0)), edge = px(new THREE.Vector3(0.88, 0, 0));
         const feetY = (1 - (feet.y + 1) / 2) * h, ours = Math.abs(edge.x - feet.x) / 2 * w;
         const painted = backdrop.layout(w, h, feetY, ours);
-        fig.platform.scale.setScalar(THREE.MathUtils.clamp(painted / ours, 1, 1.7));
+        fig.platform.scale.setScalar(THREE.MathUtils.clamp(painted / ours, 1, 1.25));
       }
     };
     const ro = new ResizeObserver(resize);

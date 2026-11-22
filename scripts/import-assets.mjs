@@ -3,7 +3,7 @@
 //
 // Recognised content (searched anywhere below each folder):
 //   bildmaster_{male,female}_v2_WEB.glb       → public/models/   character models     (git-ignored)
-//   forest_dungeon_*.webp                     → public/hero/     hero backgrounds     (git-ignored)
+//   forest_dungeon_{primary,mobile}.webp     → public/hero/     hero backgrounds     (git-ignored)
 //   hologram_{male,female}_detailed_ref.webp  → public/hero/     texture references   (git-ignored)
 //   bildmaster_*_hologram_v2.glb              → public/weapons/  class weapon models  (committed: original procedural designs)
 //
@@ -19,7 +19,7 @@ if (!packs.length) { console.error("Bitte Ordner angeben: node scripts/import-as
 
 const RULES = [
   [/^bildmaster_(male|female)_v2_WEB\.glb$/, "public/models"],
-  [/^forest_dungeon_(primary|alternate|mobile)\.webp$/, "public/hero"],
+  [/^forest_dungeon_(primary|mobile)\.webp$/, "public/hero"],
   [/^hologram_(male|female)_detailed_ref\.webp$/, "public/hero"],
   [/^bildmaster_[a-z_]+_hologram_v2\.glb$/, "public/weapons"],
 ];

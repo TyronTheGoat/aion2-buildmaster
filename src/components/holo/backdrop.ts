@@ -60,10 +60,11 @@ void main() {
 }`;
 
 export async function loadBackdrop(tall: boolean): Promise<Backdrop | null> {
-  const pick = tall ? TALL : WIDE;
-  const img = (await loadImage(pick.file)) ?? (await loadImage((tall ? WIDE : TALL).file));
+  // the portrait painting on phones, the wide one elsewhere; either one as fallback
+  let info = tall ? TALL : WIDE;
+  let img = await loadImage(info.file);
+  if (!img) { info = tall ? WIDE : TALL; img = await loadImage(info.file); }
   if (!img) return null;
-  const info = img.src.includes("mobile") ? TALL : WIDE;
   const tex = new THREE.Texture(img);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
@@ -88,7 +89,9 @@ export async function loadBackdrop(tall: boolean): Promise<Backdrop | null> {
       const [cx, cy, cr] = info.circle;
       const cover = Math.max(w / (h * aspect), 1) * h * aspect; // painting width in px at cover fit
       const want = platformPx / cr;
-      const pw = Math.max(cover, Math.min(want, cover * 1.6));
+      // big enough that the circle can sit under the feet without showing the painting's edge
+      const anchor = Math.max(feetY / cy, (h - feetY) / (1 - cy)) * aspect;
+      const pw = Math.max(cover, anchor, Math.min(want, cover * 1.6));
       const ph = pw / aspect;
       u.uScale.value.set(pw / w, ph / h);
       // place the circle centre under the feet (screen uv, y up)

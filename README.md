@@ -6,8 +6,8 @@ jeden Slot bewertet, die BiS-Linien pro Slot zeigt und einen priorisierten Upgra
 
 ## Funktionen
 - Startseite mit Charakterauswahl, neue Charaktere über **+** und kisk.app-Link
-- 3D-Hologramm je Charakter: die Bildmaster-Charaktermodelle (GLB, weiblich/männlich) unverändert mit ihrer
-  eingebetteten Textur; Idle nur durch Atmen, leichtes Schweben und Gewichtsverlagerung (kein Rig), drehen/zoomen.
+- 3D-Hologramm je Charakter: die Bildmaster-Charaktermodelle (GLB, weiblich/männlich) mit projizierter Detail-Referenz
+  vor einem Dungeon-/Wald-Hologramm-Hintergrund; kurze Klassen-Startanimation bei jeder Auswahl; Idle nur durch Atmen, leichtes Schweben und Gewichtsverlagerung (kein Rig), drehen/zoomen.
   Slot-Bereiche, Klickflächen und Ankerpunkte für Schmuck und Waffe werden beim Laden aus der Geometrie gemessen.
   Fehlen die Modelldateien, nutzt die App den eingebauten MakeHuman-Körper (CC0, `node scripts/build-human-mesh.mjs`).
   Aura je Teil in Farbe UND Stärke nach Note (BiS gold mit Funken, S+ pink, S violett, A grün, B lime, C grau, D schwach rot);
@@ -34,10 +34,20 @@ jeden Slot bewertet, die BiS-Linien pro Slot zeigt und einen priorisierten Upgra
   (per .gitignore nicht im öffentlichen Repo) und trägt sie ein; die Offline-Datei bettet sie ein
 - Fehlt ein Bild, zeigt die App „Bild fehlt“ statt eines Ersatzbildes
 
-## Charaktermodelle
-- `node scripts/import-models.mjs <entpacktes-modellpaket>` kopiert `models/bildmaster_{male,female}_v2_WEB.glb` nach `public/models/`
-- Die Modelle sind aus einem Referenzbild abgeleitet, dessen Rechte nicht geklärt sind: `public/models/` ist per .gitignore
-  nicht im öffentlichen Repo. `npm run offline` bettet sie in die Offline-Datei ein, wenn sie installiert sind.
+## Charaktermodelle, Hero-Szene und Waffen
+- `node scripts/import-assets.mjs <entpacktes-paket> [...]` übernimmt die Bildmaster-Pakete:
+  Charaktermodelle → `public/models/`, Hero-Hintergründe und Detail-Referenzen → `public/hero/`, Klassenwaffen → `public/weapons/`
+- Modelle, Hintergründe und Referenzen sind aus Bildern abgeleitet bzw. Bilder, deren Rechte nicht geklärt sind:
+  `public/models/` und `public/hero/` sind per .gitignore nicht im öffentlichen Repo. Die Waffen-GLBs sind eigene prozedurale
+  Entwürfe und liegen im Repo. `npm run offline` bettet alles Installierte in die Offline-Datei ein.
+- Die Detail-Referenz wird beim Laden pro Körperteil auf das Modell projiziert (Gelenke werden auf Modell und Bild gemessen);
+  die Rückseite bekommt einen sauberen Scan statt der gespiegelten Vorderseite.
+- Hintergrund als 2.5D-Ebene nach dem Bloom: Parallaxe, zwei Nebelschichten, Vignette mit Lichtfokus, fallende Blätter.
+- Klassenwaffen und Intros: `src/components/holo/weapons.ts` (Loadout und Halte-Pose je Klasse),
+  `src/components/holo/intro.ts` (Choreografien nach `animation_blueprints_v2.json`).
+  Ohne Rig spielen nur Waffen- und Lichtspuren; Körper mit Knochen spielen zusätzlich die Arm-Spur (`pose`).
+- Für ein späteres geriggtes Modell: seine Knochen auf die `BoneName`s abbilden (`body.ts`), die Halte-Posen in
+  `weapons.ts` an den Handknochen kalibrieren und `animatable` setzen; Slots, Auren, Kamera und Intros bleiben gleich.
 
 ## Entwicklung
 ```bash
