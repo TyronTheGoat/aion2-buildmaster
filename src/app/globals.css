@@ -35,18 +35,59 @@ body {
 .card-tilt:active { transform: perspective(900px) translateY(1px) scale(0.985); }
 .card-tilt .card-sheen { transition: transform 180ms ease-out; transform: rotate(12deg) translate(var(--sx, 0px), var(--sy, 0px)); }
 
-/* gear / Arcana switch: both views sit on one big wheel seen from the front. The current view swings
-   to the left and down along the rim while the other one rises from the lower right along the same arc. */
-.wheel { overflow-x: clip; overflow-clip-margin: 24px; }
-.wheel > * { transform-origin: 50% 1600px; }
-.wheel-in-right { animation: wheel-in-right 1200ms cubic-bezier(.45,.05,.25,1) both; }
-.wheel-in-left { animation: wheel-in-left 1200ms cubic-bezier(.45,.05,.25,1) both; }
-.wheel-out-left { animation: wheel-out-left 1200ms cubic-bezier(.45,.05,.25,1) both; }
-.wheel-out-right { animation: wheel-out-right 1200ms cubic-bezier(.45,.05,.25,1) both; }
-@keyframes wheel-out-left { from { transform: rotate(0deg); opacity: 1; } 75% { opacity: 0.9; } to { transform: rotate(-48deg); opacity: 0; } }
-@keyframes wheel-in-right { from { transform: rotate(48deg); opacity: 0; } 25% { opacity: 0.9; } to { transform: rotate(0deg); opacity: 1; } }
-@keyframes wheel-out-right { from { transform: rotate(0deg); opacity: 1; } 75% { opacity: 0.9; } to { transform: rotate(48deg); opacity: 0; } }
-@keyframes wheel-in-left { from { transform: rotate(-48deg); opacity: 0; } 25% { opacity: 0.9; } to { transform: rotate(0deg); opacity: 1; } }
+/* gear / Arcana switch: both platforms hang on an invisible ring that stands upright in front of the viewer,
+   gear on top, Arcana at the bottom (one ring diameter lower). Switching turns the ring half a turn: the platform
+   in view travels along the ring to the left and down, the other one comes up from below along the right side.
+   The platforms stay upright like gondolas; only the strip at the top of the ring is visible. */
+.wheel { --ring-r: clamp(320px, 55vh, 620px); overflow: clip; overflow-clip-margin: 28px; }
+.wheel-out-ccw { animation: ring-out-ccw 1400ms linear both; }
+.wheel-in-ccw { animation: ring-in-ccw 1400ms linear both; }
+@keyframes ring-out-ccw {
+  0% { transform: translate(calc(var(--ring-r) * 0.0000), calc(var(--ring-r) * 0.0000)); }
+  5% { transform: translate(calc(var(--ring-r) * -0.0193), calc(var(--ring-r) * 0.0002)); }
+  10% { transform: translate(calc(var(--ring-r) * -0.0768), calc(var(--ring-r) * 0.0030)); }
+  15% { transform: translate(calc(var(--ring-r) * -0.1704), calc(var(--ring-r) * 0.0146)); }
+  20% { transform: translate(calc(var(--ring-r) * -0.2955), calc(var(--ring-r) * 0.0447)); }
+  25% { transform: translate(calc(var(--ring-r) * -0.4440), calc(var(--ring-r) * 0.1040)); }
+  30% { transform: translate(calc(var(--ring-r) * -0.6032), calc(var(--ring-r) * 0.2024)); }
+  35% { transform: translate(calc(var(--ring-r) * -0.7563), calc(var(--ring-r) * 0.3458)); }
+  40% { transform: translate(calc(var(--ring-r) * -0.8845), calc(var(--ring-r) * 0.5334)); }
+  45% { transform: translate(calc(var(--ring-r) * -0.9700), calc(var(--ring-r) * 0.7567)); }
+  50% { transform: translate(calc(var(--ring-r) * -1.0000), calc(var(--ring-r) * 1.0000)); }
+  55% { transform: translate(calc(var(--ring-r) * -0.9700), calc(var(--ring-r) * 1.2433)); }
+  60% { transform: translate(calc(var(--ring-r) * -0.8845), calc(var(--ring-r) * 1.4666)); }
+  65% { transform: translate(calc(var(--ring-r) * -0.7563), calc(var(--ring-r) * 1.6542)); }
+  70% { transform: translate(calc(var(--ring-r) * -0.6032), calc(var(--ring-r) * 1.7976)); }
+  75% { transform: translate(calc(var(--ring-r) * -0.4440), calc(var(--ring-r) * 1.8960)); }
+  80% { transform: translate(calc(var(--ring-r) * -0.2955), calc(var(--ring-r) * 1.9553)); }
+  85% { transform: translate(calc(var(--ring-r) * -0.1704), calc(var(--ring-r) * 1.9854)); }
+  90% { transform: translate(calc(var(--ring-r) * -0.0768), calc(var(--ring-r) * 1.9970)); }
+  95% { transform: translate(calc(var(--ring-r) * -0.0193), calc(var(--ring-r) * 1.9998)); }
+  100% { transform: translate(calc(var(--ring-r) * -0.0000), calc(var(--ring-r) * 2.0000)); }
+}
+@keyframes ring-in-ccw {
+  0% { transform: translate(calc(var(--ring-r) * 0.0000), calc(var(--ring-r) * 2.0000)); }
+  5% { transform: translate(calc(var(--ring-r) * 0.0193), calc(var(--ring-r) * 1.9998)); }
+  10% { transform: translate(calc(var(--ring-r) * 0.0768), calc(var(--ring-r) * 1.9970)); }
+  15% { transform: translate(calc(var(--ring-r) * 0.1704), calc(var(--ring-r) * 1.9854)); }
+  20% { transform: translate(calc(var(--ring-r) * 0.2955), calc(var(--ring-r) * 1.9553)); }
+  25% { transform: translate(calc(var(--ring-r) * 0.4440), calc(var(--ring-r) * 1.8960)); }
+  30% { transform: translate(calc(var(--ring-r) * 0.6032), calc(var(--ring-r) * 1.7976)); }
+  35% { transform: translate(calc(var(--ring-r) * 0.7563), calc(var(--ring-r) * 1.6542)); }
+  40% { transform: translate(calc(var(--ring-r) * 0.8845), calc(var(--ring-r) * 1.4666)); }
+  45% { transform: translate(calc(var(--ring-r) * 0.9700), calc(var(--ring-r) * 1.2433)); }
+  50% { transform: translate(calc(var(--ring-r) * 1.0000), calc(var(--ring-r) * 1.0000)); }
+  55% { transform: translate(calc(var(--ring-r) * 0.9700), calc(var(--ring-r) * 0.7567)); }
+  60% { transform: translate(calc(var(--ring-r) * 0.8845), calc(var(--ring-r) * 0.5334)); }
+  65% { transform: translate(calc(var(--ring-r) * 0.7563), calc(var(--ring-r) * 0.3458)); }
+  70% { transform: translate(calc(var(--ring-r) * 0.6032), calc(var(--ring-r) * 0.2024)); }
+  75% { transform: translate(calc(var(--ring-r) * 0.4440), calc(var(--ring-r) * 0.1040)); }
+  80% { transform: translate(calc(var(--ring-r) * 0.2955), calc(var(--ring-r) * 0.0447)); }
+  85% { transform: translate(calc(var(--ring-r) * 0.1704), calc(var(--ring-r) * 0.0146)); }
+  90% { transform: translate(calc(var(--ring-r) * 0.0768), calc(var(--ring-r) * 0.0030)); }
+  95% { transform: translate(calc(var(--ring-r) * 0.0193), calc(var(--ring-r) * 0.0002)); }
+  100% { transform: translate(calc(var(--ring-r) * 0.0000), calc(var(--ring-r) * 0.0000)); }
+}
 
 /* comparison arrows: the line grows out of the Ist card, the glow follows a little later */
 .arrow-line { stroke-dasharray: 1 1; stroke-dashoffset: 1; animation: arrow-draw 520ms cubic-bezier(.4,0,.2,1) var(--d, 0ms) forwards; }
@@ -55,8 +96,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .card-tilt, .card-tilt:hover { transform: none; transition: none; }
-  .wheel-in-right, .wheel-in-left, .wheel-out-left, .wheel-out-right { animation: none; }
-  .wheel-out-left, .wheel-out-right { display: none; }
+  .wheel-in-ccw, .wheel-out-ccw { animation: none; }
+  .wheel-out-ccw { display: none; }
   .arrow-line, .arrow-glow { animation: none; stroke-dashoffset: 0; }
 }
 

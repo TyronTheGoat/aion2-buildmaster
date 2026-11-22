@@ -1,5 +1,5 @@
 import type { Item, StatLine } from "./types";
-import { compareIdeal } from "./compare";
+import { compareIdeal, toNum } from "./compare";
 
 /** "+N" lines are skill levels (Arcana / skill lines), everything else is a stat. */
 export const isSkillValue = (value: string) => /^\+\d+$/.test(value.trim());
@@ -24,8 +24,8 @@ export interface StatLinks {
  * The current item never shows more lines than the BiS target; when it has more, its real last line is kept.
  *
  * Arcana cards work differently: the place of an ability does not matter, its plus level does.
- * - green: the right ability with at least the ideal plus
- * - orange: the right ability, but the plus is still below the ideal
+ * - green: the right ability with exactly the ideal plus
+ * - orange: the right ability, but the plus is too low or too high
  * - red: the wrong ability (arrow to an ability that is still missing)
  */
 export function statLinks(item: Item): StatLinks | undefined {
@@ -42,7 +42,7 @@ export function statLinks(item: Item): StatLinks | undefined {
   const links: StatLinks["links"] = ist.map((line, from) => {
     const to = rows.findIndex((r) => r.have === line);
     if (to < 0) return { from, to: free.shift() ?? -1, color: "red" };
-    if (item.slot === "arcana") return { from, to, color: rows[to].state === "ok" ? "green" : "orange" };
+    if (item.slot === "arcana") return { from, to, color: toNum(line.value) === toNum(rows[to].target) ? "green" : "orange" };
     const wrong = to === lastBis ? from !== ist.length - 1 : from === lastIst;
     return { from, to, color: wrong ? "orange" : "green" };
   });

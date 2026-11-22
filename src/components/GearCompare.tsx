@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { Character, Grade, Item } from "@/lib/types";
-import { compareIdeal } from "@/lib/compare";
+import { compareIdeal, toNum } from "@/lib/compare";
 import { isSkillValue, statLinks, type LinkColor } from "@/lib/slot-lines";
 import type { StatLine } from "@/lib/types";
 import { buildPlan } from "@/lib/advisor";
@@ -66,6 +66,8 @@ export function GearCompare({ char, item, slotId }: {
   const todo = [
     ...(cmp?.rows.filter((r) => r.state === "missing").map((r) => `${r.name} ${r.target} fehlt`) ?? []),
     ...(cmp?.rows.filter((r) => r.state === "low").map((r) => `${r.name}: ${r.have?.value} → ${r.target}`) ?? []),
+    // Arcana: a plus above the ideal is wasted too
+    ...(arcana ? cmp?.rows.filter((r) => r.have && toNum(r.have.value) > toNum(r.target)).map((r) => `${r.name}: ${r.have?.value} → ${r.target} (zu hoch)`) ?? [] : []),
     ...(cmp?.extra.map((l) => `${l.name} ${l.value} ${item.fixedLines ? "ist fest (Teil ersetzen)" : "neu rollen"}`) ?? []),
   ];
 
@@ -74,7 +76,9 @@ export function GearCompare({ char, item, slotId }: {
     ? { icon: localIcon(target.icon), name: target.name, meta: [target.source, target.rarity].filter(Boolean).join(" · "), grade: "BiS" }
     : bisCraft
       ? { icon: localIcon(bisCraft.icon), name: bisCraft.name, meta: wearsBisCraft ? "Schon BiS · höchstes Crafting" : `Höchstes Crafting · IL ${bisCraft.level}`, grade: "BiS" }
-      : isBis ? { icon: iconFor(item), name: item.name, meta: "Schon BiS", grade: "BiS" } : undefined;
+      : isBis ? { icon: iconFor(item), name: item.name, meta: "Schon BiS", grade: "BiS" }
+        // Arcana: the target is the same card with the ideal abilities, so it shows the same picture
+        : arcana && stats ? { icon: iconFor(item), name: item.name, meta: "Ideale Fähigkeiten", grade: "BiS" } : undefined;
 
   const istColor = (i: number) => stats?.links.find((l) => l.from === i)?.color;
   const section = (side: "ist" | "soll") => (
@@ -135,8 +139,8 @@ export function GearCompare({ char, item, slotId }: {
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
         {arcana ? <>
-          <span className="flex items-center gap-1.5"><Arrowlet color="#34d399" />richtige Fähigkeit mit idealem Plus</span>
-          <span className="flex items-center gap-1.5"><Arrowlet color="#ff9a2e" />richtige Fähigkeit, Plus noch zu niedrig</span>
+          <span className="flex items-center gap-1.5"><Arrowlet color="#34d399" />richtige Fähigkeit mit genau dem idealen Plus</span>
+          <span className="flex items-center gap-1.5"><Arrowlet color="#ff9a2e" />richtige Fähigkeit, Plus zu niedrig oder zu hoch</span>
           <span className="flex items-center gap-1.5"><Arrowlet color="#ff3b3b" />falsche Fähigkeit (zeigt auf das, was fehlt)</span>
           <span>Bei Arcana ist der Platz egal.</span>
         </> : <>

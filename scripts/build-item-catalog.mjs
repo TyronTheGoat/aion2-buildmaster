@@ -138,6 +138,7 @@ for (const [name, file] of Object.entries(OFFICIAL_ICONS)) {
 //    Each name belongs to two TW item IDs, so the evidence stays on a name entry; the icon is taken only
 //    when every ID of that name carries the same original icon.
 const crafted = read("data/crafted-bis.json");
+const craftedIcons = read("data/crafted-bis-icons.json");
 if (crafted) {
   for (const [piece, slot] of Object.entries(crafted.slots)) {
     for (const line of ["Wise", "Ebony"]) {
@@ -153,6 +154,8 @@ if (crafted) {
         faction: line === "Wise" ? "Elyos" : "Asmodier", crafted: true,
       });
       if (!it.icon && icons.length === 1) { it.icon = icons[0]; it.iconSource = `NCSOFT (Original-Icon, gleich für IDs ${ids.map((m) => m.itemId).join(", ")})`; }
+      const known = craftedIcons?.pieces?.[piece];
+      if (!it.icon && known) { it.icon = CDN + known.icon; it.iconSource = `NCSOFT (Original-Icon, Item-ID ${known.itemId}, ${known.url})`; }
       for (const ev of crafted.evidence) if (!it.regions.some((e) => e.source === ev.source)) it.regions.push(ev);
       merged.set(it.key, it);
     }

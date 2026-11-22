@@ -31,9 +31,9 @@ describe("stat links (Ist order kept, only the last place matters)", () => {
   it("arcana: place does not matter, the plus level does", () => {
     const card: Item = { ...weapon, slot: "arcana",
       lines: [{ name: "C", value: "+1" }, { name: "A", value: "+3" }, { name: "X", value: "+2" }, { name: "B", value: "+1" }],
-      ideal: [{ name: "A", value: "+2" }, { name: "B", value: "+3" }, { name: "C", value: "+1" }, { name: "D", value: "+1" }] };
+      ideal: [{ name: "A", value: "+2" }, { name: "B", value: "+3" }, { name: "C", value: "+1" }, { name: "E", value: "+1" }] };
     const r = statLinks(card)!;
-    expect(r.links.map((l) => l.color)).toEqual(["green", "green", "red", "orange"]);
-    expect(r.links[2].to).toBe(3);
+    // A has +3 but should have +2 (too high), B +1 instead of +3 (too low): both orange
+    expect(r.links.map((l) => l.color)).toEqual(["green", "orange", "red", "orange"]);
   });
 });
