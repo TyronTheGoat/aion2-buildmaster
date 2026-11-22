@@ -40,7 +40,7 @@ const icon = readFileSync(path.join(root, "public/icon.svg"), "utf8");
 // Embed the optional hologram assets (see scripts/import-assets.mjs) that are installed.
 const MIME = { glb: "model/gltf-binary", webp: "image/webp", png: "image/png" };
 const assets = {};
-for (const dir of ["models", "hero", "weapons"]) {
+for (const dir of ["models", "hero", "weapons", "class-icons"]) {
   let files = [];
   try { files = readdirSync(path.join(root, "public", dir)); } catch { /* not installed */ }
   for (const f of files) {

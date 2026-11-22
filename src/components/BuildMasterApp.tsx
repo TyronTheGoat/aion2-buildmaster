@@ -5,9 +5,9 @@ import { parseKiskGear } from "@/lib/kisk/parse";
 import { textToLines } from "@/lib/kisk/html-to-text";
 import { CharacterView } from "./CharacterView";
 import { GradeBadge } from "./GradeBadge";
-import { ItemIcon, Sheet } from "./ui";
+import { Sheet } from "./ui";
 import { AetherBackground } from "./AetherBackground";
-import { iconFor } from "@/lib/knowledge/item-catalog";
+import { ClassIcon } from "./ClassIcon";
 import { ItemCatalog } from "./ItemCatalog";
 import { HoloCharacter, GenderPicker } from "./holo/HoloCharacter";
 import { charKey, parseKiskLink, useCharacters, type SavedChar } from "./store";
@@ -67,12 +67,11 @@ export function BuildMasterApp() {
       <ul className="space-y-3">
         {chars.map((c) => {
           const s = c.snapshot;
-          const weapon = s?.gear.find((i) => i.slot === "weapon");
           return (
             <li key={charKey(c)}>
               <button onClick={() => go(charKey(c))}
                 className="group flex w-full items-center gap-4 rounded-2xl border border-sky-300/15 bg-[#07101f]/70 p-4 text-left shadow-xl shadow-black/50 backdrop-blur-xl transition active:scale-[0.99] hover:border-sky-300/40 hover:bg-[#0a1730]/80 hover:shadow-[0_0_30px_rgba(40,130,255,0.18)]">
-                <ItemIcon src={weapon ? iconFor(weapon) : undefined} name={c.name} grade={s?.gearGrade ?? "?"} size={56} />
+                <ClassIcon className={s?.className} grade={s?.gearGrade ?? "?"} size={56} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 text-lg font-semibold">
                     {c.name}

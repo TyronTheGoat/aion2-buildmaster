@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import type { Character, Item, StatLine } from "@/lib/types";
-import { compareIdeal, toNum, type MatchState } from "@/lib/compare";
+import { compareIdeal, type MatchState } from "@/lib/compare";
 import { buildPlan } from "@/lib/advisor";
 import { iconFor, localIcon, type CatalogItem, ALL_ITEMS } from "@/lib/knowledge/item-catalog";
 import { PUBLIC_ITEMS, REGION_LABEL, regionStatus } from "@/lib/region";
@@ -29,13 +29,6 @@ const STATE: Record<Row["state"], { dot: string; text: string }> = {
   missing: { dot: "bg-rose-400", text: "text-rose-200" },
   extra: { dot: "bg-zinc-500", text: "text-zinc-300" },
 };
-
-function delta(have?: string, target?: string) {
-  const h = toNum(have), t = toNum(target);
-  if (Number.isNaN(h) || Number.isNaN(t) || t <= h) return undefined;
-  const d = Math.round((t - h) * 10) / 10;
-  return `▲ ${d.toLocaleString("de-DE")}${target?.includes("%") ? " %" : ""}`;
-}
 
 /**
  * Ist vs. Soll for one equipment slot: two equal columns whose rows line up
@@ -107,8 +100,6 @@ export function GearCompare({ char, item, slotId, label, wide, onClose }: {
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
           <Legend cls="bg-emerald-400" label="erreicht" /><Legend cls="bg-amber-400" label="zu niedrig" />
           <Legend cls="bg-rose-400" label="fehlt" /><Legend cls="bg-zinc-500" label="nicht im BiS" />
-          <span className="flex items-center gap-1.5"><MaxBadge />Höchstwert</span>
-          <span className="flex items-center gap-1.5"><Gain text="▲" />noch möglich</span>
           {craftedName && <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-violet-500/50" />Crafting-Bonus</span>}
         </div>
 
@@ -160,15 +151,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-/** Green "N" badge: the line has its highest value (nothing more to gain). */
-function MaxBadge() {
-  return <span title="Höchstwert" className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[4px] bg-emerald-500/20 text-[11px] font-bold leading-none text-emerald-300 ring-1 ring-emerald-400/40">N</span>;
-}
-
-function Gain({ text }: { text: string }) {
-  return <span className="text-[12px] font-semibold tabular-nums text-emerald-300">{text}</span>;
-}
-
 /**
  * One line, the same stat on both sides at the same height.
  * Style follows the in-game tooltip: name left, value right with an "N" badge (max) or "▲ gain".
@@ -177,35 +159,30 @@ function Gain({ text }: { text: string }) {
 function CompareRow({ row, skill, crafted }: { row: Row; skill?: boolean; crafted?: boolean }) {
   const st = STATE[row.state];
   const have = row.have?.value;
-  // gain to the BiS target, otherwise to the line's maximum roll
-  const gain = row.state === "low" ? delta(have, row.target) : delta(have, row.have?.max);
-  const haveMax = !!have && !gain && row.state !== "missing";
   const label = skill ? row.name : statLabel(row.name);
   const base = crafted
     ? "bg-gradient-to-r from-violet-500/35 via-violet-500/20 to-violet-500/5 ring-1 ring-violet-300/30"
     : "bg-white/[0.035]";
-  const name = (
+  const name = (dim?: boolean) => (
     <span className="flex min-w-0 items-center gap-2">
       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
       {skill && <SkillIcon name={row.name} size={18} />}
-      <span className={`truncate font-semibold ${crafted ? "text-violet-50" : "text-zinc-100"}`}>{label}</span>
+      <span className={`truncate font-semibold ${dim ? "text-zinc-500" : crafted ? "text-violet-50" : "text-zinc-100"}`}>{label}</span>
     </span>
   );
+  // stats show only which line sits on the item and which line should; skills keep their level
+  const left = skill ? (have ?? "Leer") : !have ? "Leer" : row.state === "ok" ? "✓" : row.state === "low" ? "zu niedrig" : row.state === "extra" ? "nicht im BiS" : "";
+  const right = skill ? (row.target ?? (row.state === "extra" ? "–" : "Offen")) : row.target ? "Ziel" : row.state === "extra" ? "–" : "Offen";
+  const leftCls = !have ? "text-zinc-500" : row.state === "ok" ? "text-emerald-300" : row.state === "low" ? "text-amber-300" : "text-zinc-400";
   return (
     <div className="grid grid-cols-2 gap-3">
       <div className={`flex min-h-[38px] items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-[13px] sm:text-sm ${base}`}>
-        {name}
-        <span className="flex shrink-0 items-center gap-1.5">
-          <span className={`font-semibold tabular-nums ${have ? "text-white" : "text-zinc-500"}`}>{have ?? "Leer"}</span>
-          {haveMax ? <MaxBadge /> : gain ? <Gain text={gain} /> : null}
-        </span>
+        {name(!have)}
+        <span className={`shrink-0 text-[12px] font-semibold tabular-nums ${skill && have ? "text-white" : leftCls}`}>{left}</span>
       </div>
       <div className={`flex min-h-[38px] items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-[13px] sm:text-sm ${crafted ? base : "bg-amber-200/[0.035]"}`}>
-        {name}
-        <span className="flex shrink-0 items-center gap-1.5">
-          <span className={`font-semibold tabular-nums ${row.target ? "text-white" : "text-zinc-500"}`}>{row.target ?? (row.state === "extra" ? "–" : "Offen")}</span>
-          {row.target && <MaxBadge />}
-        </span>
+        {name(!row.target)}
+        <span className={`shrink-0 text-[12px] font-semibold tabular-nums ${row.target ? (skill ? "text-white" : "text-amber-200/80") : "text-zinc-500"}`}>{right}</span>
       </div>
     </div>
   );

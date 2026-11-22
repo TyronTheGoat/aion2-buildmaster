@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import type { Grade } from "@/lib/types";
 
-const GRADE_RING: Record<Grade, string> = {
+export const GRADE_RING: Record<Grade, string> = {
   BiS: "ring-amber-400", "S+": "ring-fuchsia-500", S: "ring-violet-500", A: "ring-sky-500",
   B: "ring-emerald-500", C: "ring-zinc-500", D: "ring-red-600", "?": "ring-zinc-700",
 };
