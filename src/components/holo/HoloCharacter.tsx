@@ -1,7 +1,7 @@
 "use client";
 import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { Character, Item } from "@/lib/types";
-import { bodyItems, weaponKindFor, type Gender } from "@/lib/hologram";
+import { BODY_SLOTS, bodyItems, hexCss, weaponKindFor, type Gender } from "@/lib/hologram";
 import { compareIdeal, type IdealRow } from "@/lib/compare";
 import { buildPlan } from "@/lib/advisor";
 import { minScoreFor } from "@/lib/grades";
@@ -9,7 +9,7 @@ import { SLOT_LABEL_DE } from "@/lib/knowledge/slots";
 import { iconFor } from "@/lib/knowledge/item-catalog";
 import { GradeBadge } from "../GradeBadge";
 import { ItemIcon, SkillIcon, isSkillLine } from "../ui";
-import { AuraLegend } from "./HeroShowcase";
+import { AuraLegend } from "./AuraLegend";
 
 const HoloScene = lazy(() => import("./HoloScene"));
 
@@ -30,6 +30,8 @@ export function HoloCharacter({ char, gender, onBack, onDetails, onGender }: {
   const [shown, setShown] = useState<string>(); // keeps the panel content while it slides out
   const [error, setError] = useState<string>();
   const [hint, setHint] = useState(true);
+  const [listPref, setListPref] = useState<boolean>(); // undefined: open on wide screens, closed on phones
+  const listOpen = listPref ?? isWide;
 
   useEffect(() => {
     if (focus) return;
@@ -52,6 +54,10 @@ export function HoloCharacter({ char, gender, onBack, onDetails, onGender }: {
     const next = id && items.has(id) ? id : undefined;
     setFocus(next);
     if (next) { setShown(next); setHint(false); }
+  };
+  const choose = (id: string) => {
+    if (!isWide) setListPref(false);
+    pick(id);
   };
   const item = shown ? items.get(shown) : undefined;
 
@@ -96,12 +102,64 @@ export function HoloCharacter({ char, gender, onBack, onDetails, onGender }: {
         TIPPE AUF EIN TEIL · ZIEHEN ZUM DREHEN
       </p>
 
+      {/* gear tab on the right: every piece, including both rings / earrings / bracelets */}
+      {!focus && !listOpen && (
+        <button onClick={() => setListPref(true)}
+          className="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-l-2xl border border-r-0 border-sky-300/20 bg-[#07101f]/70 px-2 py-4 text-[11px] font-medium uppercase tracking-[0.25em] text-sky-100/80 backdrop-blur-xl [writing-mode:vertical-rl] hover:bg-[#0b1830]/80">
+          Ausrüstung
+        </button>
+      )}
+      <div className={`absolute z-10 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
+        ${isWide ? "bottom-4 right-4 top-20 w-[300px]" : "bottom-24 right-3 top-20 w-[264px]"}
+        ${!focus && listOpen ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-10 opacity-0"}`}>
+        <GearList items={items} active={focus} onPick={choose} onClose={() => setListPref(false)} />
+      </div>
+
       {/* info panel */}
       <div className={`absolute z-10 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
         ${isWide ? "bottom-4 right-4 top-20 w-[400px]" : "inset-x-0 bottom-0 max-h-[56vh]"}
         ${focus ? "translate-x-0 translate-y-0 opacity-100" : isWide ? "pointer-events-none translate-x-8 opacity-0" : "pointer-events-none translate-y-full opacity-0"}`}>
-        {item && shown && <SlotPanel char={char} item={item} wide={isWide} onClose={() => setFocus(undefined)} />}
+        {item && shown && <SlotPanel char={char} item={item} label={slotLabel(shown, items)} wide={isWide} onClose={() => setFocus(undefined)} />}
       </div>
+    </div>
+  );
+}
+
+/** Label with a number for paired slots: "Ring 1", "Ring 2". */
+function slotLabel(id: string, items: Map<string, Item>) {
+  const [slot, idx] = id.split(":");
+  const pairs = [...items.keys()].filter((k) => k.startsWith(`${slot}:`)).length;
+  return `${SLOT_LABEL_DE[slot as Item["slot"]]}${pairs > 1 ? ` ${+idx + 1}` : ""}`;
+}
+
+function GearList({ items, active, onPick, onClose }: { items: Map<string, Item>; active?: string; onPick: (id: string) => void; onClose: () => void }) {
+  const ids = [...items.keys()].sort((a, b) => BODY_SLOTS.indexOf(a.split(":")[0] as Item["slot"]) - BODY_SLOTS.indexOf(b.split(":")[0] as Item["slot"]) || a.localeCompare(b));
+  return (
+    <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-sky-200/10 bg-[#07101f]/70 shadow-2xl shadow-black/40 backdrop-blur-2xl">
+      <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
+        <span className="text-[10px] uppercase tracking-[0.3em] text-sky-300/70">Ausrüstung</span>
+        <button onClick={onClose} aria-label="Liste schließen" className="rounded-full bg-white/5 px-2 py-0.5 text-xs text-zinc-300 hover:bg-white/10">›</button>
+      </div>
+      <ul className="flex-1 overflow-y-auto px-2 pb-2">
+        {ids.map((id) => {
+          const it = items.get(id)!;
+          const rated = it.scored && it.grade !== "?";
+          return (
+            <li key={id}>
+              <button onClick={() => onPick(id)}
+                className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition hover:bg-white/[0.06] ${active === id ? "bg-white/[0.08]" : ""}`}>
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={rated ? { background: hexCss(it.grade), boxShadow: `0 0 10px ${hexCss(it.grade)}` } : { background: "#334155" }} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-medium leading-tight text-white">{slotLabel(id, items)}</span>
+                  <span className="block truncate text-[11px] leading-tight text-zinc-500">{it.name}</span>
+                </span>
+                {rated ? <GradeBadge grade={it.grade} size="sm" /> : <span className="text-[10px] text-zinc-600">–</span>}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -112,7 +170,7 @@ const ROW: Record<IdealRow["state"], { mark: string; cls: string }> = {
   missing: { mark: "✗", cls: "text-rose-300" },
 };
 
-function SlotPanel({ char, item, wide, onClose }: { char: Character; item: Item; wide: boolean; onClose: () => void }) {
+function SlotPanel({ char, item, label, wide, onClose }: { char: Character; item: Item; label: string; wide: boolean; onClose: () => void }) {
   const cmp = compareIdeal(item);
   const step = buildPlan(char).steps.find((s) => s.item === item);
   const isBis = item.grade === "BiS";
@@ -128,7 +186,7 @@ function SlotPanel({ char, item, wide, onClose }: { char: Character; item: Item;
     <div className={`flex h-full max-h-[inherit] flex-col overflow-hidden border border-sky-200/10 bg-[#07101f]/75 shadow-2xl shadow-sky-900/30 backdrop-blur-2xl ${wide ? "rounded-3xl" : "rounded-t-3xl"}`}>
       <div className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
         <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.25em] text-sky-300/70">{SLOT_LABEL_DE[item.slot]}</div>
+          <div className="text-[10px] uppercase tracking-[0.25em] text-sky-300/70">{label}</div>
           <div className="truncate text-base font-semibold">{item.name}</div>
         </div>
         <button onClick={onClose} aria-label="Schließen" className="rounded-full bg-white/5 px-2.5 py-1 text-sm text-zinc-300 hover:bg-white/10">✕</button>

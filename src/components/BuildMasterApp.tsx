@@ -10,7 +10,6 @@ import { AetherBackground } from "./AetherBackground";
 import { iconFor } from "@/lib/knowledge/item-catalog";
 import { ItemCatalog } from "./ItemCatalog";
 import { HoloCharacter, GenderPicker } from "./holo/HoloCharacter";
-import { HeroShowcase } from "./holo/HeroShowcase";
 import { charKey, parseKiskLink, useCharacters, type SavedChar } from "./store";
 
 function useHashRoute(): [string | undefined, (k?: string) => void] {
@@ -44,9 +43,6 @@ export function BuildMasterApp() {
   const [route, go] = useHashRoute();
   const [adding, setAdding] = useState(false);
   const selected = chars.find((c) => charKey(c) === route);
-  // featured in the hero: the character opened last, else the first one
-  const [lastKey] = useState(() => { try { return typeof window === "undefined" ? null : localStorage.getItem("bm:last"); } catch { return null; } });
-  const featured = chars.find((c) => charKey(c) === lastKey) ?? chars[0];
 
   if (route === "katalog") return <ItemCatalog onBack={() => go()} />;
 
@@ -58,14 +54,10 @@ export function BuildMasterApp() {
   return (
     <div className="space-y-5">
       <AetherBackground />
-      {featured && (
-        <HeroShowcase char={featured.snapshot} name={featured.name} server={`${featured.server} · ${featured.region.toUpperCase()}`}
-          gender={featured.gender ?? "m"} onOpen={() => go(charKey(featured))} />
-      )}
-      <div className="flex items-end justify-between pt-2">
+      <div className="flex items-end justify-between pt-6">
         <div>
           <div className="text-[11px] uppercase tracking-[0.3em] text-sky-300/70">Hologramm-Archiv</div>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight">Charaktere</h2>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight">Charaktere</h1>
           <p className="text-sm text-sky-100/60">Wähle einen Charakter oder füge einen neuen hinzu.</p>
         </div>
         <button onClick={() => setAdding(true)} aria-label="Charakter hinzufügen"
@@ -82,7 +74,10 @@ export function BuildMasterApp() {
                 className="group flex w-full items-center gap-4 rounded-2xl border border-sky-300/15 bg-[#07101f]/70 p-4 text-left shadow-xl shadow-black/50 backdrop-blur-xl transition active:scale-[0.99] hover:border-sky-300/40 hover:bg-[#0a1730]/80 hover:shadow-[0_0_30px_rgba(40,130,255,0.18)]">
                 <ItemIcon src={weapon ? iconFor(weapon) : undefined} name={c.name} grade={s?.gearGrade ?? "?"} size={56} />
                 <div className="min-w-0 flex-1">
-                  <div className="text-lg font-semibold">{c.name}</div>
+                  <div className="flex items-center gap-2 text-lg font-semibold">
+                    {c.name}
+                    {c.gender && <span className="text-sm font-normal text-sky-300/70" title={c.gender === "f" ? "weiblich" : "männlich"}>{c.gender === "f" ? "♀" : "♂"}</span>}
+                  </div>
                   <div className="truncate text-sm text-sky-100/55">
                     {[s?.className, `${c.server} · ${c.region.toUpperCase()}`].filter(Boolean).join(" · ")}
                   </div>
@@ -154,7 +149,6 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
   const [pasting, setPasting] = useState(false);
   const [text, setText] = useState("");
   const [view, setView] = useState<"holo" | "list">("holo");
-  useEffect(() => { try { localStorage.setItem("bm:last", charKey(saved)); } catch { /* private mode */ } }, [saved]);
 
   const refresh = useCallback(async () => {
     if (isOffline()) { setPasting(true); return; }

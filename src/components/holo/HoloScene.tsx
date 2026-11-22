@@ -32,14 +32,14 @@ const FOCUS: Partial<Record<SlotKind, { dist: number; dir: [number, number, numb
   helmet: { dist: 1.3, dir: [0.3, 0.12, 1] },
   shoulders: { dist: 1.5, dir: [0.45, 0.3, 1] },
   torso: { dist: 1.75, dir: [0.25, 0.1, 1] },
-  gloves: { dist: 1.0, dir: [0.2, 0.2, 1] },
+  gloves: { dist: 1.0, dir: [0.9, 0.3, 0.4] },
   pants: { dist: 2.1, dir: [0.3, 0.05, 1] },
   boots: { dist: 1.4, dir: [0.35, 0.35, 1] },
   cape: { dist: 2.4, dir: [0.35, 0.15, -1] },
   necklace: { dist: 0.9, dir: [0.15, 0.1, 1] },
   earring: { dist: 0.7, dir: [0.9, 0.1, 0.6] },
-  ring: { dist: 0.7, dir: [0.1, 0.25, 1] },
-  bracelet: { dist: 0.8, dir: [0.1, 0.2, 1] },
+  ring: { dist: 0.7, dir: [0.9, 0.3, 0.35] },
+  bracelet: { dist: 0.8, dir: [0.9, 0.3, 0.35] },
   belt: { dist: 1.4, dir: [0.2, 0.05, 1] },
 };
 

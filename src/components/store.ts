@@ -15,6 +15,8 @@ export interface SavedChar {
 
 const KEY = "bm:chars";
 const SEEDED = "bm:seeded";
+/** Gender per character, kept separately so it stays even if the character is removed and added again */
+const GENDER = "bm:gender";
 const listeners = new Set<() => void>();
 let cacheRaw: string | null = null;
 let cache: SavedChar[] = [];
@@ -28,12 +30,19 @@ function read(): SavedChar[] {
     localStorage.setItem(SEEDED, "1");
     localStorage.setItem(KEY, JSON.stringify([{ region: "eu", server: "odar", name: "Florentina", snapshot: FLORENTINA }]));
   }
-  const raw = localStorage.getItem(KEY) ?? "[]";
-  if (raw !== cacheRaw) { cacheRaw = raw; cache = JSON.parse(raw); }
+  const raw = (localStorage.getItem(KEY) ?? "[]") + (localStorage.getItem(GENDER) ?? "");
+  if (raw !== cacheRaw) {
+    cacheRaw = raw;
+    const genders: Record<string, "f" | "m"> = JSON.parse(localStorage.getItem(GENDER) ?? "{}");
+    cache = (JSON.parse(localStorage.getItem(KEY) ?? "[]") as SavedChar[]).map((c) => ({ ...c, gender: c.gender ?? genders[charKey(c)] }));
+  }
   return cache;
 }
 
 function write(list: SavedChar[]) {
+  const genders: Record<string, "f" | "m"> = JSON.parse(localStorage.getItem(GENDER) ?? "{}");
+  for (const c of list) if (c.gender) genders[charKey(c)] = c.gender;
+  localStorage.setItem(GENDER, JSON.stringify(genders));
   localStorage.setItem(KEY, JSON.stringify(list));
   listeners.forEach((l) => l());
 }

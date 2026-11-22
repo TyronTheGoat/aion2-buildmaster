@@ -57,16 +57,16 @@ void main() {
   if (vW.y > uReveal) discard;
   vec3 v = normalize(cameraPosition - vW);
   float fres = pow(1.0 - abs(dot(normalize(vN), v)), 2.4);
-  float k = vW.y * 150.0;
+  float k = vW.y * 88.0;
   float fw = max(fwidth(k), 1e-4);
-  float line = (1.0 - min(abs(fract(k) - 0.5) / fw, 1.0)) * clamp(1.4 - fw, 0.0, 1.0);
+  float line = (1.0 - min(abs(fract(k) - 0.5) / fw, 1.0)) * clamp(1.6 - 2.0 * fw, 0.0, 1.0);
   float scanY = fract(uTime * 0.14) * 2.6 - 0.2;
   float band = exp(-pow((vW.y - scanY) * 12.0, 2.0));
   float edge = smoothstep(0.08, 0.0, uReveal - vW.y);
   float flicker = 0.97 + 0.03 * sin(uTime * 29.0 + vW.y * 7.0);
   // the rim of a rated part takes on its status colour, the inside stays hologram blue
-  vec3 rimCol = mix(uColor, vAura * (0.6 + 0.5 * vLevel), step(0.01, vLevel) * 0.8);
-  vec3 c = uColor * (0.03 + 0.17 * line + 0.2 * band) + rimCol * 0.95 * fres;
+  vec3 rimCol = mix(uColor, vAura * (0.6 + 0.5 * vLevel), 0.85 * vLevel * vLevel);
+  vec3 c = uColor * (0.1 + 0.32 * line + 0.18 * band) + rimCol * 1.05 * fres;
   c += vec3(0.55, 0.85, 1.0) * edge * 1.2;
   gl_FragColor = vec4(c * vFocus * uStrength * flicker, 1.0);
 }`;
@@ -113,45 +113,45 @@ export interface Figure {
 
 type Pose = Partial<Record<BoneName, V3>>;
 
-/** Combat-ready base pose per weapon family (Euler XYZ per bone, relative to the bind pose). */
+/** Ready stance per weapon family (Euler XYZ per bone, relative to MakeHuman's A-pose). */
 function combatPose(weapon: WeaponKind): Pose {
-  const legs: Pose = {
-    "thigh.L": [-0.42, 0, 0.1], "shin.L": [0.5, 0, 0], "foot.L": [-0.08, 0, 0],
-    "thigh.R": [0.2, 0, -0.12], "shin.R": [0.34, 0, 0], "foot.R": [-0.52, 0, 0],
-    hips: [0, -0.32, 0], spine: [0.07, 0.1, 0], chest: [0.04, 0.1, 0], neck: [0, 0.05, 0], head: [-0.03, 0.12, 0],
+  const base: Pose = {
+    "thigh.L": [-0.14, 0, 0.0], "shin.L": [0.2, 0, 0], "foot.L": [-0.06, 0, 0],
+    "thigh.R": [0.07, 0, -0.01], "shin.R": [0.15, 0, 0], "foot.R": [-0.21, 0, 0],
+    hips: [0, -0.14, 0], spine: [0.03, 0.05, 0], chest: [0.02, 0.04, 0], neck: [0, 0.02, 0], head: [-0.02, 0.07, 0],
   };
   if (weapon === "orb" || weapon === "spellbook") {
     return {
-      ...legs,
-      "upperArm.R": [-0.6, 0.1, 0.22], "foreArm.R": [-1.15, 0, 0], "hand.R": [-0.25, 0, 0],
-      "upperArm.L": [-0.3, 0, -0.12], "foreArm.L": [-1.05, 0, 0.0], "hand.L": [0.15, 0.3, 0],
+      ...base,
+      "upperArm.R": [-0.32, 0, 0.18], "foreArm.R": [-0.85, 0.2, 0], "hand.R": [-0.3, 0, 0],
+      "upperArm.L": [-0.08, 0, -0.14], "foreArm.L": [-0.35, 0, 0], "hand.L": [0.1, 0, 0],
     };
   }
   if (weapon === "bow") {
     return {
-      ...legs,
-      "upperArm.L": [-1.05, 0, -0.25], "foreArm.L": [-0.15, 0, 0], "hand.L": [0, 0, 0],
-      "upperArm.R": [-0.95, 0, 0.5], "foreArm.R": [-1.5, 0, 0], "hand.R": [0, 0, 0],
+      ...base,
+      "upperArm.L": [-0.7, 0, -0.1], "foreArm.L": [-0.2, 0, 0],
+      "upperArm.R": [-0.15, 0, 0.15], "foreArm.R": [-0.4, 0, 0],
     };
   }
   if (weapon === "staff" || weapon === "polearm") {
     return {
-      ...legs,
-      "upperArm.R": [-0.4, 0, 0.18], "foreArm.R": [-0.85, 0, 0], "hand.R": [0, 0, 0],
-      "upperArm.L": [-0.35, 0, -0.12], "foreArm.L": [-1.0, 0, 0], "hand.L": [0.1, 0, 0],
+      ...base,
+      "upperArm.R": [-0.2, 0, 0.25], "foreArm.R": [-0.7, 0, 0],
+      "upperArm.L": [-0.08, 0, -0.14], "foreArm.L": [-0.35, 0, 0],
     };
   }
   // swords, mace, daggers
   return {
-    ...legs,
-    "upperArm.R": [-0.45, 0, 0.18], "foreArm.R": [-1.0, 0, 0], "hand.R": [0.35, 0, 0],
-    "upperArm.L": [-0.55, 0, -0.12], "foreArm.L": [-1.35, 0, 0], "hand.L": [0, 0.2, 0],
+    ...base,
+    "upperArm.R": [-0.25, 0, 0.2], "foreArm.R": [-0.75, 0, 0], "hand.R": [0.3, 0, 0],
+    "upperArm.L": [-0.25, 0, -0.15], "foreArm.L": [-0.9, 0, 0],
   };
 }
 /** Pose while the camera looks at the weapon: lift it towards the face. */
 function presentPose(weapon: WeaponKind): Pose {
-  if (weapon === "bow") return { "upperArm.L": [-1.35, 0, -0.1], "foreArm.L": [-0.25, 0, 0], head: [0, 0.35, 0] };
-  return { "upperArm.R": [-0.95, 0.1, 0.32], "foreArm.R": [-1.55, 0, 0], "hand.R": [-0.35, 0, 0], head: [0.12, -0.15, 0] };
+  if (weapon === "bow") return { "upperArm.L": [-1.1, 0, -0.05], "foreArm.L": [-0.3, 0, 0], head: [0, 0.35, 0] };
+  return { "upperArm.R": [-0.75, 0.1, 0.3], "foreArm.R": [-1.35, 0.2, 0], "hand.R": [-0.35, 0, 0], head: [0.12, -0.2, 0] };
 }
 
 const ease3 = (k: number) => k * k * (3 - 2 * k);
@@ -284,7 +284,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean)
   const up = new THREE.Vector3(0, 0, 1);
 
   // body markers for the camera
-  marker(bones.head, [0, 0.1 * hs, 0.02], "helmet:0");
+  marker(bones.head, [0, 0.07 * hs, 0.0], "helmet:0");
   marker(bones.chest, [0, 0.08, 0.04], "torso:0");
   marker(bones.chest, [0, 0.17, 0], "shoulders:0");
   marker(bones.hips, [0, -0.25, 0.03], "pants:0");
@@ -311,7 +311,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean)
     marker(rg, [0, 0, 0], `ring:${idx}`);
     // earring
     const sx = side === "L" ? 1 : -1;
-    const er = part(bones.head, new THREE.SphereGeometry(0.01, 16, 12), `earring:${idx}`, { p: [sx * 0.084 * hs, 0.065 * hs, 0] });
+    const er = part(bones.head, new THREE.SphereGeometry(0.01, 16, 12), `earring:${idx}`, { p: [sx * 0.071 * hs, 0.03, -0.015] });
     part(er, new THREE.SphereGeometry(0.034, 10, 8), `earring:${idx}`, { hitOnly: true });
     marker(er, [0, 0, 0], `earring:${idx}`);
   }
@@ -319,15 +319,15 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean)
   part(bones.neck, new THREE.TorusGeometry(f ? 0.058 : 0.066, 0.005, 8, 56), "necklace:0", { p: [0, 0.0, 0.012], r: [Math.PI / 2 - 0.45, 0, 0] });
   part(bones.neck, new THREE.OctahedronGeometry(0.014), "necklace:0", { p: [0, -0.04, f ? 0.07 : 0.08] });
   // belt
-  part(bones.hips, new THREE.TorusGeometry(f ? 0.128 : 0.145, 0.011, 10, 64), "belt:0", { p: rel("hips", [0, J.spine[1] - 0.075, 0]), r: [Math.PI / 2, 0, 0], s: [1, 0.74, 1] });
-  marker(bones.hips, rel("hips", [0, J.spine[1] - 0.075, 0.1]), "belt:0");
+  part(bones.hips, new THREE.TorusGeometry(f ? 0.128 : 0.145, 0.011, 10, 64), "belt:0", { p: rel("hips", [0, J.spine[1] - 0.055, -0.005]), r: [Math.PI / 2, 0, 0], s: [1, 0.72, 1] });
+  marker(bones.hips, rel("hips", [0, J.spine[1] - 0.055, 0.1]), "belt:0");
   // cape
   const capePivot = new THREE.Group();
   capePivot.position.set(...rel("chest", [0, J["shoulder.L"][1] + 0.02, -0.075]));
   bones.chest.add(capePivot);
   const capeGeo = new THREE.CylinderGeometry(f ? 0.17 : 0.2, f ? 0.3 : 0.34, 1.0, 40, 24, true, Math.PI - 0.95, 1.9);
   capeGeo.translate(0, -0.5, 0.075);
-  part(capePivot, capeGeo, "cape:0", { side: THREE.DoubleSide, strength: 0.7 });
+  part(capePivot, capeGeo, "cape:0", { side: THREE.DoubleSide, strength: 0.45 });
   marker(capePivot, [0, -0.4, -0.15], "cape:0");
   // offhand guard on the left forearm
   const shield = new THREE.Shape();
@@ -335,11 +335,16 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean)
   shield.quadraticCurveTo(-0.08, -0.1, -0.1, 0.02); shield.quadraticCurveTo(-0.1, 0.12, 0, 0.13);
   const shieldGeo = new THREE.ExtrudeGeometry(shield, { depth: 0.012, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 3, curveSegments: 16 });
   shieldGeo.center();
-  {
+  if (weapon === "sword" || weapon === "mace") {
+    // only shield classes carry the offhand visibly; for everyone else it stays in the gear list
     const E = J["elbow.L"], W = J["wrist.L"];
-    const mid = rel("foreArm.L", [(E[0] + W[0]) / 2 + 0.055, (E[1] + W[1]) / 2, (E[2] + W[2]) / 2]);
-    const guard = part(bones["foreArm.L"], shieldGeo, "offhand:0", { p: mid, r: [0, Math.PI / 2, -0.42] });
+    const mid = rel("foreArm.L", [(E[0] + W[0]) / 2 + 0.05, (E[1] + W[1]) / 2, (E[2] + W[2]) / 2]);
+    const guard = part(bones["foreArm.L"], shieldGeo, "offhand:0", { p: mid, r: [0, Math.PI / 2, -0.75] });
     marker(guard, [0, 0, 0], "offhand:0");
+  } else {
+    geos.add(shieldGeo);
+    gearMats("offhand:0", THREE.FrontSide, 1);
+    marker(palm.L, [0, 0, 0], "offhand:0");
   }
 
   // ---- weapon -----------------------------------------------------------------
@@ -548,7 +553,7 @@ export function buildFigure(gender: Gender, weapon: WeaponKind, reduce: boolean)
     const mic = Math.sin(t * 2.3 + 0.7) * amp;           // micro motion
     const look = Math.sin(t * 0.31) * amp;
 
-    bones.hips.position.set(bind.hips.x + 0.016 * ws, bind.hips.y - 0.062 - 0.007 * bob, bind.hips.z + 0.01);
+    bones.hips.position.set(bind.hips.x + 0.016 * ws, bind.hips.y - 0.018 - 0.005 * bob, bind.hips.z + 0.01);
     rot("hips", 0, 0.03 * ws, 0.016 * ws);
     rot("spine", 0.01 * br, 0, -0.01 * ws);
     rot("chest", 0.024 * br, 0.02 * look, -0.008 * ws);

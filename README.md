@@ -6,11 +6,12 @@ jeden Slot bewertet, die BiS-Linien pro Slot zeigt und einen priorisierten Upgra
 
 ## Funktionen
 - Startseite mit Charakterauswahl, neue Charaktere über **+** und kisk.app-Link
-- Startseite mit Hero-Showcase: der zuletzt geöffnete Charakter dreht sich als Hologramm, mit Farblegende der Noten
-- 3D-Hologramm je Charakter: glatter, zusammenhängender Körper (Signed-Distance-Modell, Marching Cubes, Skelett),
-  kampfbereite Idle-Animation, drehen/zoomen. Aura je Teil in Farbe UND Stärke nach Note (BiS gold mit Funken,
-  S+ pink, S violett, A grün, B lime, C grau, D schwach rot); die Waffe bekommt zusätzlich Halo und Funken.
-  Tippen fliegt die Kamera zum Teil und zeigt Ist vs. BiS.
+- 3D-Hologramm je Charakter: menschlicher Körper aus dem MakeHuman-Basismodell (CC0, weiblich/männlich,
+  erzeugt mit `node scripts/build-human-mesh.mjs`), Skelett mit ruhiger Bereitschafts-Idle, drehen/zoomen.
+  Aura je Teil in Farbe UND Stärke nach Note (BiS gold mit Funken, S+ pink, S violett, A grün, B lime, C grau, D schwach rot);
+  die Waffe bekommt zusätzlich Halo und Funken. Nur die echte Klassenwaffe wird gezeigt (Schild nur bei Schwert/Streitkolben).
+  Reiter „Ausrüstung“ rechts listet alle Teile (Ring 1/2, Armband 1/2 …); Tippen auf Teil oder Eintrag fliegt die Kamera hin
+  und zeigt Ist vs. BiS. Das Geschlecht wird beim ersten Öffnen einmal gewählt und dauerhaft gespeichert.
   Die Waffe (Orb, Schwert, Stab, Bogen …) wird aus dem Waffennamen bzw. der Klasse abgeleitet. Keine Spiel-Assets.
 - Ausrüstung & Arcana im Ist-Stand mit Icons, ✓/✗ je Linie und Fortschritt „X/Y BiS“
 - Tippen auf ein Teil öffnet das BiS-Ziel von kisk.app: Ist vs. Ziel je Linie,
