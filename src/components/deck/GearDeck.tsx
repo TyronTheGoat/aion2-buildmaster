@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Character, Item } from "@/lib/types";
 import { iconFor } from "@/lib/knowledge/item-catalog";
 import { SLOT_LABEL_DE } from "@/lib/knowledge/slots";
@@ -42,13 +42,18 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
   const [tab, setTab] = useState<"gear" | "arcana">("gear");
   // the view that is turning away during the wheel switch
   const [leaving, setLeaving] = useState<"gear" | "arcana">();
+  // keep the taller height while the wheel turns, so the outgoing view is not cut off
+  const wheelRef = useRef<HTMLDivElement>(null);
+  const [lockH, setLockH] = useState<number>();
   const switchTab = () => {
+    if (leaving) return;
+    setLockH(wheelRef.current?.offsetHeight);
     setLeaving(tab);
     setTab(tab === "gear" ? "arcana" : "gear");
   };
   useEffect(() => {
     if (!leaving) return;
-    const t = setTimeout(() => setLeaving(undefined), 750);
+    const t = setTimeout(() => { setLeaving(undefined); setLockH(undefined); }, 1250);
     return () => clearTimeout(t);
   }, [leaving, tab]);
   const deck = useMemo(() => all.filter((d) => (tab === "arcana") === (d.item.slot === "arcana")), [all, tab]);
@@ -134,7 +139,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
         ))}
       </button>
 
-      <div className="wheel relative -mx-4 overflow-x-clip px-4">
+      <div ref={wheelRef} className="wheel relative" style={{ minHeight: leaving ? lockH : undefined }}>
         {leaving && <Tiles key={`out-${leaving}`} deck={all.filter((d) => (leaving === "arcana") === (d.item.slot === "arcana"))} onOpen={setOpen}
           className={`pointer-events-none absolute inset-x-0 top-0 ${leaving === "gear" ? "wheel-out-left" : "wheel-out-right"}`} />}
         <Tiles key={`in-${tab}`} deck={deck} onOpen={setOpen}

@@ -11,11 +11,11 @@ function App() {
           <span className="ml-auto text-xs text-zinc-500">Offline-Version</span>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-5 pb-8">
         <BuildMasterApp />
       </main>
-      <footer className="mx-auto max-w-6xl px-4 pb-6 text-xs text-zinc-500">
-        Charakterdaten von kisk.app. Nicht offiziell, kein Bezug zu NCSOFT.
+      <footer className="pointer-events-none fixed inset-x-0 bottom-0 z-20 bg-[#0b0c10]/85 pb-[env(safe-area-inset-bottom)] text-center text-[9px] leading-[14px] text-zinc-600">
+        Daten: kisk.app · Nicht offiziell, kein Bezug zu NCSOFT
       </footer>
     </div>
   );

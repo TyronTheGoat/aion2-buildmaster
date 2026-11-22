@@ -22,6 +22,11 @@ export interface StatLinks {
  * - orange: a BiS line on the wrong place (the last BiS line not on the last place, or another one on the last place)
  * - red: not part of the BiS target (arrow to a BiS line that is still missing)
  * The current item never shows more lines than the BiS target; when it has more, its real last line is kept.
+ *
+ * Arcana cards work differently: the place of an ability does not matter, its plus level does.
+ * - green: the right ability with at least the ideal plus
+ * - orange: the right ability, but the plus is still below the ideal
+ * - red: the wrong ability (arrow to an ability that is still missing)
  */
 export function statLinks(item: Item): StatLinks | undefined {
   const cmp = compareIdeal(item);
@@ -37,6 +42,7 @@ export function statLinks(item: Item): StatLinks | undefined {
   const links: StatLinks["links"] = ist.map((line, from) => {
     const to = rows.findIndex((r) => r.have === line);
     if (to < 0) return { from, to: free.shift() ?? -1, color: "red" };
+    if (item.slot === "arcana") return { from, to, color: rows[to].state === "ok" ? "green" : "orange" };
     const wrong = to === lastBis ? from !== ist.length - 1 : from === lastIst;
     return { from, to, color: wrong ? "orange" : "green" };
   });

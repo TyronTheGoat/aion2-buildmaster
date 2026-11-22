@@ -56,6 +56,8 @@ export function GearCompare({ char, item, slotId }: {
 
   const cmp = compareIdeal(item);
   const stats = useMemo(() => statLinks(item), [item]);
+  // Arcana: the place of an ability does not matter, its plus level does
+  const arcana = item.slot === "arcana";
   const istStats = stats?.ist ?? item.lines;
   const links = useMemo<Link[]>(() => (stats?.links ?? []).filter((l) => l.to >= 0)
     .map((l) => ({ key: `s:${l.from}`, from: `s:${l.from}`, to: `s:${l.to}`, color: LINK[l.color].hex })), [stats]);
@@ -81,9 +83,9 @@ export function GearCompare({ char, item, slotId }: {
         <div className="mb-1.5 text-[10px] uppercase tracking-[0.22em] text-zinc-500"><span className="sm:hidden">Werte</span><span className="hidden sm:inline">Werte / Fähigkeiten</span></div>
         <div className="space-y-1">
           {side === "ist"
-            ? (istStats.length ? istStats.map((l, i) => <IstStat key={i} id={`s:${i}`} line={l} color={stats ? istColor(i) : undefined} unlockSlot={!!stats && i === istStats.length - 1} />)
+            ? (istStats.length ? istStats.map((l, i) => <IstStat key={i} id={`s:${i}`} line={l} color={stats ? istColor(i) : undefined} unlockSlot={!arcana && !!stats && i === istStats.length - 1} plus={arcana} />)
               : <EmptyRow>Leer</EmptyRow>)
-            : (stats?.bis.length ? stats.bis.map((b, i) => <BisStat key={i} id={`s:${i}`} name={b.name} skill={b.skill} missing={b.missing} unlock={i === stats.bis.length - 1} />)
+            : (stats?.bis.length ? stats.bis.map((b, i) => <BisStat key={i} id={`s:${i}`} name={b.name} skill={b.skill} missing={b.missing} unlock={!arcana && i === stats.bis.length - 1} plus={arcana ? b.value : undefined} />)
               : <EmptyRow>Offen</EmptyRow>)}
         </div>
       </div>
@@ -132,15 +134,22 @@ export function GearCompare({ char, item, slotId }: {
       </div>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
-        <span className="flex items-center gap-1.5"><Arrowlet color="#34d399" />richtig</span>
-        <span className="flex items-center gap-1.5"><Arrowlet color="#ff9a2e" />richtig, aber falscher Platz (nur der letzte Platz zählt)</span>
-        <span className="flex items-center gap-1.5"><Arrowlet color="#ff3b3b" />falsch (zeigt auf das, was fehlt)</span>
-        <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-violet-500/50" />Freischalt-Zeile (gehört auf den letzten Platz)</span>
+        {arcana ? <>
+          <span className="flex items-center gap-1.5"><Arrowlet color="#34d399" />richtige Fähigkeit mit idealem Plus</span>
+          <span className="flex items-center gap-1.5"><Arrowlet color="#ff9a2e" />richtige Fähigkeit, Plus noch zu niedrig</span>
+          <span className="flex items-center gap-1.5"><Arrowlet color="#ff3b3b" />falsche Fähigkeit (zeigt auf das, was fehlt)</span>
+          <span>Bei Arcana ist der Platz egal.</span>
+        </> : <>
+          <span className="flex items-center gap-1.5"><Arrowlet color="#34d399" />richtig</span>
+          <span className="flex items-center gap-1.5"><Arrowlet color="#ff9a2e" />richtig, aber falscher Platz (nur der letzte Platz zählt)</span>
+          <span className="flex items-center gap-1.5"><Arrowlet color="#ff3b3b" />falsch (zeigt auf das, was fehlt)</span>
+          <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-violet-500/50" />Freischalt-Zeile (gehört auf den letzten Platz)</span>
+        </>}
       </div>
 
       <Card grade="?" className="p-4 sm:p-5">
         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-[#beac80]">Noch zu tun</div>
-        {isBis ? (
+        {isBis && !(arcana && todo.length) ? (
           <p className="text-sm text-[#ffd54a]">Nichts mehr. Dieses Teil ist BiS.</p>
         ) : todo.length ? (
           <ul className="space-y-1.5 text-sm text-zinc-200">
@@ -196,7 +205,7 @@ function EmptyRow({ children }: { children: React.ReactNode }) {
 }
 
 /** A line (stat or skill) of the current item, in the order it sits on the item. The last row is the unlock slot. */
-function IstStat({ id, line, color, unlockSlot }: { id: string; line: StatLine; color?: LinkColor; unlockSlot: boolean }) {
+function IstStat({ id, line, color, unlockSlot, plus }: { id: string; line: StatLine; color?: LinkColor; unlockSlot: boolean; plus?: boolean }) {
   const v = color ? LINK[color] : undefined;
   return (
     <div data-pair={`ist:${id}`} className={`flex h-9 items-center justify-between gap-1.5 rounded-lg bg-white/[0.035] px-2 text-[12px] sm:px-2.5 sm:text-[13px] ${unlockSlot ? "ring-1 ring-violet-300/30" : ""}`}>
@@ -205,13 +214,14 @@ function IstStat({ id, line, color, unlockSlot }: { id: string; line: StatLine; 
         {isSkillValue(line.value) && <SkillIcon name={line.name} size={16} />}
         <span className="truncate font-medium text-zinc-100">{isSkillValue(line.value) ? line.name : statLabel(line.name)}</span>
       </span>
-      {v && <span className={`shrink-0 text-[11px] font-semibold ${v.markCls}`}>{v.mark}</span>}
+      {plus ? <span className={`shrink-0 text-[12px] font-semibold tabular-nums ${v?.markCls ?? "text-zinc-300"}`}>{line.value}</span>
+        : v && <span className={`shrink-0 text-[11px] font-semibold ${v.markCls}`}>{v.mark}</span>}
     </div>
   );
 }
 
 /** A BiS line, in BiS order. The last one is the unlockable line. */
-function BisStat({ id, name, skill, missing, unlock }: { id: string; name: string; skill: boolean; missing: boolean; unlock: boolean }) {
+function BisStat({ id, name, skill, missing, unlock, plus }: { id: string; name: string; skill: boolean; missing: boolean; unlock: boolean; plus?: string }) {
   const bg = unlock ? "bg-gradient-to-r from-violet-500/35 via-violet-500/20 to-violet-500/5 ring-1 ring-violet-300/30" : "bg-white/[0.035]";
   return (
     <div data-pair={`soll:${id}`} className={`flex h-9 items-center justify-between gap-1.5 rounded-lg px-2 text-[12px] sm:px-2.5 sm:text-[13px] ${bg}`}>
@@ -220,7 +230,8 @@ function BisStat({ id, name, skill, missing, unlock }: { id: string; name: strin
         {skill && <SkillIcon name={name} size={16} />}
         <span className={`truncate font-medium ${unlock ? "text-violet-50" : "text-zinc-100"}`}>{skill ? name : statLabel(name)}</span>
       </span>
-      <span className={`shrink-0 text-[11px] font-semibold ${missing ? "text-rose-300/80" : "text-[#ffd54a]"}`}>{missing ? "fehlt" : "◆"}</span>
+      {plus ? <span className={`shrink-0 text-[12px] font-semibold tabular-nums ${missing ? "text-rose-300/80" : "text-[#ffd54a]"}`}>{plus}</span>
+        : <span className={`shrink-0 text-[11px] font-semibold ${missing ? "text-rose-300/80" : "text-[#ffd54a]"}`}>{missing ? "fehlt" : "◆"}</span>}
     </div>
   );
 }

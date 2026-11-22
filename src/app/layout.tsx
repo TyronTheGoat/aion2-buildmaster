@@ -25,12 +25,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <nav aria-label="Hauptnavigation"><Link href="/#" className="rounded-lg border border-[#d9c58f]/25 px-3 py-1 text-sm text-[#efe6cc]/85 hover:border-[#d9c58f]/50">Charaktere</Link></nav>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 pb-[calc(2rem+env(safe-area-inset-bottom))]">
           {children}
         </main>
-        <footer className="mx-auto max-w-6xl px-4 pb-6 text-xs text-zinc-500">
-          Charakterdaten von <a className="underline" href="https://kisk.app" target="_blank" rel="noreferrer">kisk.app</a>.
-          Nicht offiziell, kein Bezug zu NCSOFT. Angaben ohne Gewähr.
+        <footer className="pointer-events-none fixed inset-x-0 bottom-0 z-20 bg-[#0b0c10]/85 pb-[env(safe-area-inset-bottom)] text-center text-[9px] leading-[14px] text-zinc-600">
+          Daten: kisk.app · Nicht offiziell, kein Bezug zu NCSOFT
         </footer>
       </body>
     </html>
