@@ -49,6 +49,8 @@ export interface Character {
   level?: number;
   combatPower?: number;
   gearGrade?: Grade;
+  /** Character portrait (head) as kisk.app links it; hosted by NCSOFT (profileimg.plaync.com), loaded live, never stored */
+  portrait?: string;
   gear: Item[];
   arcana: Item[];
   source: { url: string; fetchedAt: string; mode: "live" | "paste" | "demo" };

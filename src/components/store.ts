@@ -21,6 +21,11 @@ const listeners = new Set<() => void>();
 let cacheRaw: string | null = null;
 let cache: SavedChar[] = [];
 
+/** Portrait of a character: from its data, or the known one for the demo character (older saved copies lack it). */
+export function portraitOf(c: { region: string; server: string; name: string; portrait?: string; snapshot?: Character }): string | undefined {
+  return c.portrait ?? c.snapshot?.portrait ?? (charKey(c) === charKey(FLORENTINA) ? FLORENTINA.portrait : undefined);
+}
+
 export const charKey = (c: { region: string; server: string; name: string }) =>
   `${c.region.toLowerCase()}/${c.server.toLowerCase()}/${c.name.toLowerCase()}`;
 

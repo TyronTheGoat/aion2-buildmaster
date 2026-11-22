@@ -41,7 +41,7 @@ export function GearCompare({ char, item, slotId }: {
   const gridRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const t1 = setTimeout(() => setStage(1), 220);
-    const t2 = setTimeout(() => setStage(2), 220 + 560);
+    const t2 = setTimeout(() => setStage(2), 220 + 1100);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
   const charKey = `${char.region}/${char.server}/${char.name}`.toLowerCase();
@@ -108,8 +108,8 @@ export function GearCompare({ char, item, slotId }: {
       <div ref={gridRef} className="relative grid grid-cols-2 gap-10 [--gap:2.5rem] sm:gap-20 sm:[--gap:5rem]">
         {stage === 2 && <Arrows container={gridRef} links={links} />}
         {/* Ist-Stand */}
-        <div className="transition-transform duration-500 ease-out motion-reduce:transition-none"
-          style={{ transform: stage >= 1 ? "none" : "translateX(calc(50% + var(--gap) / 2))" }}>
+        <div className="transition-transform duration-[900ms] ease-[cubic-bezier(.45,0,.2,1)] will-change-transform motion-reduce:transition-none"
+          style={{ transform: stage >= 1 ? "translateX(0)" : "translateX(calc(50% + var(--gap) / 2))" }}>
           <Card grade={item.grade} className="flex h-full flex-col p-3 sm:p-5">
             <CardHead title="Ist-Stand" rank={item.grade} />
             <ItemBlock icon={SHOW_ITEM_ICONS ? iconFor(item) : undefined} grade={item.grade} name={item.name} info={istInfo} sub={istSub} />
@@ -119,8 +119,8 @@ export function GearCompare({ char, item, slotId }: {
         </div>
 
         {/* Soll-Stand / BiS */}
-        <div className="transition-all duration-500 ease-out motion-reduce:transition-none"
-          style={{ opacity: stage >= 1 ? 1 : 0, transform: stage >= 1 ? "none" : "translateX(1.5rem)" }}>
+        <div className="transition-[opacity,transform] delay-[280ms] duration-[800ms] ease-[cubic-bezier(.33,0,.2,1)] will-change-[opacity,transform] motion-reduce:transition-none"
+          style={{ opacity: stage >= 1 ? 1 : 0, transform: stage >= 1 ? "translateX(0) scale(1)" : "translateX(2rem) scale(0.98)" }}>
           <Card grade={soll?.grade ?? "?"} className="flex h-full flex-col p-3 sm:p-5">
             <CardHead title="Soll-Stand / BiS" short="Soll / BiS" rank={soll ? "BiS" : undefined} />
             {soll ? (

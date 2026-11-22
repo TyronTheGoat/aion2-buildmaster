@@ -1,5 +1,5 @@
 "use client";
-import type { CSSProperties, PointerEvent, ReactNode } from "react";
+import { useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import type { Grade } from "@/lib/types";
 import { GRADE_GLOW, GRADE_HEX_CSS } from "@/lib/grades";
 
@@ -78,6 +78,20 @@ export function CardArt({ src, alt, grade = "?" }: { src?: string; alt: string; 
  * Set to true to show the original item icons again (data and matching stay unchanged).
  */
 export const SHOW_ITEM_ICONS = true;
+
+/**
+ * Character portrait from kisk.app (NCSOFT profile image), loaded live. Falls back to the neutral placeholder
+ * when there is none or it cannot be loaded (e.g. offline without internet).
+ */
+export function Portrait({ src, name, className = "" }: { src?: string; name: string; className?: string }) {
+  const [failed, setFailed] = useState<string>();
+  if (!src || failed === src) return <Filler className={className} />;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt={`Profilbild von ${name}`} referrerPolicy="no-referrer" onError={() => setFailed(src)}
+      className={`shrink-0 rounded-xl object-cover ring-1 ring-[#d9c58f]/30 ${className}`} />
+  );
+}
 
 /** Neutral placeholder area (no picture, no decoration). */
 export function Filler({ className = "", label }: { className?: string; label?: string }) {

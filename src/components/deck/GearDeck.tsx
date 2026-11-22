@@ -4,7 +4,8 @@ import type { Character, Item } from "@/lib/types";
 import { iconFor } from "@/lib/knowledge/item-catalog";
 import { SLOT_LABEL_DE } from "@/lib/knowledge/slots";
 import { GRADE_HEX_CSS } from "@/lib/grades";
-import { Card, CardArt, Filler, SHOW_ITEM_ICONS } from "./Card";
+import { Card, CardArt, Filler, Portrait, SHOW_ITEM_ICONS } from "./Card";
+import { portraitOf } from "../store";
 import { GearCompare } from "../GearCompare";
 
 /** Order of the cards: weapon first, then armour, jewellery, the rest and Arcana last. */
@@ -110,7 +111,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
       <div className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-2 overflow-hidden rounded-2xl px-3 py-2.5">
         <button onClick={onBack} aria-label="Zurück zur Charakterauswahl"
           className="relative shrink-0 rounded-full border border-[#d9c58f]/20 bg-white/[0.03] px-3 py-1 text-sm text-[#efe6cc]/85 hover:border-[#d9c58f]/40">‹ Zurück</button>
-        <Filler className="relative h-10 w-10 rounded-lg" />
+        <Portrait src={portraitOf(char)} name={char.name} className="relative h-10 w-10 rounded-lg" />
         <div className="relative min-w-0 flex-1">
           <div className="truncate text-base font-semibold leading-tight text-[#f4eed7]">{char.name}</div>
           <div className="truncate text-[11px] text-[#beac80]/80">

@@ -21,6 +21,8 @@ export const FLORENTINA: Character = {
   level: 45,
   combatPower: 193085,
   gearGrade: "A",
+  // linked on kisk.app (og:image), 2026-11-22
+  portrait: "https://profileimg.plaync.com/game_profile_images/aion2global/images?gameServerKey=2314&charKey=651333096108652459",
   source: { url: "https://kisk.app/c/eu/odar/Florentina/gear", fetchedAt: "2026-11-21T21:20:00Z", mode: "demo" },
   warnings: [],
   gear: [

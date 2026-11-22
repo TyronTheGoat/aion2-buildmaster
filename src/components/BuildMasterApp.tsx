@@ -8,9 +8,9 @@ import { GRADE_HEX_CSS } from "@/lib/grades";
 import { Sheet } from "./ui";
 import { ItemCatalog } from "./ItemCatalog";
 import { GearDeck, deckOf } from "./deck/GearDeck";
-import { Filler, SHOW_ITEM_ICONS } from "./deck/Card";
+import { Filler, Portrait, SHOW_ITEM_ICONS } from "./deck/Card";
 import { iconFor } from "@/lib/knowledge/item-catalog";
-import { charKey, parseKiskLink, useCharacters, type SavedChar } from "./store";
+import { charKey, parseKiskLink, portraitOf, useCharacters, type SavedChar } from "./store";
 
 function useHashRoute(): [string | undefined, (k?: string) => void] {
   const [route, setRoute] = useState<string>();
@@ -83,7 +83,7 @@ export function BuildMasterApp() {
                 className="card-face group relative flex h-full w-full flex-col gap-4 overflow-hidden rounded-[20px] p-4 text-left transition hover:-translate-y-0.5 active:scale-[0.99]">
                 <span aria-hidden className="pointer-events-none absolute inset-[5px] rounded-[15px] border border-[#d9c58f]/20" />
                 <div className="relative flex items-center gap-4">
-                  <Filler className="h-20 w-20" />
+                  <Portrait src={portraitOf(c)} name={c.name} className="h-20 w-20" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-xl font-semibold text-[#f4eed7]">{c.name}</div>
                     <div className="truncate text-sm text-[#beac80]/80">
@@ -181,7 +181,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
     setStatus("loading");
     try {
       const char = await fetchLive(saved);
-      upsert({ ...saved, snapshot: char });
+      upsert({ ...saved, snapshot: { ...char, portrait: char.portrait ?? portraitOf(saved) } });
       setStatus("idle");
     } catch (e) {
       setError(e instanceof TypeError ? "kisk.app gerade nicht erreichbar" : e instanceof Error ? e.message : String(e));
@@ -201,7 +201,8 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
   function applyPaste() {
     const url = `https://kisk.app/c/${saved.region}/${saved.server}/${encodeURIComponent(saved.name)}/gear`;
     const char = parseKiskGear(textToLines(text), { region: saved.region, server: saved.server, name: saved.name, url, mode: "paste" });
-    upsert({ ...saved, snapshot: char });
+    // pasted text carries no picture: keep the known portrait
+    upsert({ ...saved, snapshot: { ...char, portrait: portraitOf(saved) } });
     setPasting(false); setText(""); setStatus("idle");
   }
 
