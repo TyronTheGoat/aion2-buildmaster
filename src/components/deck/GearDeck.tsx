@@ -156,7 +156,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
 function Tiles({ deck, onOpen, className = "" }: { deck: DeckEntry[]; onOpen: (id: string) => void; className?: string }) {
   const rankWord = useT()("Rang", "Rank");
   return (
-    <ul className={`grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4 ${className}`}>
+    <ul className={`grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-10 lg:grid-cols-4 ${className}`}>
       {deck.map((d) => (
         <li key={d.id}>
           <Card as="button" grade={d.item.grade} onClick={() => onOpen(d.id)} label={`${d.label}: ${d.item.name}`}

@@ -56,8 +56,9 @@ export function ItemCatalog({ onBack }: { onBack: () => void }) {
   const [level, setLevel] = useState("Alle");
   const [cls, setCls] = useState("Alle");
   const [q, setQ] = useState("");
-  // internal view: also Taiwan-only and unconfirmed items, clearly marked; never used for planning
-  const [internal, setInternal] = useState(false);
+  // all items by default; Taiwan-only and unconfirmed ones carry a badge and are never used for planning (BiS / targets)
+  const [euOnly, setEuOnly] = useState(false);
+  const internal = !euOnly;
   const [shown, setShown] = useState<CatalogItem>();
   const [limit, setLimit] = useState(PAGE);
   const opts = internal ? ALL_OPTS : PUBLIC_OPTS;
@@ -72,8 +73,8 @@ export function ItemCatalog({ onBack }: { onBack: () => void }) {
     (level === "Alle" || String(i.level) === level) &&
     (cls === "Alle" || fitsClass(i.slot, cls)) &&
     (!q || i.name.toLowerCase().includes(q.toLowerCase())))
-    // items with an original icon first, highest item level first
-    .sort((a, b) => Number(!!b.icon) - Number(!!a.icon) || (b.level ?? 0) - (a.level ?? 0)), [internal, source, cat, slot, rarity, level, cls, q]);
+    // EU / Global first, then items with an original icon, highest item level first
+    .sort((a, b) => Number(regionStatus(b) === "eu") - Number(regionStatus(a) === "eu") || Number(!!b.icon) - Number(!!a.icon) || (b.level ?? 0) - (a.level ?? 0)), [internal, source, cat, slot, rarity, level, cls, q]);
   const withIcon = items.filter((i) => i.icon).length;
   const hidden = regionCounts();
 
@@ -82,11 +83,11 @@ export function ItemCatalog({ onBack }: { onBack: () => void }) {
       <button onClick={onBack} className="text-sm text-zinc-400 hover:text-white">‹ {t("Charaktere", "Characters")}</button>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{t("Item-Katalog", "Item catalog")}</h1>
-        <p className="text-sm text-zinc-400">{items.length} Items · {withIcon} {t("mit Originalbild", "with original icon")} · {internal ? t("inkl. interner Daten", "incl. internal data") : show(REGION_LABEL.eu, lang)}</p>
-        <p className="text-[11px] text-zinc-500">{internal ? t("Intern", "Internal") : t("Intern ausgeblendet", "Hidden internally")}: {hidden.tw} {t("nur Taiwan", "Taiwan only")} · {hidden.unclear} {show(REGION_LABEL.unclear, lang)}</p>
+        <p className="text-sm text-zinc-400">{items.length} Items · {withIcon} {t("mit Originalbild", "with original icon")} · {internal ? t("alle Regionen", "all regions") : show(REGION_LABEL.eu, lang)}</p>
+        <p className="text-[11px] text-zinc-500">{t("Davon", "Of these")} {hidden.tw} {t("nur Taiwan", "Taiwan only")} · {hidden.unclear} {show(REGION_LABEL.unclear, lang)} · {t("für BiS und Ziele zählen nur EU / Global Items", "only EU / Global items count for BiS and targets")}</p>
         <label className="mt-2 flex items-center gap-2 text-xs text-zinc-300">
-          <input type="checkbox" checked={internal} onChange={(e) => { setInternal(e.target.checked); setLimit(PAGE); }} className="accent-amber-400" />
-          {t("Interne Daten zeigen (nur Taiwan / unbestätigt, nicht für die Planung)", "Show internal data (Taiwan only / unconfirmed, not used for planning)")}
+          <input type="checkbox" checked={euOnly} onChange={(e) => { setEuOnly(e.target.checked); setLimit(PAGE); }} className="accent-amber-400" />
+          {t("Nur für EU / Global bestätigte Items zeigen", "Show only items confirmed for EU / Global")}
         </label>
       </div>
       <div className="space-y-2">
@@ -99,10 +100,10 @@ export function ItemCatalog({ onBack }: { onBack: () => void }) {
         <Chips value={rarity} options={opts.rarities} onChange={setRarity} />
         <Chips value={level} options={opts.levels} onChange={setLevel} />
       </div>
-      <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5 lg:grid-cols-5">
+      <ul className="grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 sm:gap-x-5 sm:gap-y-9 lg:grid-cols-5">
         {items.slice(0, limit).map((i) => (
           <li key={i.key}>
-            <Card as="button" grade={i.crafted ? "BiS" : "?"} onClick={() => setShown(i)} label={i.name} className="flex h-full w-full flex-col p-2.5">
+            <Card as="button" grade="?" onClick={() => setShown(i)} label={i.name} className="flex h-full w-full flex-col p-2.5">
               <CardArt src={localIcon(i.icon)} alt={i.name} grade={i.crafted ? "BiS" : "?"} />
               <div className="relative mt-2 line-clamp-2 min-h-[2.5em] text-[12px] font-medium leading-tight text-[#f4eed7]">{i.name}</div>
               <div className="relative mt-0.5 flex items-center gap-1.5 text-[10px] text-zinc-500">

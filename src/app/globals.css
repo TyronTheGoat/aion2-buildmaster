@@ -27,14 +27,15 @@ body { overflow-x: clip; }
     radial-gradient(120% 80% at 50% 0%, rgba(61, 102, 162, 0.22) 0%, transparent 60%),
     linear-gradient(160deg, #22252c 0%, #15171c 55%, #0e0f13 100%);
 }
-/* rank light (see RANK_STYLE in lib/grades): the card's own shadow breathes between --rank-base and --rank-peak */
-.rank-legendary, .rank-pulse, .rank-glow { animation: rank-pulse var(--rank-period, 3s) ease-in-out infinite; }
-.rank-flicker { animation: rank-flicker var(--rank-period, 3.6s) linear infinite; }
-@keyframes rank-pulse { 0%, 100% { box-shadow: var(--rank-base); } 50% { box-shadow: var(--rank-peak); } }
+/* rank light (see RANK_STYLE in lib/grades): a separate light layer behind the card breathes in opacity only,
+   which the browser animates on the GPU, so the pulse runs smoothly */
+.rank-light { opacity: 0; will-change: opacity; }
+.rank-legendary, .rank-pulse, .rank-glow { animation-name: rank-breathe; animation-timing-function: cubic-bezier(.37,0,.63,1); animation-iteration-count: infinite; animation-direction: alternate; }
+.rank-flicker { animation-name: rank-flicker; animation-timing-function: linear; animation-iteration-count: infinite; }
+@keyframes rank-breathe { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rank-flicker {
-  0%, 40%, 46%, 100% { box-shadow: var(--rank-base); }
-  42% { box-shadow: var(--rank-peak); } 44% { box-shadow: var(--rank-base); } 45% { box-shadow: var(--rank-peak); }
-  80% { box-shadow: var(--rank-base); } 82% { box-shadow: var(--rank-peak); } 84% { box-shadow: var(--rank-base); }
+  0%, 38%, 100% { opacity: 0; } 41% { opacity: 0.8; } 43% { opacity: 0.2; } 45% { opacity: 0.9; } 50% { opacity: 0; }
+  78% { opacity: 0; } 80% { opacity: 0.7; } 83% { opacity: 0; }
 }
 /* a soft shine passes over the face now and then (S+ light, BiS stronger) */
 .rank-shine {
@@ -219,6 +220,7 @@ body { overflow-x: clip; }
 @media (prefers-reduced-motion: reduce) {
   .card-tilt, .card-tilt:hover { transform: none; transition: none; }
   .rank-legendary, .rank-pulse, .rank-glow, .rank-flicker, .rank-shine, .rank-sparkle, .rank-sparkle::after { animation: none; }
+  .rank-light { opacity: 0.5; }
   .wheel-in-ccw, .wheel-out-ccw { animation: none; }
   .wheel-out-ccw { display: none; }
   .arrow-line, .arrow-glow { animation: none; stroke-dashoffset: 0; }
