@@ -25,7 +25,10 @@ export function deckOf(char: Character, lang: Lang = "en"): DeckEntry[] {
     .map((item) => {
       const n = seen.get(item.slot) ?? 0;
       seen.set(item.slot, n + 1);
-      const label = `${slotLabel(item.slot, lang)}${(count.get(item.slot) ?? 0) > 1 ? ` ${n + 1}` : ""}`;
+      // Arcana cards are named by their kind ("Chalice", "Parchment", …) instead of "Arcana 1–5"
+      const label = item.slot === "arcana" && item.name
+        ? item.name.split(" ")[0]
+        : `${slotLabel(item.slot, lang)}${(count.get(item.slot) ?? 0) > 1 ? ` ${n + 1}` : ""}`;
       return { id: `${item.slot}:${n}`, item, label };
     })
     .sort((a, b) => ORDER.indexOf(a.item.slot) - ORDER.indexOf(b.item.slot) || a.id.localeCompare(b.id));
@@ -93,6 +96,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
                     <button onClick={() => setOpen(d.id)} aria-current={active ? "true" : undefined}
                       className={`flex w-full items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm transition ${active ? "bg-white/[0.09] text-[#f4eed7] ring-1 ring-[#d9c58f]/40" : "text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200"}`}>
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: GRADE_HEX_CSS[d.item.grade] }} />
+                      <SlotIcon src={SHOW_ITEM_ICONS ? iconFor(d.item) : undefined} />
                       {d.label}
                     </button>
                   </li>
@@ -173,5 +177,18 @@ function Tiles({ deck, onOpen, className = "" }: { deck: DeckEntry[]; onOpen: (i
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Small icon of the equipped item in the slot list; an empty frame when there is none. */
+function SlotIcon({ src }: { src?: string }) {
+  return (
+    <span aria-hidden className="relative h-6 w-6 shrink-0 overflow-hidden rounded-md bg-[radial-gradient(circle_at_50%_40%,#1f3a66_0%,#111a2b_60%,#0a0d14_100%)] ring-1 ring-white/10">
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-contain p-[2px]"
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+      )}
+    </span>
   );
 }

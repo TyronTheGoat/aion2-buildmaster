@@ -68,8 +68,6 @@ export function BuildMasterApp() {
         <div className="flex gap-2 md:w-[520px]">
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Suche: Charaktername …", "Search: character name …")} aria-label={t("Charakter suchen", "Search characters")}
             className="min-w-0 flex-1 rounded-xl border border-[#d9c58f]/20 bg-white/[0.03] px-3.5 py-2.5 text-base text-[#f4eed7] outline-none placeholder:text-zinc-500 focus:border-[#d9c58f]/50" />
-          <button onClick={() => setAdding(true)}
-            className="shrink-0 rounded-xl border border-[#d9c58f]/30 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-[#efe6cc] hover:border-[#d9c58f]/60">{t("+ Neuer Charakter", "+ New character")}</button>
         </div>
       </div>
 
