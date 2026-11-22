@@ -44,6 +44,8 @@ export interface Ingredient extends ItemRef {
   /** "transfer": the item that is carried over into the new one (03), kept apart from normal materials */
   kind: "material" | "transfer";
   optional?: boolean;
+  /** other items the source names for the same transfer slot (not confirmed while `unverified`) */
+  alternatives?: (ItemRef & { unverified?: boolean })[];
 }
 
 /** One named recipe per faction (not per gear type). Chances on the recipe itself are the ones at the required mastery. */
@@ -72,6 +74,10 @@ export interface Recipe extends RecipeChances {
   patch?: string;
   source?: string;
   notes?: string;
+  /** whether the direct ingredient list is known to be complete: "complete" (checked on the recipe page), "unconfirmed" (some known, not checked), "none" */
+  ingredientsStatus?: "complete" | "unconfirmed" | "none";
+  /** data from the Global game client that nobody has seen live on EU yet */
+  liveUnconfirmed?: boolean;
   ingredients: Ingredient[];
 }
 
@@ -128,7 +134,7 @@ export function craftSlotOf(gearSlot?: string): CraftSlot | null {
   if (s === "guard" || s === "shield") return "guard";
   if (s === "gloves") return "gloves";
   if (["necklace", "earring", "earrings", "bracelet", "belt", "amulet"].includes(s)) return "jewelry";
-  if (["chest", "torso", "pants", "helmet", "helm", "shoulders", "boots", "cape", "cloak"].includes(s)) return "armor";
+  if (["chest", "torso", "pants", "legs", "helmet", "helm", "shoulders", "boots", "cape", "cloak"].includes(s)) return "armor";
   return null;
 }
 
@@ -212,12 +218,15 @@ export const emptyState = (): CraftState => ({
 /* ------------------------------------------------------------------ import ------------------------------------------------------------------ */
 
 export interface ImportError { row: number; message: string }
-export type FileKind = "recipes" | "chances" | "materials" | "transfers" | "keymap" | "chain" | "catalog" | "prices" | "gaps" | "unknown";
+export type FileKind = "recipes" | "chances" | "materials" | "transfers" | "keymap" | "chain" | "catalog" | "prices" | "gaps" | "coverage" | "sources" | "unknown";
 
 /** Which input a file is, from its columns (file names change between packages). */
 export function detectKind(header: string[]): FileKind {
   const h = new Set(header);
   if (h.has("v3_recipe_key") && h.has("new_recipe_key")) return "keymap";
+  if (h.has("ingredient_coverage") || h.has("full_ingredient_set_confirmed")) return "coverage";
+  if (h.has("url_status")) return "sources";
+  if (h.has("item_or_material_id")) return "catalog";
   if (h.has("sequence_position")) return "chain";
   if (h.has("catalog_key")) return "catalog";
   if (h.has("required_item_name")) return "transfers";
@@ -290,6 +299,8 @@ export function importRecipes(text: string, existing: Recipe[] = []) {
       pFinal: prob(r, errs, "p_final_item_per_attempt", "p_final"),
       best: bestBase !== null || bestFinal !== null ? { pBase: guaranteed === true && bestBase === null ? 1 : bestBase, pComboActivation: pAct, pComboSuccess: null, pFinal: bestFinal, guaranteed } : undefined,
       ingredients: prev?.ingredients ?? [],
+      ingredientsStatus: prev?.ingredientsStatus,
+      liveUnconfirmed: prev?.liveUnconfirmed,
     };
     recipe.documentedMastery = recipe.requiredMastery;
     if (hasCombo && !recipe.comboOutput) recipe.comboOutput = { name: `${recipe.name} (Combo)`, faction: faction || undefined, unverified: true };
@@ -321,6 +332,8 @@ export function importIngredients(text: string, recipes: Recipe[], kind: Ingredi
       kind,
     };
     if (bool(r, errs, "is_optional") === true) ing.optional = true;
+    const altName = str(r, "alternate_item_name");
+    if (altName) ing.alternatives = [{ name: altName, itemId: str(r, "alternate_item_id"), unverified: (str(r, "alternate_transfer_options_verified") ?? "").toLowerCase() !== "yes" }];
     if (errs.length) { errors.push({ row, message: errs.join("; ") }); return; }
     const list = fresh.get(rec.recipeKey) ?? [];
     if (list.some((x) => sameItem(x, ing))) { errors.push({ row, message: `doppelte Zutat "${name}" in ${rec.recipeKey}` }); return; }
@@ -363,8 +376,16 @@ export function importKeyMap(text: string, state: CraftState) {
     if (!from || !to) errors.push({ row: i + 2, message: "alter oder neuer Schlüssel fehlt" }); else map[from] = to;
   });
   const m = (k: string) => map[k] ?? k;
+  // an old placeholder row merges into the real recipe: it only fills fields the real row leaves empty
+  const fill = (real: Recipe, old: Recipe): Recipe => {
+    const out: Record<string, unknown> = { ...real };
+    for (const [k, v] of Object.entries(old)) if ((out[k] === null || out[k] === undefined) && v !== null && v !== undefined) out[k] = v;
+    if (!real.ingredients.length && old.ingredients.length) out.ingredients = old.ingredients;
+    return out as unknown as Recipe;
+  };
+  const olds = new Map(state.recipes.filter((r) => r.recipeKey in map).map((r) => [map[r.recipeKey], r] as const));
   const recipes = state.recipes.filter((r) => !(r.recipeKey in map) || !state.recipes.some((x) => x.recipeKey === map[r.recipeKey]))
-    .map((r) => (r.recipeKey in map ? { ...r, recipeKey: map[r.recipeKey] } : r));
+    .map((r) => (r.recipeKey in map ? { ...r, recipeKey: map[r.recipeKey] } : olds.has(r.recipeKey) ? fill(r, olds.get(r.recipeKey)!) : r));
   return {
     state: {
       ...state, keyMap: map, recipes,
@@ -408,9 +429,10 @@ export function importChain(text: string, state: CraftState) {
       const r = byKey.get(c.recipeKey);
       if (!r) return;
       r.level = c.normalLevel ?? r.level;
-      r.comboLevel = c.comboLevel;
+      r.comboLevel = c.comboLevel ?? r.comboLevel ?? null;
       const next = byKey.get(list[i + 1]?.recipeKey ?? "");
-      if (c.comboLevel === null || !next) return;
+      // derive the combo result only for a confirmed combo level and when the recipe file does not name it
+      if (c.comboLevel === null || !next || (r.comboOutput && !r.comboOutput.unverified)) return;
       if (next.transfer && next.guaranteed === true && next.pComboActivation === null) {
         // the safe transfer of the next step makes exactly the combo item of this step
         r.comboOutput = { name: next.output.name, itemId: next.output.itemId, faction: next.output.faction };
@@ -426,17 +448,56 @@ export function importChain(text: string, state: CraftState) {
   return { state: { ...state, chains: [...state.chains.filter((x) => !chains.some((c) => c.recipeKey === x.recipeKey)), ...chains], recipes: state.recipes.map((r) => byKey.get(r.recipeKey) ?? r) }, errors, rows: rows.length };
 }
 
+/** Coverage of the direct ingredient lists (V7 07 / 08): which recipes are checked complete on their recipe page. */
+export function importCoverage(text: string, state: CraftState) {
+  const { rows } = parseCsv(text);
+  const errors: ImportError[] = [];
+  const status = new Map<string, Recipe["ingredientsStatus"]>();
+  rows.forEach((r, i) => {
+    const raw = str(r, "recipe_key");
+    if (!raw) { errors.push({ row: i + 2, message: "recipe_key fehlt" }); return; }
+    const key = state.keyMap[raw] ?? raw;
+    const cov = (str(r, "ingredient_coverage") ?? "").toLowerCase();
+    const confirmed = (str(r, "full_ingredient_set_confirmed") ?? "").toLowerCase();
+    const s: Recipe["ingredientsStatus"] = cov.startsWith("verified_complete") || confirmed === "yes" ? "complete" : cov === "no_ingredients" ? "none" : cov || confirmed ? "unconfirmed" : undefined;
+    // a recipe once checked complete stays complete
+    if (s && status.get(key) !== "complete") status.set(key, s);
+  });
+  const recipes = state.recipes.map((r) => {
+    const s = status.get(r.recipeKey);
+    if (!s || r.ingredientsStatus === "complete") return r;
+    return { ...r, ingredientsStatus: s === "none" && r.ingredients.length ? "unconfirmed" as const : s };
+  });
+  return { state: { ...state, recipes }, errors, rows: rows.length };
+}
+
+/** Recipe sources (V7 04): marks recipes that come from Global client data and were not tested live on EU. */
+export function importSources(text: string, state: CraftState) {
+  const { rows } = parseCsv(text);
+  const live = new Map<string, boolean>();
+  for (const r of rows) {
+    const raw = str(r, "recipe_key");
+    if (!raw) continue;
+    const v = (str(r, "current_live_eu_verified") ?? "").toLowerCase();
+    live.set(state.keyMap[raw] ?? raw, !(v.startsWith("yes") || v === "verified"));
+  }
+  return { state: { ...state, recipes: state.recipes.map((r) => (live.has(r.recipeKey) ? { ...r, liveUnconfirmed: live.get(r.recipeKey) } : r)) }, rows: rows.length };
+}
+
 /** Start entries of the price catalogue (13): selection only, its empty price columns are ignored. */
 export function importCatalog(text: string, existing: CatalogEntry[] = []) {
   const { rows } = parseCsv(text);
   const out = new Map(existing.map((e) => [e.key, e] as const));
   for (const r of rows) {
-    const key = str(r, "catalog_key"), name = str(r, "item_name");
+    // 13: catalog_key/item_name; 06 (V7): item_or_material_id/label — only rows with a real item ID, recipe targets come from the recipes
+    const id06 = str(r, "item_or_material_id");
+    if (!str(r, "catalog_key") && !id06) continue;
+    const key = str(r, "catalog_key") ?? `id:${id06}`, name = str(r, "item_name", "label");
     if (!key || !name) continue;
     const cat = (str(r, "catalog_category") ?? "").toLowerCase();
     const slot = str(r, "gear_slot");
     out.set(key, {
-      key, name, itemId: str(r, "item_id"), faction: str(r, "faction"), slot,
+      key, name, itemId: str(r, "item_id") ?? id06, faction: str(r, "faction"), slot,
       category: cat.includes("transfer") ? "transfer" : cat.includes("zutat") ? "intermediate" : categoryOfSlot(slot),
       recipeKeys: (str(r, "source_recipe_key") ?? "").split(";").filter(Boolean), bound: /\(bound\)/i.test(name) ? true : null,
     });
@@ -490,6 +551,8 @@ export function importFile(state: CraftState, fileName: string, text: string): {
   else if (kind === "chain") { const r = importChain(text, state); next = r.state; errors = r.errors; rows = r.rows; }
   else if (kind === "catalog") { const r = importCatalog(text, state.catalogExtra); next = { ...state, catalogExtra: r.catalog }; rows = r.rows; }
   else if (kind === "prices") { const r = importPrices(text, state.prices); next = { ...state, prices: r.prices }; errors = r.errors; rows = r.rows; }
+  else if (kind === "coverage") { const r = importCoverage(text, state); next = r.state; errors = r.errors; rows = r.rows; }
+  else if (kind === "sources") { const r = importSources(text, state); next = r.state; rows = r.rows; }
   else if (kind === "gaps") { rows = parsed.length; next = { ...state, gaps: [...state.gaps.filter((g) => g.file !== fileName), { file: fileName, rows: parsed }] }; }
   else return { state, kind, errors: [{ row: 0, message: `Datei "${fileName}" nicht erkannt (Spalten: ${header.slice(0, 6).join(", ")} …)` }], rows: 0 };
   next = { ...next, imports: [...next.imports.filter((x) => x.file !== fileName), { file: fileName, at, rows, errors: errors.length }] };
@@ -579,6 +642,7 @@ export interface Missing { what: string; item?: string }
 export function attemptCost(recipe: Recipe, ctx: PriceCtx | Price[], s: Scenario, free: (i: Ingredient) => boolean = () => false) {
   const missing: Missing[] = [];
   if (!recipe.ingredients.length) missing.push({ what: "Zutaten des Rezepts fehlen" });
+  const unconfirmed = recipe.ingredients.length > 0 && recipe.ingredientsStatus !== undefined && recipe.ingredientsStatus !== "complete";
   let sum = 0;
   for (const i of recipe.ingredients) {
     if (i.qty === null) { missing.push({ what: "Menge fehlt", item: i.name }); continue; }
@@ -587,7 +651,7 @@ export function attemptCost(recipe: Recipe, ctx: PriceCtx | Price[], s: Scenario
     if (p === null) missing.push({ what: "Preis fehlt", item: i.name });
     else sum += p * i.qty;
   }
-  return { cost: missing.length ? null : sum, partial: sum, missing };
+  return { cost: missing.length ? null : sum, partial: sum, missing, unconfirmed };
 }
 
 /** Cost of one failed attempt (what is lost). Unknown loss rule blocks the number. */
@@ -829,6 +893,7 @@ export function pathSimInput(p: Project, state: CraftState, s: Scenario) {
   const path = remainingPath(p, state);
   const missing: (Missing & { step: string })[] = [];
   let partial = 0;
+  const unconfirmed = new Set<string>();
   const crafted = (i: Ingredient) => !!craftsItself(p, i, state.recipes);
   const steps = path.map(({ recipe, goal }) => {
     const c = chancesFor(recipe, state.overrides, p.character, p.mastery);
@@ -838,6 +903,7 @@ export function pathSimInput(p: Project, state: CraftState, s: Scenario) {
     const free = (i: Ingredient) => crafted(i) || (i.kind === "transfer" && !!producerOf(i, state.recipes, p.faction));
     const ok = attemptCost(recipe, ctx, s, free);
     partial += ok.partial;
+    if (ok.unconfirmed) unconfirmed.add(recipe.name);
     const fail = prob === 1 ? { cost: 0, missing: [] } : failCost(recipe, ctx, s, free);
     for (const m of [...ok.missing, ...fail.missing]) missing.push({ step: recipe.name, ...m });
     // a failure that eats a crafted intermediate sends the path back; that branch is not simulated yet
@@ -847,7 +913,7 @@ export function pathSimInput(p: Project, state: CraftState, s: Scenario) {
     }
     return { p: prob ?? 0, cost: ok.cost ?? 0, failCost: fail.cost ?? 0 };
   });
-  return { path, steps: missing.length ? null : steps, missing, partial };
+  return { path, steps: missing.length ? null : steps, missing, partial, unconfirmed: [...unconfirmed] };
 }
 
 /* ------------------------------------------------------------------ price catalogue ------------------------------------------------------------------ */
@@ -901,14 +967,16 @@ export function buildCatalog(state: Pick<CraftState, "recipes" | "catalogExtra">
  */
 export function openCost(p: Project, state: CraftState, s: Scenario) {
   const missing: (Missing & { step: string })[] = [];
+  const unconfirmed: string[] = [];
   let sum = 0;
   const free = (i: Ingredient) => !!craftsItself(p, i, state.recipes) || (i.kind === "transfer" && !!producerOf(i, state.recipes, p.faction));
   for (const { recipe } of remainingPath(p, state)) {
     const c = attemptCost(recipe, ctxOf(state, p, recipe.recipeKey), s, free);
     sum += c.partial;
+    if (c.unconfirmed) unconfirmed.push(recipe.name);
     for (const m of c.missing) missing.push({ step: recipe.name, ...m });
   }
-  return { cost: missing.length ? null : sum, partial: sum, missing };
+  return { cost: missing.length ? null : sum, partial: sum, missing, unconfirmed: [...new Set(unconfirmed)] };
 }
 
 /** Item level of a milestone (combo level when the step aims at the combo result). */

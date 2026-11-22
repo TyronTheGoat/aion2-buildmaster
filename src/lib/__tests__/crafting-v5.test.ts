@@ -23,16 +23,27 @@ const proj = (target: string, extra: Partial<Project> = {}): Project => ({
 const attempt = (projectId: string, r: Recipe, outcome: AttemptEvent["outcome"]): AttemptEvent =>
   ({ id: Math.random().toString(36), kind: "attempt", projectId, at: "2026-11-22T11:00:00Z", recipeKey: r.recipeKey, outcome, ...attemptEffects(r, outcome), costLow: 1, costHigh: 2 });
 
-describe("V4 import", () => {
+describe("V4/V5 + V7 import", () => {
   it("every file is recognised and imports without errors", () => {
-    expect(log.map((l) => l.kind)).toEqual(["recipes", "materials", "transfers", "keymap", "chain", "gaps", "gaps", "gaps", "catalog"]);
+    expect(log.map((l) => l.kind)).toEqual(["recipes", "materials", "transfers", "keymap", "chain", "gaps", "catalog",
+      "recipes", "keymap", "materials", "transfers", "chain", "coverage", "coverage", "gaps", "sources", "catalog"]);
     expect(log.every((l) => l.errors === 0)).toBe(true);
   });
-  it("158 recipes with unique keys; 123 still without ingredients stay visible as gaps", () => {
-    expect(data.recipes).toHaveLength(158);
-    expect(new Set(data.recipes.map((r) => r.recipeKey)).size).toBe(158);
-    expect(data.recipes.filter((r) => !r.ingredients.length)).toHaveLength(123);
-    expect(data.gaps.find((g) => g.file.startsWith("07"))!.rows).toHaveLength(123);
+  it("409 V7 rows give 391 recipes: the 18 placeholder spellbook keys merge into their real recipe", () => {
+    expect(data.recipes).toHaveLength(391);
+    expect(new Set(data.recipes.map((r) => r.recipeKey)).size).toBe(391);
+    expect(data.recipes.every((r) => r.recipeKey.startsWith("recipe:"))).toBe(true);
+    const { rows } = parseCsv(BUILTIN_FILES.find(([f]) => f === "v7/01_EU_GLOBAL_REZEPTE_409.csv")![1]);
+    expect(rows).toHaveLength(409);
+  });
+  it("ingredient coverage: 18 checked complete, the rest unconfirmed or missing — never shown as complete", () => {
+    const by = (s: string) => data.recipes.filter((r) => r.ingredientsStatus === s).length;
+    expect(by("complete")).toBe(18);
+    expect(data.recipes.filter((r) => r.ingredients.length).length).toBe(74);
+    expect(by("none")).toBe(data.recipes.filter((r) => !r.ingredients.length).length);
+    const longsword = R("recipe:111013001");
+    expect(longsword.ingredientsStatus).toBe("complete");
+    expect(longsword.ingredients.filter((i) => i.kind === "material")).toHaveLength(6);
   });
   it("no ingredient or transfer is attached twice, transfers stay apart from materials", () => {
     for (const r of data.recipes) {
@@ -44,13 +55,30 @@ describe("V4 import", () => {
   it("importing the same files again does not double anything", () => {
     let s = data;
     for (const [f, t] of BUILTIN_FILES) s = importFile(s, f, t).state;
-    expect(s.recipes).toHaveLength(158);
+    expect(s.recipes).toHaveLength(391);
     expect(s.recipes.flatMap((r) => r.ingredients)).toHaveLength(data.recipes.flatMap((r) => r.ingredients).length);
-    expect(s.chains).toHaveLength(18);
+    expect(s.chains).toHaveLength(data.chains.length);
   });
-  it("old V3 Orb keys are moved to the new keys (04)", () => {
-    const { rows } = parseCsv(BUILTIN_FILES.find(([f]) => f.startsWith("04"))![1]);
-    for (const r of rows) expect(data.keyMap[r.v3_recipe_key]).toBe(r.new_recipe_key);
+  it("old V3 keys are moved to the new keys (V5 04, V7 09)", () => {
+    for (const f of ["v5/04_V3_Orb_ID_Korrekturen.csv", "v7/09_BESTEHENDE_REZEPT_MAPPING.csv"]) {
+      const { rows } = parseCsv(BUILTIN_FILES.find(([n]) => n === f)![1]);
+      for (const r of rows) expect(data.keyMap[r.v3_recipe_key]).toBe(r.new_recipe_key);
+    }
+  });
+  it("V7 80 % table agrees with the recipe data and the 80 % rule", () => {
+    const { rows } = parseCsv(BUILTIN_FILES.find(([f]) => f === "v7/03_REZEPT_CHANCEN_80_PROZENT.csv")![1]);
+    let combos = 0;
+    for (const row of rows) {
+      const r = R(data.keyMap[row.recipe_key] ?? row.recipe_key);
+      expect(r, row.recipe_key).toBeTruthy();
+      if (row.n80_normal_at_required) expect(attemptsFor(effectiveChance(r, "normal")), row.recipe_key).toBe(Number(row.n80_normal_at_required));
+      if (row.n80_combo_best) { combos++; expect(r.best, row.recipe_key).toBeTruthy(); expect(attemptsFor(effectiveChance(r.best!, "combo")), row.recipe_key).toBe(Number(row.n80_combo_best)); }
+    }
+    expect(combos).toBe(188);
+  });
+  it("transfer alternatives are kept apart and marked unconfirmed", () => {
+    const t = R("recipe:311093011").ingredients.find((i) => i.kind === "transfer")!;
+    expect(t.alternatives?.[0]).toMatchObject({ name: "True Dragon Lord Orb", unverified: true });
   });
 });
 
@@ -60,7 +88,7 @@ describe("Orb chain Lv18 → 102 (09)", () => {
     ["Asmodian", "recipe:321093015", ["Truth Orb", "Expert's Truth Orb", "Artisan's Truth Orb", "Star Dragon Lord Orb", "Splendent Star Dragon Lord Orb", "Dark Dragon Lord Orb", "Splendent Dark Dragon Lord Orb", "Ebony Dragon Lord Orb", "Splendent Ebony Dragon Lord Orb"]],
   ] as const) {
     it(`${faction}: 9 stages in order, levels 18 → 102`, () => {
-      const chain = data.chains.filter((c) => c.faction === faction).sort((a, b) => a.position - b.position);
+      const chain = data.chains.filter((c) => c.faction === faction && c.slot === "orb").sort((a, b) => a.position - b.position);
       expect(chain.map((c) => R(c.recipeKey).name)).toEqual(names);
       expect(chain.map((c) => c.normalLevel)).toEqual([18, 28, 39, 62, 70, 78, 86, 94, 102]);
       expect(chain.filter((c) => c.extraLv44Base).map((c) => c.normalLevel)).toEqual([78, 94]);
@@ -73,7 +101,7 @@ describe("Orb chain Lv18 → 102 (09)", () => {
       expect(names44.every((m) => m.goal === "combo")).toBe(true);
       expect(path[path.length - 1].recipe.recipeKey).toBe(last);
       // every stage of the confirmed chain appears in the path
-      for (const c of data.chains.filter((c) => c.faction === faction)) expect(path.some((m) => m.recipe.recipeKey === c.recipeKey)).toBe(true);
+      for (const c of data.chains.filter((c) => c.faction === faction && c.slot === "orb")) expect(path.some((m) => m.recipe.recipeKey === c.recipeKey)).toBe(true);
       // no recipe of the other faction
       expect(path.every((m) => m.recipe.faction === faction)).toBe(true);
     });
@@ -101,7 +129,7 @@ describe("80 % values against 05", () => {
     expect(attemptsFor(0.2304)).toBe(7);
   });
   it("every row of 05 matches the recipe data", () => {
-    const { rows } = parseCsv(BUILTIN_FILES.find(([f]) => f.startsWith("05"))![1]);
+    const { rows } = parseCsv(BUILTIN_FILES.find(([f]) => f === "v5/05_Ergaenzte_80pct_Chancen.csv")![1]);
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
       const r = R(data.keyMap[row.recipe_key] ?? row.recipe_key);
@@ -211,7 +239,7 @@ describe("stored data from Phase 1 (version 1)", () => {
     const old = { version: 1, recipes: [], overrides: [], prices: [{ name: "Odyle", server: "odar", low: 5, high: 6, ref: null, tradeable: true }], gaps: [], imports: [], inventory: { "n:odyle": 3 }, projects: [p], events: [] };
     const s = migrate(old as never);
     expect(s.version).toBe(2);
-    expect(s.recipes).toHaveLength(158);
+    expect(s.recipes).toHaveLength(391);
     expect(s.projects).toEqual([p]);
     expect(s.prices).toEqual(old.prices);
     expect(s.inventory).toEqual(old.inventory);

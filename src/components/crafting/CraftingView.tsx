@@ -84,6 +84,8 @@ export function CraftingView({ char, ui, setUi }: { char: Character; ui: CraftUi
     URL.revokeObjectURL(a.href);
   };
   const gaps = state.recipes.filter((r) => !r.ingredients.length).length;
+  const complete = state.recipes.filter((r) => r.ingredientsStatus === "complete").length;
+  const unconfirmed = state.recipes.filter((r) => r.ingredients.length && r.ingredientsStatus !== "complete").length;
   const subs = [["projects", t("Crafting-Projekte", "Crafting projects")], ["next", "Crafting Next Steps"]] as const;
   const onPrices = ui.sub === "prices";
 
@@ -113,8 +115,10 @@ export function CraftingView({ char, ui, setUi }: { char: Character; ui: CraftUi
       </div>
 
       <p className="text-[11px] text-zinc-500">
-        <span className="text-[#ffa31a]/85">Beta</span> · {state.recipes.length} {t("Rezepte", "recipes")}
-        {gaps > 0 && <> · <span className={MISSING}>{gaps} {t("noch ohne Zutatenliste (Datenlücke)", "still without ingredient list (data gap)")}</span></>}
+        <span className="text-[#ffa31a]/85">Beta</span> · {state.recipes.length} {t("Rezepte (EU/Global-Clientdaten)", "recipes (EU/Global client data)")}
+        {" · "}{complete} {t("mit geprüfter Zutatenliste", "with checked ingredient list")}
+        {unconfirmed > 0 && <> · <span className={MISSING}>{unconfirmed} {t("Zutaten unbestätigt", "ingredients unconfirmed")}</span></>}
+        {gaps > 0 && <> · <span className={MISSING}>{gaps} {t("noch ohne Zutatenliste", "still without ingredient list")}</span></>}
         {" · "}{t("Preise trägst nur du ein.", "Only you enter prices.")}
       </p>
 
@@ -222,7 +226,7 @@ function ProjectCard({ p, state, onOpen }: { p: Project; state: CraftState; onOp
         </span></div>
         {p.status !== "done" && (
           <div className="truncate text-zinc-500">{t("Offene Materialkosten", "Open material cost")}: {cost.low.cost !== null
-            ? <span className="text-[#efe6cc]/85">{range(cost.low.cost, cost.high.cost)}</span>
+            ? <span className="text-[#efe6cc]/85">{range(cost.low.cost, cost.high.cost)}{cost.low.unconfirmed.length > 0 && <span className={MISSING}> · {t("vorläufig", "provisional")}</span>}</span>
             : <span className={MISSING}>{t("Daten fehlen", "Data missing")}{cost.low.partial > 0 ? ` (${t("bekannt", "known")} ${range(cost.low.partial, cost.high.partial)})` : ""}</span>}</div>
         )}
       </div>
@@ -371,6 +375,7 @@ function ProjectDetail({ p, state, update, onBack, onPrice }: { p: Project; stat
                 <span className="text-[#efe6cc]/85">{m.item.name}</span>
                 {lv !== null && <span className="text-zinc-500">Lv {lv}</span>}
                 {m.goal === "combo" && <span className="text-zinc-500">Combo</span>}
+                {m.recipe.ingredientsStatus !== undefined && m.recipe.ingredientsStatus !== "complete" && <span className={MISSING}>{m.recipe.ingredients.length ? t("Zutaten unbestätigt", "ingredients unconfirmed") : t("Zutaten fehlen", "ingredients missing")}</span>}
                 {!m.done && p.status !== "done" && <button className="ml-auto text-zinc-500 underline hover:text-zinc-300" onClick={() => set({ owned: [...p.owned, m.item] })}>{t("als vorhanden markieren", "mark as owned")}</button>}
                 {m.done && isOwned && <button className="ml-auto text-zinc-500 underline hover:text-zinc-300" onClick={() => set({ owned: p.owned.filter((o) => itemKey(o) !== itemKey(m.item)) })}>{t("Markierung entfernen", "unmark")}</button>}
               </li>
@@ -475,6 +480,9 @@ function ProjectBudget({ p, state }: { p: Project; state: CraftState }) {
           <ul className="list-inside list-disc text-zinc-400">{[...new Set(input.missing.map((m) => `${m.step}: ${m.what}${m.item ? ` (${m.item})` : ""}`))].slice(0, 8).map((m) => <li key={m}>{m}</li>)}</ul>
         </div>
       )}
+      {input.unconfirmed.length > 0 && (
+        <div className={`mt-1 ${MISSING}`}>{t("Vorläufig: Zutatenliste nicht bestätigt bei", "Provisional: ingredient list not confirmed for")} {input.unconfirmed.join(", ")}</div>
+      )}
       {r && (
         <div className="mt-1 space-y-0.5 text-zinc-300">
           <div>{t("80 %-Budget", "80 % budget")}: <b className="text-[#f4eed7]">{kinah(r.budget80)}</b> <span className="text-zinc-500">({t("95 %-Intervall", "95 % interval")} {kinah(r.ci95[0])} – {kinah(r.ci95[1])})</span></div>
@@ -547,7 +555,8 @@ function StepCard({ s, state, onLog, onPrice, showProject }: { s: NextStep; stat
           const own = i.crafted || (i.kind === "transfer" && canCraft(s.project, i, state.recipes));
           return (
             <li key={`${i.kind}:${itemKey(i)}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-white/[0.03] px-2 py-1">
-              <span className="text-[#efe6cc]/85">{i.name}{i.crafted ? <span className="text-zinc-500"> · {t("Zwischenitem", "intermediate")}</span> : i.kind === "transfer" ? <span className="text-zinc-500"> · Transfer</span> : ""}</span>
+              <span className="text-[#efe6cc]/85">{i.name}{i.crafted ? <span className="text-zinc-500"> · {t("Zwischenitem", "intermediate")}</span> : i.kind === "transfer" ? <span className="text-zinc-500"> · Transfer</span> : ""}
+                {i.alternatives?.map((a) => <span key={a.itemId ?? a.name} className="text-zinc-500"> · {t("oder", "or")} {a.name}{a.unverified ? ` (${t("unbestätigt", "unconfirmed")})` : ""}</span>)}</span>
               <span className={ok ? "text-[#5fbf8a]" : "text-[#ff3344]"}>{i.have} / {i.qty ?? "?"}</span>
               <span className="ml-auto"><PriceCell item={i} ctxProject={s.project} stepKey={s.recipe.recipeKey} state={state} hide={own}
                 onEdit={() => onPrice({ item: i, server: s.project.server, project: s.project, stepKey: s.recipe.recipeKey })} /></span>
@@ -556,6 +565,13 @@ function StepCard({ s, state, onLog, onPrice, showProject }: { s: NextStep; stat
         })}
         {!s.ingredients.length && <li className={MISSING}>{t("Zutaten nicht dokumentiert (Datenlücke)", "Ingredients not documented (data gap)")}</li>}
       </ul>
+      {(s.ingredients.length > 0 && s.recipe.ingredientsStatus !== undefined && s.recipe.ingredientsStatus !== "complete" || s.recipe.liveUnconfirmed) && (
+        <p className="relative text-[11px] text-zinc-500">
+          {s.ingredients.length > 0 && s.recipe.ingredientsStatus !== undefined && s.recipe.ingredientsStatus !== "complete" && <span className={MISSING}>{t("Zutatenliste nicht auf der Rezeptseite bestätigt, Kosten vorläufig. ", "Ingredient list not confirmed on the recipe page, cost provisional. ")}</span>}
+          {s.recipe.liveUnconfirmed && t("Global-Clientdaten, nicht live bestätigt.", "Global client data, not confirmed live.")}
+          {s.recipe.source && <> · <a className="underline hover:text-zinc-300" href={s.recipe.source} target="_blank" rel="noreferrer">{t("Quelle", "Source")}</a></>}
+        </p>
+      )}
       <div className="relative grid gap-1 text-xs text-zinc-300 sm:grid-cols-2">
         <div>{t("Chance bei deiner Stufe", "Chance at your level")} {s.project.mastery ?? "?"}: {pct(pActual) ?? <span className={MISSING}>{t("unbekannt", "unknown")}</span>}
           {s.chance.basis === "character" && s.chance.override?.source && <span className="text-zinc-500"> · {s.chance.override.source}{s.chance.override.date ? `, ${s.chance.override.date}` : ""}</span>}
