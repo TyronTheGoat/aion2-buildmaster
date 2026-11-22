@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #03070f;
+  --background: #0b0c10;
   --foreground: #e8e8ef;
   color-scheme: dark;
 }
@@ -18,3 +18,17 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+
+/* BuildMaster card deck: graphite face with a hint of sapphire (palette of the Ebony Dragon Lord Orb) */
+.card-face {
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(61, 102, 162, 0.22) 0%, transparent 60%),
+    linear-gradient(160deg, #22252c 0%, #15171c 55%, #0e0f13 100%);
+}
+.bm-backdrop {
+  background:
+    radial-gradient(60% 45% at 50% 0%, rgba(61, 102, 162, 0.28) 0%, transparent 70%),
+    radial-gradient(50% 40% at 85% 100%, rgba(153, 228, 226, 0.08) 0%, transparent 70%),
+    radial-gradient(40% 35% at 10% 90%, rgba(190, 172, 128, 0.08) 0%, transparent 70%),
+    #0b0c10;
+}

@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import type { Character, Item, StatLine } from "@/lib/types";
+import type { Character, Grade, Item, StatLine } from "@/lib/types";
 import { compareIdeal, type MatchState } from "@/lib/compare";
 import { buildPlan } from "@/lib/advisor";
 import { iconFor, localIcon, type CatalogItem, ALL_ITEMS } from "@/lib/knowledge/item-catalog";
@@ -11,6 +11,7 @@ import { ItemIcon, SkillIcon, Sheet, isSkillLine } from "./ui";
 import { usePlanned } from "./plan-store";
 import { craftedBis } from "@/lib/crafted-bis";
 import { statLabel } from "@/lib/stat-names";
+import { Card, CardArt } from "./deck/Card";
 
 type Row = { name: string; have?: StatLine; target?: string; state: MatchState | "extra" };
 
@@ -24,19 +25,16 @@ function rowsFor(item: Item): Row[] {
   ];
 }
 
-const STATE: Record<Row["state"], { dot: string; text: string }> = {
-  ok: { dot: "bg-emerald-400", text: "text-emerald-200" },
-  low: { dot: "bg-amber-400", text: "text-amber-200" },
-  missing: { dot: "bg-rose-400", text: "text-rose-200" },
-  extra: { dot: "bg-zinc-500", text: "text-zinc-300" },
-};
+const DOT: Record<Row["state"], string> = { ok: "bg-emerald-400", low: "bg-amber-400", missing: "bg-rose-400", extra: "bg-zinc-500" };
+
+type Side = "ist" | "soll";
 
 /**
- * Ist vs. Soll for one equipment slot: two equal columns whose rows line up
- * (same slot, same ability, same stat at the same height), then "Noch zu tun".
+ * Ist vs. Soll for one gear piece as two cards side by side. Both cards list the same rows in the same
+ * order and height, so a stat sits at the same height on both. "Noch zu tun" follows in full width.
  */
-export function GearCompare({ char, item, slotId, label, wide, onClose }: {
-  char: Character; item: Item; slotId: string; label: string; wide: boolean; onClose: () => void;
+export function GearCompare({ char, item, slotId, label, onClose }: {
+  char: Character; item: Item; slotId: string; label: string; onClose: () => void;
 }) {
   const charKey = `${char.region}/${char.server}/${char.name}`.toLowerCase();
   const { planned, setPlanned } = usePlanned(charKey);
@@ -64,67 +62,73 @@ export function GearCompare({ char, item, slotId, label, wide, onClose }: {
     ...(cmp?.extra.map((l) => `${l.name} ${l.value} ${item.fixedLines ? "ist fest (Teil ersetzen)" : "neu rollen"}`) ?? []),
   ];
 
+  // the target piece shown on the Soll card
+  const soll: { icon?: string; name: string; meta: string; grade: Grade } | undefined = target
+    ? { icon: localIcon(target.icon), name: target.name, meta: [target.source, target.rarity].filter(Boolean).join(" · "), grade: "BiS" }
+    : bisCraft
+      ? { icon: localIcon(bisCraft.icon), name: bisCraft.name, meta: wearsBisCraft ? "Schon BiS · höchstes Crafting" : `Höchstes Crafting · IL ${bisCraft.level}`, grade: "BiS" }
+      : isBis ? { icon: iconFor(item), name: item.name, meta: "Schon BiS", grade: "BiS" } : undefined;
+
+  const section = (side: Side) => (
+    <>
+      {skills.length > 0 && <RowList title="Fähigkeiten" rows={skills} side={side} skill />}
+      <RowList title="Werte" rows={stats} side={side} craftedName={craftedName} />
+    </>
+  );
+
   return (
-    <div className={`flex h-full max-h-[inherit] flex-col overflow-hidden border border-sky-200/10 bg-[#07101f]/80 shadow-2xl shadow-sky-900/30 backdrop-blur-2xl ${wide ? "rounded-3xl" : "rounded-t-3xl"}`}>
-      <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-4">
-        <div className="text-[11px] uppercase tracking-[0.25em] text-sky-300/80">{label}</div>
-        <button onClick={onClose} aria-label="Schließen" className="rounded-full bg-white/5 px-2.5 py-1 text-sm text-zinc-300 hover:bg-white/10">✕</button>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <button onClick={onClose} className="rounded-full border border-[#d9c58f]/20 bg-white/[0.03] px-3.5 py-1.5 text-sm text-[#efe6cc]/85 hover:border-[#d9c58f]/40">‹ Alle Karten</button>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#beac80]">{label}</div>
       </div>
 
-      <div className="overflow-y-auto px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-5">
-        {/* column headers */}
-        <div className="sticky top-0 z-[1] grid grid-cols-2 gap-3 bg-[#07101f]/95 pb-2 pt-1 backdrop-blur">
-          <div className="rounded-xl border border-sky-300/20 bg-sky-300/[0.06] px-3 py-2 text-sm font-semibold tracking-wide text-sky-100">Ist-Stand</div>
-          <div className="rounded-xl border border-amber-300/25 bg-amber-300/[0.06] px-3 py-2 text-sm font-semibold tracking-wide text-amber-100">Soll-Stand</div>
-        </div>
+      <div className="grid grid-cols-2 gap-3 sm:gap-5">
+        {/* Ist-Stand */}
+        <Card grade={item.grade} className="p-2.5 sm:p-4">
+          <SideHeader title="Ist-Stand" tone="text-[#99e4e2]" />
+          <CardArt src={iconFor(item)} alt={item.name} grade={item.grade} />
+          <ItemTitle name={item.name}
+            meta={<><GradeBadge grade={item.grade} size="sm" />{item.enhance !== undefined && <span className="text-[11px] text-[#beac80]">+{item.enhance}</span>}</>} />
+          {section("ist")}
+        </Card>
 
-        {/* equipped vs. planned item */}
-        <div className="grid grid-cols-2 gap-3">
-          <ItemCell icon={iconFor(item)} name={item.name} grade={item.grade} score={item.score} enhance={item.enhance} />
-          {target ? (
-            <ItemCell icon={localIcon(target.icon)} name={target.name} meta={[target.source, target.rarity].filter(Boolean).join(" · ")}
-              action={<button onClick={() => setPicking(true)} className="text-[11px] text-amber-200/80 underline-offset-2 hover:underline">ändern</button>} />
-          ) : bisCraft ? (
-            <ItemCell icon={localIcon(bisCraft.icon)} name={bisCraft.name} grade="BiS"
-              meta={wearsBisCraft ? "Schon BiS · höchstes Crafting" : `Höchstes Crafting · IL ${bisCraft.level}`}
-              action={<button onClick={() => setPicking(true)} className="text-[11px] text-amber-200/80 underline-offset-2 hover:underline">anderes Ziel</button>} />
-          ) : isBis ? (
-            <ItemCell icon={iconFor(item)} name={item.name} grade="BiS" enhance={item.enhance} meta="Schon BiS"
-              action={<button onClick={() => setPicking(true)} className="text-[11px] text-amber-200/80 underline-offset-2 hover:underline">anderes Ziel</button>} />
+        {/* Soll-Stand */}
+        <Card grade={soll?.grade ?? "?"} className="p-2.5 sm:p-4">
+          <SideHeader title="Soll-Stand" tone="text-[#ffd54a]" />
+          {soll ? (
+            <>
+              <CardArt src={soll.icon} alt={soll.name} grade={soll.grade} />
+              <ItemTitle name={soll.name} meta={<span className="truncate text-[11px] text-[#beac80]">{soll.meta}</span>}
+                action={<button onClick={() => setPicking(true)} className="text-[11px] text-[#ffd54a]/80 underline-offset-2 hover:underline">anderes Ziel</button>} />
+            </>
           ) : (
-            <button onClick={() => setPicking(true)}
-              className="flex min-h-[76px] items-center gap-3 rounded-2xl border border-dashed border-amber-300/30 bg-amber-300/[0.03] px-3 text-left hover:bg-amber-300/[0.07]">
-              <ItemIcon name="Offen" size={44} />
-              <span><span className="block text-sm font-semibold text-amber-100">Offen</span><span className="block text-[11px] text-zinc-400">Ziel-Item wählen</span></span>
+            <button onClick={() => setPicking(true)} className="block w-full text-left">
+              <CardArt alt="Offen" />
+              <ItemTitle name="Offen" meta={<span className="text-[11px] text-zinc-400">Ziel-Item wählen</span>} />
             </button>
           )}
-        </div>
-
-        {skills.length > 0 && <Section title="Fähigkeiten">{skills.map((r) => <CompareRow key={r.name} row={r} skill />)}</Section>}
-        <Section title="Werte">
-          {stats.length ? stats.map((r) => <CompareRow key={r.name} row={r} crafted={r.name === craftedName} />) : <EmptyRow />}
-        </Section>
-
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
-          <Legend cls="bg-emerald-400" label="erreicht" /><Legend cls="bg-amber-400" label="zu niedrig" />
-          <Legend cls="bg-rose-400" label="fehlt" /><Legend cls="bg-zinc-500" label="nicht im BiS" />
-          {craftedName && <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-violet-500/50" />Crafting-Bonus</span>}
-        </div>
-
-        {/* to-do, full width */}
-        <div className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
-          <div className="mb-2 text-[11px] uppercase tracking-[0.25em] text-sky-300/80">Noch zu tun</div>
-          {isBis ? (
-            <p className="text-sm text-amber-200">Nichts mehr. Dieses Teil ist BiS.</p>
-          ) : todo.length ? (
-            <ul className="space-y-1.5 text-sm text-zinc-200">
-              {todo.map((t) => <li key={t} className="flex gap-2"><span className="text-sky-400">•</span><span>{t}</span></li>)}
-            </ul>
-          ) : (
-            <p className="text-sm text-zinc-300">{step?.title ?? "Für dieses Teil liegt kein BiS-Ziel vor."}</p>
-          )}
-        </div>
+          {section("soll")}
+        </Card>
       </div>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
+        <span>✓ erreicht</span><span>▲ zu niedrig</span><span>Leer = fehlt</span><span>✕ nicht im BiS</span><span>◆ Ziel</span>
+        {craftedName && <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-violet-500/50" />Crafting-Bonus</span>}
+      </div>
+
+      <Card grade="?" className="p-4 sm:p-5">
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-[#beac80]">Noch zu tun</div>
+        {isBis ? (
+          <p className="text-sm text-[#ffd54a]">Nichts mehr. Dieses Teil ist BiS.</p>
+        ) : todo.length ? (
+          <ul className="space-y-1.5 text-sm text-zinc-200">
+            {todo.map((t) => <li key={t} className="flex gap-2"><span className="text-[#99e4e2]">•</span><span>{t}</span></li>)}
+          </ul>
+        ) : (
+          <p className="text-sm text-zinc-300">{step?.title ?? "Für dieses Teil liegt kein BiS-Ziel vor."}</p>
+        )}
+      </Card>
 
       <ItemPicker open={picking} onClose={() => setPicking(false)} slot={item.slot} className={char.className}
         current={target?.key} onPick={(k) => { setPlanned(slotId, k); setPicking(false); }} />
@@ -132,82 +136,57 @@ export function GearCompare({ char, item, slotId, label, wide, onClose }: {
   );
 }
 
-function ItemCell({ icon, name, grade, score, enhance, meta, action }: {
-  icon?: string; name: string; grade?: Item["grade"]; score?: number; enhance?: number; meta?: string; action?: React.ReactNode;
-}) {
+function SideHeader({ title, tone }: { title: string; tone: string }) {
+  return <div className={`relative mb-2 text-center text-[11px] font-semibold uppercase tracking-[0.3em] ${tone}`}>{title}</div>;
+}
+
+/** Fixed height so the rows below start at the same height on both cards. */
+function ItemTitle({ name, meta, action }: { name: string; meta: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <div className="flex min-h-[76px] items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-      <ItemIcon src={icon} name={name} grade={grade ?? "?"} enhance={enhance} size={44} />
-      <div className="min-w-0">
-        <div className="line-clamp-2 text-sm font-semibold leading-snug text-white">{name}</div>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          {grade && grade !== "?" && <GradeBadge grade={grade} score={score} size="sm" />}
-          {meta && <span className="truncate text-[11px] text-zinc-400">{meta}</span>}
-          {action}
-        </div>
+    <div className="relative mt-2.5 h-[78px]">
+      <div className="line-clamp-2 text-[13px] font-semibold leading-snug text-[#f4eed7] sm:text-sm">{name}</div>
+      <div className="mt-1 flex min-w-0 items-center gap-1.5">{meta}</div>
+      {action && <div className="mt-0.5">{action}</div>}
+    </div>
+  );
+}
+
+function RowList({ title, rows, side, skill, craftedName }: { title: string; rows: Row[]; side: Side; skill?: boolean; craftedName?: string }) {
+  return (
+    <div className="relative mt-3">
+      <div className="mb-1.5 text-[10px] uppercase tracking-[0.22em] text-zinc-500">{title}</div>
+      <div className="space-y-1">
+        {rows.length ? rows.map((r) => <CompareRow key={r.name} row={r} side={side} skill={skill} crafted={r.name === craftedName} />)
+          : <div className="flex h-9 items-center rounded-lg bg-white/[0.035] px-2.5 text-[12px] text-zinc-500">{side === "ist" ? "Leer" : "Offen"}</div>}
       </div>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="mt-4">
-      <div className="mb-1.5 text-[11px] uppercase tracking-[0.2em] text-zinc-500">{title}</div>
-      <div className="space-y-1.5">{children}</div>
-    </div>
-  );
-}
-
-/**
- * One line, the same stat on both sides at the same height.
- * Style follows the in-game tooltip: name left, value right with an "N" badge (max) or "▲ gain".
- * The crafted bonus line (6th stat of crafted / exceeded gear) is a highlighted purple row.
- */
-function CompareRow({ row, skill, crafted }: { row: Row; skill?: boolean; crafted?: boolean }) {
-  const st = STATE[row.state];
+/** One line: stats show only which stat sits on the item (Ist) and which should (Soll); skills keep their level. */
+function CompareRow({ row, side, skill, crafted }: { row: Row; side: Side; skill?: boolean; crafted?: boolean }) {
   const have = row.have?.value;
+  const present = side === "ist" ? !!have : !!row.target;
   const label = skill ? row.name : statLabel(row.name);
-  const base = crafted
-    ? "bg-gradient-to-r from-violet-500/35 via-violet-500/20 to-violet-500/5 ring-1 ring-violet-300/30"
-    : "bg-white/[0.035]";
-  const name = (dim?: boolean) => (
-    <span className="flex min-w-0 items-center gap-2">
-      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
-      {skill && <SkillIcon name={row.name} size={18} />}
-      <span className={`truncate font-semibold ${dim ? "text-zinc-500" : crafted ? "text-violet-50" : "text-zinc-100"}`}>{label}</span>
-    </span>
-  );
-  // stats show only which line sits on the item and which line should; skills keep their level
-  const left = skill ? (have ?? "Leer") : !have ? "Leer" : row.state === "ok" ? "✓" : row.state === "low" ? "zu niedrig" : row.state === "extra" ? "nicht im BiS" : "";
-  const right = skill ? (row.target ?? (row.state === "extra" ? "–" : "Offen")) : row.target ? "Ziel" : row.state === "extra" ? "–" : "Offen";
-  const leftCls = !have ? "text-zinc-500" : row.state === "ok" ? "text-emerald-300" : row.state === "low" ? "text-amber-300" : "text-zinc-400";
+  const mark = side === "ist"
+    ? (skill && have) || (!have ? "Leer" : row.state === "ok" ? "✓" : row.state === "low" ? "▲" : row.state === "extra" ? "✕" : "")
+    : (skill && row.target) || (row.target ? "◆" : row.state === "extra" ? "–" : "Offen");
+  const markCls = side === "ist"
+    ? (!have ? "text-zinc-500" : skill ? "text-white" : row.state === "ok" ? "text-emerald-300" : row.state === "low" ? "text-amber-300" : "text-zinc-500")
+    : (row.target ? (skill ? "text-white" : "text-[#ffd54a]") : "text-zinc-500");
+  const bg = crafted ? "bg-gradient-to-r from-violet-500/35 via-violet-500/20 to-violet-500/5 ring-1 ring-violet-300/30" : "bg-white/[0.035]";
   return (
-    <div className="grid grid-cols-2 gap-3">
-      <div className={`flex min-h-[38px] items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-[13px] sm:text-sm ${base}`}>
-        {name(!have)}
-        <span className={`shrink-0 text-[12px] font-semibold tabular-nums ${skill && have ? "text-white" : leftCls}`}>{left}</span>
-      </div>
-      <div className={`flex min-h-[38px] items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-[13px] sm:text-sm ${crafted ? base : "bg-amber-200/[0.035]"}`}>
-        {name(!row.target)}
-        <span className={`shrink-0 text-[12px] font-semibold tabular-nums ${row.target ? (skill ? "text-white" : "text-amber-200/80") : "text-zinc-500"}`}>{right}</span>
-      </div>
+    <div className={`flex h-9 items-center justify-between gap-1.5 rounded-lg px-2 text-[12px] sm:px-2.5 sm:text-[13px] ${bg}`}>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT[row.state]}`} />
+        {skill && <SkillIcon name={row.name} size={16} />}
+        <span className={`truncate font-medium ${present ? (crafted ? "text-violet-50" : "text-zinc-100") : "text-zinc-500"}`}>{label}</span>
+      </span>
+      <span className={`shrink-0 text-[11px] font-semibold tabular-nums ${markCls}`}>{mark}</span>
     </div>
   );
 }
 
-function EmptyRow() {
-  return (
-    <div className="grid grid-cols-2 gap-3 text-sm">
-      <div className="rounded-xl bg-white/[0.04] px-3 py-2 text-zinc-500">Leer</div>
-      <div className="rounded-xl bg-amber-200/[0.04] px-3 py-2 text-zinc-500">Offen</div>
-    </div>
-  );
-}
-
-function Legend({ cls, label }: { cls: string; label: string }) {
-  return <span className="flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${cls}`} />{label}</span>;
-}
 
 /** Choose the planned item for a slot – only from the released EU / Global selection. */
 function ItemPicker({ open, onClose, slot, className, current, onPick }: {

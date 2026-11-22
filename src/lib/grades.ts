@@ -36,3 +36,10 @@ export const GRADE_COLORS: Record<Grade, string> = {
   D: "bg-[#b81f2d] text-white",
   "?": "bg-[#7a8594] text-white",
 };
+
+/** Rank colours as CSS hex (aura / card glow palette). */
+export const GRADE_HEX_CSS: Record<Grade, string> = {
+  BiS: "#ffd54a", "S+": "#7dff4d", S: "#21d96b", A: "#ff9a2e", B: "#ff6a3d", C: "#ff3b3b", D: "#b81f2d", "?": "#7a8594",
+};
+/** Glow strength per rank (BiS strongest). */
+export const GRADE_GLOW: Record<Grade, number> = { BiS: 1, "S+": 0.9, S: 0.75, A: 0.6, B: 0.45, C: 0.35, D: 0.25, "?": 0.2 };

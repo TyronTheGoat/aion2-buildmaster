@@ -115,7 +115,7 @@ export function HoloCharacter({ char, gender, onBack, onDetails, onGender }: {
       <div className={`absolute z-10 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
         ${isWide ? "bottom-4 right-4 top-20 w-[min(680px,calc(100vw-2rem))]" : "inset-x-0 bottom-0 max-h-[72vh]"}
         ${focus ? "translate-x-0 translate-y-0 opacity-100" : isWide ? "pointer-events-none translate-x-8 opacity-0" : "pointer-events-none translate-y-full opacity-0"}`}>
-        {item && shown && <GearCompare char={char} item={item} slotId={shown} label={slotLabel(shown, items)} wide={isWide} onClose={() => setFocus(undefined)} />}
+        {item && shown && <GearCompare char={char} item={item} slotId={shown} label={slotLabel(shown, items)} onClose={() => setFocus(undefined)} />}
       </div>
     </div>
   );

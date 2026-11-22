@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#03070f",
+  themeColor: "#0b0c10",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -19,10 +19,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="de" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <header className="sticky top-0 z-10 border-b border-sky-300/10 bg-[#03070f]/80 backdrop-blur pt-[env(safe-area-inset-top)]">
+        <header className="sticky top-0 z-10 border-b border-[#d9c58f]/10 bg-[#0b0c10]/80 backdrop-blur pt-[env(safe-area-inset-top)]">
           <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
             <Link href="/" className="font-semibold tracking-tight">
-              <span className="text-sky-400">Aion 2</span> BuildMaster
+              <span className="text-[#d9c58f]">Aion 2</span> BuildMaster
             </Link>
           </div>
         </header>

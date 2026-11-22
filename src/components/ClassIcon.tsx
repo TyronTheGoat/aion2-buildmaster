@@ -38,14 +38,14 @@ export function ClassIcon({ className, grade = "?", size = 56 }: { className?: s
   const src = slug ? assetUrl(`class-icons/${slug}.png`) : undefined;
   const [failed, setFailed] = useState<string>();
   return (
-    <div className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-[#0d1b33] to-[#050b16] text-sky-200/85 ring-2 ${GRADE_RING[grade]}`}
+    <div className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[radial-gradient(circle_at_50%_35%,#1f3a66_0%,#15171c_70%)] text-[#e6d5a3] ring-2 ${GRADE_RING[grade]}`}
       style={{ width: size, height: size }} title={className}>
       {src && failed !== src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt={className ?? ""} className="h-[82%] w-[82%] object-contain" onError={() => setFailed(src)} />
       ) : (
         <svg viewBox="0 0 24 24" width={size * 0.8} height={size * 0.8} aria-hidden>
-          <path d="M12 1.5 21 6.75v10.5L12 22.5 3 17.25V6.75z" fill="rgba(56,152,255,0.08)" stroke="rgba(125,200,255,0.28)" strokeWidth={0.8} />
+          <path d="M12 1.5 21 6.75v10.5L12 22.5 3 17.25V6.75z" fill="rgba(217,197,143,0.06)" stroke="rgba(217,197,143,0.35)" strokeWidth={0.8} />
           <g transform="translate(3 3) scale(0.75)"><Glyph slug={slug} /></g>
         </svg>
       )}
