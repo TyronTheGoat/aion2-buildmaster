@@ -1,4 +1,5 @@
 "use client";
+import { itemName } from "@/lib/item-names";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { Character, Grade, Item } from "@/lib/types";
 import { compareIdeal, toNum } from "@/lib/compare";
@@ -114,7 +115,7 @@ export function GearCompare({ char, item, slotId }: {
           style={{ transform: stage >= 1 ? "translateX(0)" : "translateX(calc(50% + var(--gap) / 2))" }}>
           <Card grade={item.grade} className="flex h-full flex-col p-3 sm:p-5">
             <CardHead title={t("Ist-Stand", "Current")} rank={item.grade} />
-            <ItemBlock icon={SHOW_ITEM_ICONS ? iconFor(item) : undefined} grade={item.grade} name={item.name} info={istInfo} sub={istSub} />
+            <ItemBlock icon={SHOW_ITEM_ICONS ? iconFor(item) : undefined} grade={item.grade} name={itemName(item.name)} info={istInfo} sub={istSub} />
             {section("ist")}
             <CardFoot>{t("Aktuell ausgerüstet", "Currently equipped")}</CardFoot>
           </Card>
@@ -126,7 +127,7 @@ export function GearCompare({ char, item, slotId }: {
           <Card grade={soll?.grade ?? "?"} className="flex h-full flex-col p-3 sm:p-5">
             <CardHead title={t("Soll-Stand / BiS", "Target / BiS")} short={t("Soll / BiS", "BiS")} rank={soll ? "BiS" : undefined} />
             {soll ? (
-              <ItemBlock icon={SHOW_ITEM_ICONS ? soll.icon : undefined} grade={soll.grade} name={soll.name} info={sollInfo} sub={sollSub}
+              <ItemBlock icon={SHOW_ITEM_ICONS ? soll.icon : undefined} grade={soll.grade} name={itemName(soll.name)} info={sollInfo} sub={sollSub}
                 action={<button onClick={() => setPicking(true)} className="text-[11px] text-[#ffa31a]/80 underline-offset-2 hover:underline">{wearsBisCraft ? t("Schon BiS · anderes Ziel", "Already BiS · other target") : t("anderes Ziel", "other target")}</button>} />
             ) : (
               <button onClick={() => setPicking(true)} className="block w-full text-left">
@@ -318,7 +319,7 @@ function ItemPicker({ open, onClose, slot, className, current, onPick }: {
               className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left hover:bg-white/[0.06] ${current === i.key ? "border-amber-300/50 bg-amber-300/[0.06]" : "border-white/10"}`}>
               <ItemIcon src={localIcon(i.icon)} name={i.name} size={36} />
               <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">{i.name}</span>
+                <span className="block truncate text-sm font-medium">{itemName(i.name)}</span>
                 <span className="block truncate text-[11px] text-zinc-500">{[i.source, i.slot, i.level && `Lv ${i.level}`, i.rarity].filter(Boolean).join(" · ")}</span>
               </span>
             </button>

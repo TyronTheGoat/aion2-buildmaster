@@ -1,4 +1,5 @@
 "use client";
+import { itemName } from "@/lib/item-names";
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Character } from "@/lib/types";
 import { numberLocale, useLang, useT, type T } from "@/lib/i18n";
@@ -362,7 +363,7 @@ function NewProject({ state, char, charKey: key, onDone }: { state: CraftState; 
 }
 
 /** Name without the faction tag: the project already knows the faction. */
-const shown = (n: string) => n.replace(/\s*\((elyos|asmodian)\)\s*$/i, "");
+const shown = (n: string) => itemName(n.replace(/\s*\((elyos|asmodian)\)\s*$/i, ""));
 
 function ProjectDetail({ p, state, update, char, onBack, onPrice }: { p: Project; state: CraftState; update: Update; char: Character; onBack: () => void; onPrice: (x: PriceTarget) => void }) {
   const t = useT();
@@ -920,7 +921,7 @@ function CatalogRow({ e, state, server, update, onPrice }: { e: CatalogEntry & {
   return (
     <li className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl py-1.5 pl-2 pr-3 text-xs" style={e.area === "materials" ? rarityEdge(e.name) : undefined}>
       <ItemIcon src={icon} rarity={e.area === "materials" ? rarityOf(e.name) : undefined} />
-      <span className="min-w-0 text-sm text-[#efe6cc]/90">{e.name}</span>
+      <span className="min-w-0 text-sm text-[#efe6cc]/90">{shown(e.name)}</span>
       <span className="text-zinc-500">{e.itemId ? `#${e.itemId}` : t("ohne Item-ID", "no item ID")}{e.bound === true ? ` · ${t("gebunden", "bound")}` : ""}
         {e.area === "gear" ? ` · ${isTarget ? t("Rezeptziel", "recipe target") : t("Zwischenstufe", "intermediate")}` : ""}{e.custom ? ` · ${t("eigener Eintrag", "own entry")}` : ""}</span>
       <span className="ml-auto flex flex-wrap items-center gap-2">
@@ -1013,7 +1014,7 @@ function PriceDialog({ target, state, onClose, onSave }: { target: PriceTarget; 
         <Card className="max-h-[90vh] space-y-3 overflow-y-auto p-4 text-sm">
           <div className="relative">
             <div className={LABEL}>{t("Marktpreis", "Market price")} · {server}</div>
-            <div className="text-base font-semibold text-[#f4eed7]">{item.name}</div>
+            <div className="text-base font-semibold text-[#f4eed7]">{shown(item.name)}</div>
             {item.itemId && <div className="text-xs text-zinc-500">Item-ID {item.itemId}</div>}
           </div>
           <div className="relative grid grid-cols-2 gap-2">

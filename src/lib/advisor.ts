@@ -1,4 +1,5 @@
 import { statLabel } from "./stat-names";
+import { itemLabel } from "./item-names";
 import type { Character, Grade, Item, StatLine } from "./types";
 import { gradeRank, minScoreFor } from "./grades";
 import { SLOT_LABEL_DE, SLOT_WEIGHT } from "./knowledge/slots";
@@ -83,8 +84,8 @@ function adviseItem(char: Character, item: Item): UpgradeStep | undefined {
     return {
       item, kind: missing.length ? "arcana" : "enhance", target, gain, effort,
       title: missing.length
-        ? `${item.name}: ${missing.length} Fähigkeit(en) fehlen`
-        : lowLv.length ? `${item.name}: ${lowLv.length} Stufe(n) erhöhen` : `${item.name}: auf ${target} bringen`,
+        ? `${itemLabel(item.name, "de")}: ${missing.length} Fähigkeit(en) fehlen`
+        : lowLv.length ? `${itemLabel(item.name, "de")}: ${lowLv.length} Stufe(n) erhöhen` : `${itemLabel(item.name, "de")}: auf ${target} bringen`,
       details, priority: (gain * weight) / (1 + (effort - 1) * 0.25),
     };
   }
@@ -94,7 +95,7 @@ function adviseItem(char: Character, item: Item): UpgradeStep | undefined {
     const want = cmp ? cmp.rows.filter((r) => r.state === "missing").map((r) => r.name) : missingIdealLines(char.className, item.slot, item.lines.map((l) => l.name), 4);
     return {
       item, kind: "replace", target, gain, effort: 3, priority: (gain * weight) / 2,
-      title: `${label} ersetzen: ${item.name} hat feste Linien`,
+      title: `${label} ersetzen: ${itemLabel(item.name, "de")} hat feste Linien`,
       details: [
         "Feste Linien lassen sich nicht neu rollen, nur ein neues Teil hilft.",
         want.length ? `Suche ein Armband mit: ${want.map(de).join(", ")}` : "Suche ein Teil mit besseren Linien für deine Klasse.",

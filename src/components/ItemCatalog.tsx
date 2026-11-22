@@ -1,4 +1,5 @@
 "use client";
+import { itemName } from "@/lib/item-names";
 import { useMemo, useState } from "react";
 import { PUBLIC_ITEMS, REGION_LABEL, regionCounts, regionStatus, type RegionStatus } from "@/lib/region";
 import { CLASSES, fitsClass } from "@/lib/slot-map";
@@ -105,7 +106,7 @@ export function ItemCatalog({ onBack }: { onBack: () => void }) {
           <li key={i.key}>
             <Card as="button" grade="?" onClick={() => setShown(i)} label={i.name} className="flex h-full w-full flex-col p-2.5">
               <CardArt src={localIcon(i.icon)} alt={i.name} grade={i.crafted ? "BiS" : "?"} />
-              <div className="relative mt-2 line-clamp-2 min-h-[2.5em] text-[12px] font-medium leading-tight text-[#f4eed7]">{i.name}</div>
+              <div className="relative mt-2 line-clamp-2 min-h-[2.5em] text-[12px] font-medium leading-tight text-[#f4eed7]">{itemName(i.name)}</div>
               <div className="relative mt-0.5 flex items-center gap-1.5 text-[10px] text-zinc-500">
                 <span className="truncate">{[i.slot, i.level && `IL ${i.level}`].filter(Boolean).join(" · ")}</span>
                 {internal && <span className={`shrink-0 rounded px-1.5 py-px text-[9px] ${BADGE[regionStatus(i)]}`}>{regionStatus(i) === "eu" ? "EU" : regionStatus(i) === "tw" ? t("nur TW", "TW only") : t("unbestätigt", "unconfirmed")}</span>}
@@ -114,7 +115,7 @@ export function ItemCatalog({ onBack }: { onBack: () => void }) {
           </li>
         ))}
       </ul>
-      <Sheet open={!!shown} onClose={() => setShown(undefined)} title={<h2 className="text-lg font-semibold text-[#f4eed7]">{shown?.name}</h2>}>
+      <Sheet open={!!shown} onClose={() => setShown(undefined)} title={<h2 className="text-lg font-semibold text-[#f4eed7]">{shown ? itemName(shown.name) : null}</h2>}>
         {shown && (
           <div className="space-y-4">
             <div className="mx-auto w-48"><CardArt src={localIcon(shown.icon)} alt={shown.name} grade={shown.crafted ? "BiS" : "?"} /></div>

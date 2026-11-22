@@ -1,4 +1,5 @@
 "use client";
+import { itemName } from "@/lib/item-names";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Character, Item } from "@/lib/types";
 import { iconFor } from "@/lib/knowledge/item-catalog";
@@ -181,7 +182,7 @@ function Tiles({ deck, onOpen, className = "" }: { deck: DeckEntry[]; onOpen: (i
     <ul className={`grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-10 lg:grid-cols-4 ${className}`}>
       {deck.map((d) => (
         <li key={d.id}>
-          <Card as="button" grade={d.item.grade} onClick={() => onOpen(d.id)} label={`${d.label}: ${d.item.name}`}
+          <Card as="button" grade={d.item.grade} onClick={() => onOpen(d.id)} label={`${d.label}: ${itemName(d.item.name)}`}
             className="flex h-full w-full items-center gap-3 p-3">
             <div className="relative w-16 shrink-0">
               {SHOW_ITEM_ICONS ? <CardArt src={iconFor(d.item)} alt={d.item.name} grade={d.item.grade} /> : <Filler className="aspect-square w-full" />}
@@ -189,7 +190,7 @@ function Tiles({ deck, onOpen, className = "" }: { deck: DeckEntry[]; onOpen: (i
             <div className="relative min-w-0">
               <div className="truncate text-sm font-semibold text-[#f4eed7]">{d.label}</div>
               <div className="text-xs text-zinc-400">{rankWord}: <span className="font-semibold" style={{ color: GRADE_HEX_CSS[d.item.grade] }}>{d.item.grade === "?" ? "–" : d.item.grade}</span></div>
-              <div className="truncate text-[11px] text-zinc-500">{d.item.name}</div>
+              <div className="truncate text-[11px] text-zinc-500">{itemName(d.item.name)}</div>
             </div>
           </Card>
         </li>

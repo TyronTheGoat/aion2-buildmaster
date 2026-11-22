@@ -1,4 +1,5 @@
 "use client";
+import { itemName } from "@/lib/item-names";
 import { useState } from "react";
 import type { Character, Item, StatLine } from "@/lib/types";
 import { compareIdeal, type IdealRow } from "@/lib/compare";
@@ -51,7 +52,7 @@ export function ItemCards({ char, items, arcana = false }: { char: Character; it
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-[10px] uppercase tracking-wide text-zinc-500">{SLOT_LABEL_DE[item.slot]}</div>
-                        <div className="truncate font-semibold leading-snug">{item.name}</div>
+                        <div className="truncate font-semibold leading-snug">{itemName(item.name)}</div>
                         <SourceLine name={item.name} />
                       </div>
                       {item.scored ? <GradeBadge grade={item.grade} score={item.score} size="sm" /> : <span className="text-[10px] text-zinc-500">ohne Wertung</span>}
@@ -83,7 +84,7 @@ export function ItemCards({ char, items, arcana = false }: { char: Character; it
             <ItemIcon src={iconFor(open)} name={open.name} grade={open.grade} enhance={open.enhance} size={44} tall={open.slot === "arcana"} />
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-wide text-zinc-500">{SLOT_LABEL_DE[open.slot]}</div>
-              <div className="font-semibold leading-snug">{open.name}</div>
+              <div className="font-semibold leading-snug">{itemName(open.name)}</div>
               <SourceLine name={open.name} />
               <div className="mt-0.5"><GradeBadge grade={open.grade} score={open.score} size="sm" /></div>
             </div>

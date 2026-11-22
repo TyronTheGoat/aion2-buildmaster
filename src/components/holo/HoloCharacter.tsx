@@ -1,4 +1,5 @@
 "use client";
+import { itemName } from "@/lib/item-names";
 import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { Character, Item } from "@/lib/types";
 import { BODY_SLOTS, bodyItems, hexCss, weaponKindFor, type Gender } from "@/lib/hologram";
@@ -148,7 +149,7 @@ function GearList({ items, active, onPick, onClose }: { items: Map<string, Item>
                   style={rated ? { background: hexCss(it.grade), boxShadow: `0 0 10px ${hexCss(it.grade)}` } : { background: "#334155" }} />
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px] font-medium leading-tight text-white">{slotLabel(id, items)}</span>
-                  <span className="block truncate text-[11px] leading-tight text-zinc-500">{it.name}</span>
+                  <span className="block truncate text-[11px] leading-tight text-zinc-500">{itemName(it.name)}</span>
                 </span>
                 {rated ? <GradeBadge grade={it.grade} size="sm" /> : <span className="text-[10px] text-zinc-600">–</span>}
               </button>

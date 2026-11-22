@@ -17,6 +17,9 @@ export function setLang(l: Lang) {
   listeners.forEach((f) => f());
 }
 
+/** Current UI language outside React (components re-render through useLang / useT). */
+export const currentLang = (): Lang => current;
+
 export function useLang(): Lang {
   return useSyncExternalStore(
     (cb) => { listeners.add(cb); return () => { listeners.delete(cb); }; },
