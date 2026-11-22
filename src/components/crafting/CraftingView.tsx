@@ -10,7 +10,7 @@ import { useCraft } from "../craft-store";
 import { Card, CardArt, Filler, SHOW_ITEM_ICONS } from "../deck/Card";
 import {
   activeAttempts, attemptCost, attemptEffects, buildCatalog, canCraft, craftSlotOf, craftsItself, ctxOf, findPrice, importFile,
-  GEAR_SLOTS, PLAN_CONFIDENCE, craftPlan, currentCraft, itemKey, ladderItems, levelOf, normName, ownedCount, planCost, prioritySlot, routeItems, routeOf, routeOptions, sameItem, topOf, weaponTypeOf, withOwnedCount, withRoute, producerOf, progress, projectTarget, savePrice, sortProjects,
+  GEAR_SLOTS, PLAN_CONFIDENCE, craftPlan, currentCraft, itemKey, ladderItems, levelOf, normName, ownedCount, planCost, prioritySlot, missingRoutePrices, routeItems, routeOf, routeOptions, sameItem, topOf, weaponTypeOf, withOwnedCount, withRoute, producerOf, progress, projectTarget, savePrice, sortProjects,
   spent, stageLevel, uid, validatePrice,
   type CatalogEntry, type CraftSlot, type CraftState, type ImportError, type ItemRef, type NextStep, type PlanLine, type Outcome, type Project, type Scenario,
 } from "@/lib/crafting/model";
@@ -571,22 +571,43 @@ function PriceInput({ item, state, update, server }: { item: ItemRef; state: Cra
   );
 }
 
-/** Buy or craft: every route with what is still to buy, the cheapest known one recommended; the player picks. */
+/**
+ * Buy or craft: every route with what is still to buy and where it starts (lowest stage still missing after the stock).
+ * The default is to craft everything from the lowest stage; the cheapest known route is only suggested.
+ * Prices the comparison lacks are listed right here to fill in.
+ */
 function RouteStep({ p, state, update, onBack }: { p: Project; state: CraftState; update: Update; onBack: () => void }) {
   const t = useT();
   const kinah = useKinah();
   const opts = routeOptions(p, state, "low");
   const current = routeOf(p, state);
-  const [pick, setPick] = useState(current === "all" ? (opts.find((o) => o.recommended)?.key ?? "all") : current);
+  const [pick, setPick] = useState(current);
   const conf = p.confidence ?? PLAN_CONFIDENCE;
-  const label = (o: (typeof opts)[number]) => o.key === "all" ? t("Alles selbst craften", "Craft everything myself")
+  const best = opts.find((o) => o.recommended);
+  const all = opts.find((o) => o.key === "all")!;
+  const missing = missingRoutePrices(opts);
+  const label = (o: (typeof opts)[number]) => o.key === "all" ? t("Alles selbst craften (ab der untersten Stufe)", "Craft everything myself (from the lowest stage)")
     : o.key === "final" ? `${t("Endwaffe direkt kaufen", "Buy the final item")}: ${shown(o.item?.name ?? "?")}`
       : `${shown(o.item!.name)} ${t("kaufen, ab da selbst craften", "buy, craft from there")}`;
+  const cost = (o: (typeof opts)[number]) => {
+    if (o.conf.cost !== null) return <>{Math.round(conf * 100)} %: <b className="text-[#f4eed7]">{kinah(o.conf.cost)}</b>{o.mean.cost !== null && <span className="text-zinc-500"> · Ø {kinah(o.mean.cost)}</span>}</>;
+    if (o.unknown.length) return <span className={MISSING}>{t("Rezeptdaten fehlen", "recipe data missing")}</span>;
+    const n = o.conf.missingPrices.length;
+    return <>{o.conf.known > 0 && <>{t("mind.", "at least")} <b className="text-[#f4eed7]">{kinah(o.conf.known)}</b> · </>}<span className={MISSING}>{n} {n === 1 ? t("Preis fehlt", "price missing") : t("Preise fehlen", "prices missing")}</span></>;
+  };
   return (
     <>
       <div>
         <div className="text-base font-semibold text-[#f4eed7]">{t("Kaufen oder selbst craften?", "Buy or craft yourself?")}</div>
-        <p className="text-xs text-zinc-400">{t("Pro Weg: was du mit deinem Lager noch kaufen musst. Geplant wird so, dass jede Stufe mit der gewählten Sicherheit klappt; Ø ist der Mittelwert.", "Per route: what you still have to buy given your stock. Each stage is planned to work with the chosen confidence; Ø is the mean.")}</p>
+        <p className="text-xs text-zinc-400">{t("Ziel ist die Endstufe, angefangen wird ganz unten. Pro Weg: wo du mit deinem Lager einsteigst und was du noch kaufen musst. Geplant wird so, dass jede Stufe mit der gewählten Sicherheit klappt; Ø ist der Mittelwert.", "The target is the final stage, you start at the very bottom. Per route: where you start with your stock and what you still have to buy. Each stage is planned to work with the chosen confidence; Ø is the mean.")}</p>
+      </div>
+      <div className="rounded-xl bg-white/[0.03] px-3 py-2 text-xs ring-1 ring-white/10">
+        <div className="text-zinc-300">{all.start ? <>{t("Mit deinem Lager fängst du an bei", "With your stock you start at")}: <b className="text-[#f4eed7]">{shown(all.start.name)}</b></> : t("Mit deinem Lager ist nichts mehr zu craften.", "With your stock there is nothing left to craft.")}</div>
+        {best && best.key !== "all" && <div className="mt-1 flex flex-wrap items-center gap-2 text-zinc-400">
+          <span><span className="text-[#5fbf8a]">{t("Empfehlung", "Suggestion")}:</span> {label(best)}{best.start ? <> · {t("Einstieg bei", "start at")} {shown(best.start.name)}</> : null}{all.conf.cost !== null && best.conf.cost !== null && <> · {t("spart", "saves")} {kinah(all.conf.cost - best.conf.cost)}</>}</span>
+          {pick !== best.key && <button className={BTN} onClick={() => setPick(best.key)}>{t("Empfehlung wählen", "Pick suggestion")}</button>}
+        </div>}
+        {best?.key === "all" && <div className="mt-1 text-[#5fbf8a]">{t("Empfehlung: alles selbst craften ist am günstigsten.", "Suggestion: crafting everything is cheapest.")}</div>}
       </div>
       <label className="flex items-center gap-2 text-xs text-zinc-400">{t("Sicherheit pro Stufe", "Confidence per stage")}
         <select className={`${INPUT} text-xs`} value={conf} onChange={(e) => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...x, confidence: Number(e.target.value) } : x)) }))}>
@@ -599,14 +620,28 @@ function RouteStep({ p, state, update, onBack }: { p: Project; state: CraftState
             <label className={`flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-3 py-2 text-xs ring-1 ${pick === o.key ? "bg-white/[0.08] ring-[#d9c58f]/50" : "bg-white/[0.02] ring-white/10 hover:ring-[#d9c58f]/30"}`}>
               <input type="radio" name="route" checked={pick === o.key} onChange={() => setPick(o.key)} />
               {o.item && <ItemIcon src={iconOf(o.item, p.faction)} />}
-              <span className="min-w-0 flex-1 text-sm text-[#efe6cc]/90">{label(o)}{o.recommended && <span className="ml-2 rounded-full bg-[#5fbf8a]/15 px-2 py-0.5 text-[11px] text-[#5fbf8a]">{t("Empfohlen", "Recommended")}</span>}</span>
-              <span className="text-zinc-300">{o.conf.cost !== null ? <>{Math.round(conf * 100)} %: <b className="text-[#f4eed7]">{kinah(o.conf.cost)}</b>{o.mean.cost !== null && <span className="text-zinc-500"> · Ø {kinah(o.mean.cost)}</span>}</>
-                : <span className={MISSING}>{o.unknown.length ? t("Daten fehlen", "data missing") : `${o.conf.missingPrices.length} ${o.conf.missingPrices.length === 1 ? t("Preis fehlt", "price missing") : t("Preise fehlen", "prices missing")}`}</span>}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm text-[#efe6cc]/90">{label(o)}{o.recommended && <span className="ml-2 rounded-full bg-[#5fbf8a]/15 px-2 py-0.5 text-[11px] text-[#5fbf8a]">{t("Empfohlen", "Suggested")}</span>}</span>
+                {o.key !== "final" && <span className="block text-[11px] text-zinc-500">{o.start ? `${t("Einstieg bei", "start at")}: ${shown(o.start.name)}` : t("nichts mehr zu craften", "nothing left to craft")}</span>}
+                {o.conf.missingPrices.length > 0 && <span className={`block text-[11px] ${MISSING}`}>{t("fehlt", "missing")}: {o.conf.missingPrices.map((i) => shown(i.name)).join(", ")}</span>}
+              </span>
+              <span className="text-zinc-300">{cost(o)}</span>
             </label>
           </li>
         ))}
       </ul>
-      {!opts.some((o) => o.recommended) && <p className={`text-xs ${MISSING}`}>{t("Für eine Empfehlung fehlen noch Preise. Du kannst trotzdem einen Weg wählen und die Preise später eintragen.", "Prices are missing for a recommendation. You can still pick a route and add prices later.")}</p>}
+      {missing.length > 0 && <section className="space-y-2 rounded-xl bg-white/[0.02] p-3 ring-1 ring-[#e6b450]/30">
+        <div className="text-xs text-[#f4eed7]">{t("Diese Preise fehlen für die Rechnung. Trag sie kurz ein (Kinah pro Stück), dann rechne ich sofort neu:", "These prices are missing for the calculation. Enter them quickly (Kinah per piece) and I recalculate right away:")}</div>
+        <ul className="grid gap-1.5 sm:grid-cols-2">
+          {missing.map((i) => (
+            <li key={itemKey(i)} className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-2 py-1.5 text-xs ring-1 ring-white/5" style={rarityEdge(i.name)}>
+              <ItemIcon src={iconOf(i, p.faction)} rarity={rarityOf(i.name)} />
+              <span className="min-w-0 flex-1 truncate text-[#efe6cc]/90">{shown(i.name)}</span>
+              <PriceInput item={i} state={state} update={update} server={p.server} />
+            </li>
+          ))}
+        </ul>
+      </section>}
       <div className="flex flex-wrap gap-2">
         <button className={BTN} onClick={onBack}>‹ {t("Zurück", "Back")}</button>
         <button className={`${BTN} border-[#d9c58f]/50 text-[#f4eed7]`} onClick={() => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...withRoute(x, s, pick), setup: undefined } : x)) }))}>{t("Weg übernehmen und loslegen", "Take this route and start")} ›</button>

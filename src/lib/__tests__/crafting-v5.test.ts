@@ -341,6 +341,28 @@ describe("craft plan (top-down calculator) and routes", () => {
   });
 });
 
+describe("start from the lowest stage", () => {
+  it("a new orb project targets the top stage but starts at the lowest one; stock moves the start up", async () => {
+    const { currentCraft, routeOptions, missingRoutePrices, topOf, routeOf, withOwnedCount, itemKey } = await import("../crafting/model");
+    const top = topOf(data, "Asmodian", "orb")!;
+    const p = proj(top.recipeKey, { faction: "Asmodian" });
+    expect(top.name).toBe("Splendent Ebony Dragon Lord Orb");
+    expect(routeOf(p, data)).toBe("all");
+    const cur = currentCraft(p, data);
+    expect(cur.line!.item.name).toBe("Splendent Truth Orb (Asmodian)");
+    const opts = routeOptions(p, data);
+    expect(opts.find((o) => o.key === "all")!.start!.name).toBe("Splendent Truth Orb (Asmodian)");
+    // the Fine Sapphire Gemstone has no price in the Odar list: it is asked for, never made up
+    expect(missingRoutePrices(opts).some((i) => i.name === "Fine Sapphire Gemstone")).toBe(true);
+    // with enough Artisan's orbs in stock, the lower stages drop out and the start moves up
+    const art = cur.plan.lines.find((l) => /^Artisan/.test(l.item.name))!;
+    const withStock = withOwnedCount(p, art.item, art.need);
+    const after = currentCraft(withStock, data);
+    expect(itemKey(after.line!.item)).not.toBe(itemKey(cur.line!.item));
+    expect(after.plan.lines.some((l) => /^Expert/.test(l.item.name) && l.missing > 0)).toBe(false);
+  });
+});
+
 describe("Odar reference prices (V2 list)", () => {
   it("imports only marked rows with an item ID and never replaces the player's own price", async () => {
     const { findPrice, importPriceSuggestions, savePrice } = await import("../crafting/model");

@@ -1323,11 +1323,20 @@ export function routeOptions(p: Project, state: CraftState, s: Scenario = "low")
     const plan = craftPlan(v, state);
     const conf = planCost(plan, ctx, s);
     const mean = planCost(craftPlan(v, state, "mean"), ctx, s);
-    return { ...r, conf, mean, unknown: plan.unknown, recommended: false };
+    // where this route starts: the lowest stage that still misses items, after the stock
+    const start = plan.lines.find((l) => l.missing > 0)?.item ?? null;
+    return { ...r, conf, mean, unknown: plan.unknown, start, recommended: false };
   });
   const best = opts.filter((o) => o.conf.cost !== null).sort((a, b) => a.conf.cost! - b.conf.cost!)[0];
   if (best) best.recommended = true;
   return opts;
+}
+
+/** Prices the route comparison still lacks, over every route, each item once (stages first, then materials). */
+export function missingRoutePrices(opts: ReturnType<typeof routeOptions>): ItemRef[] {
+  const out: ItemRef[] = [];
+  for (const o of opts) for (const i of o.conf.missingPrices) if (!out.some((x) => sameItem(x, i))) out.push(i);
+  return out;
 }
 
 /** The craft to do now: the lowest stage of the plan that still misses items (null when nothing is left or the path is unknown). */
