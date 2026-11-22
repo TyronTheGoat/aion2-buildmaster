@@ -5,9 +5,10 @@ import { iconFor } from "@/lib/knowledge/item-catalog";
 import { numberLocale, slotLabel, useLang, useT, type Lang } from "@/lib/i18n";
 import { GRADE_HEX_CSS } from "@/lib/grades";
 import { Card, CardArt, Filler, Portrait, SHOW_ITEM_ICONS } from "./Card";
-import { portraitOf } from "../store";
+import { charKey, portraitOf } from "../store";
 import { GearCompare } from "../GearCompare";
-import { CraftingView } from "../crafting/CraftingView";
+import { CraftingView, type CraftUi } from "../crafting/CraftingView";
+import { useCraft } from "../craft-store";
 
 /** Order of the cards: weapon first, then armour, jewellery, the rest and Arcana last. */
 const ORDER: Item["slot"][] = [
@@ -39,34 +40,39 @@ export function deckOf(char: Character, lang: Lang = "en"): DeckEntry[] {
  * Character view: the gear laid out as physical cards (big icon, slot, name, rank glow, no stats yet).
  * Tapping a card opens the Ist / Soll comparison as two cards side by side.
  */
+type View = "gear" | "arcana" | "crafting";
+const VIEWS: View[] = ["gear", "arcana", "crafting"];
+
 export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
   char: Character; onBack: () => void; onRefresh: () => void; onRemove: () => void; note?: React.ReactNode;
 }) {
   const t = useT();
   const lang = useLang();
   const all = useMemo(() => deckOf(char, lang), [char, lang]);
-  // two pages: equipment and Arcana cards
-  const [tab, setTab] = useState<"gear" | "arcana">("gear");
+  // three pages on one wheel: equipment cards, Arcana cards, crafting
+  const [tab, setTab] = useState<View>("gear");
   // the view that is turning away during the wheel switch
-  const [leaving, setLeaving] = useState<"gear" | "arcana">();
+  const [leaving, setLeaving] = useState<View>();
   // keep the taller height while the wheel turns, so the outgoing view is not cut off
   const wheelRef = useRef<HTMLDivElement>(null);
   const [lockH, setLockH] = useState<number>();
-  const switchTab = () => {
-    if (leaving) return;
+  // crafting keeps its own sub-view and open project while the wheel shows another page
+  const [craftUi, setCraftUi] = useState<CraftUi>({ sub: "projects" });
+  const switchTo = (v: View) => {
+    if (leaving || v === tab) return; // no second switch while the wheel turns
     setLockH(wheelRef.current?.offsetHeight);
     setLeaving(tab);
-    setTab(tab === "gear" ? "arcana" : "gear");
+    setTab(v);
   };
   useEffect(() => {
     if (!leaving) return;
     const t = setTimeout(() => { setLeaving(undefined); setLockH(undefined); }, 1650);
     return () => clearTimeout(t);
   }, [leaving, tab]);
-  const deck = useMemo(() => all.filter((d) => (tab === "arcana") === (d.item.slot === "arcana")), [all, tab]);
+  const deckFor = (v: View) => all.filter((d) => (v === "arcana") === (d.item.slot === "arcana"));
   const [open, setOpen] = useState<string>();
-  const [crafting, setCrafting] = useState(false);
   const entry = all.find((d) => d.id === open);
+  const { state: craftState } = useCraft();
 
   useEffect(() => {
     if (!entry) return;
@@ -81,8 +87,6 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
       <h1 className="truncate text-lg font-semibold tracking-tight text-[#f4eed7] sm:text-2xl">{title}</h1>
     </div>
   );
-
-  if (crafting) return <CraftingView char={char} onBack={() => setCrafting(false)} />;
 
   // 3 / slot comparison: slot list left, Ist card, BiS card
   if (entry) {
@@ -116,6 +120,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
 
   // 2 / gear overview: compact character bar, switch, cards
   const arcanaCount = all.filter((d) => d.item.slot === "arcana").length;
+  const craftCount = craftState.projects.filter((p) => p.charKey === charKey(char) && p.status !== "done").length || null;
   return (
     <div className="space-y-4">
       <div className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-2 overflow-hidden rounded-2xl px-3 py-2.5">
@@ -130,7 +135,6 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
           </div>
         </div>
         <div className="relative flex shrink-0 gap-1.5 text-xs">
-          <button onClick={() => setCrafting(true)} className="rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-[#efe6cc] hover:border-[#d9c58f]/45">Crafting</button>
           <button onClick={onRefresh} className="rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-[#efe6cc] hover:border-[#d9c58f]/45">{t("Aktualisieren", "Refresh")}</button>
           <button onClick={onBack} className="rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-[#efe6cc] hover:border-[#d9c58f]/45">{t("Charakter wechseln", "Switch character")}</button>
           <button onClick={onRemove} className="rounded-lg px-2 py-1.5 text-zinc-500 hover:text-zinc-300">{t("Entfernen", "Remove")}</button>
@@ -138,27 +142,36 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
       </div>
       {note}
 
-      {/* one switch: Ausrüstung ⇄ Arcana; both views ride an invisible flat ring in depth that always turns the same way */}
-      <button type="button" role="switch" aria-checked={tab === "arcana"} onClick={switchTab}
-        aria-label={`${t("Umschalten auf", "Switch to")} ${tab === "gear" ? "Arcana" : t("Ausrüstung", "Equipment")}`}
-        className="relative grid grid-cols-2 rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_3px_0_-0.5px_#06070a] hover:border-[#d9c58f]/45">
-        <span aria-hidden className="absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg bg-white/[0.09] ring-1 ring-[#d9c58f]/40 transition-transform duration-500 ease-out motion-reduce:transition-none"
-          style={{ transform: tab === "arcana" ? "translateX(100%)" : "none" }} />
-        {([["gear", t("Ausrüstung", "Equipment"), all.length - arcanaCount], ["arcana", "Arcana", arcanaCount]] as const).map(([k, l, n]) => (
-          <span key={k} className={`relative px-4 py-1.5 text-center transition-colors ${tab === k ? "text-[#f4eed7]" : "text-zinc-500"}`}>
-            {l} <span className="text-xs text-zinc-500">{n}</span>
-          </span>
+      {/* one switch: Ausrüstung | Arcana | Crafting; all views ride an invisible flat ring in depth that always turns the same way */}
+      <div role="tablist" aria-label={t("Ansicht", "View")} onKeyDown={(e) => {
+        const i = VIEWS.indexOf(tab);
+        if (e.key === "ArrowRight") switchTo(VIEWS[(i + 1) % VIEWS.length]);
+        if (e.key === "ArrowLeft") switchTo(VIEWS[(i + VIEWS.length - 1) % VIEWS.length]);
+      }}
+        className="relative grid grid-cols-3 rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_3px_0_-0.5px_#06070a] hover:border-[#d9c58f]/45">
+        <span aria-hidden className="absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/3)] rounded-lg bg-white/[0.09] ring-1 ring-[#d9c58f]/40 transition-transform duration-500 ease-out motion-reduce:transition-none"
+          style={{ transform: `translateX(${VIEWS.indexOf(tab) * 100}%)` }} />
+        {([["gear", t("Ausrüstung", "Equipment"), all.length - arcanaCount], ["arcana", "Arcana", arcanaCount], ["crafting", "Crafting", craftCount]] as const).map(([k, l, n]) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} tabIndex={tab === k ? 0 : -1} onClick={() => switchTo(k)}
+            className={`relative px-2 py-1.5 text-center transition-colors sm:px-4 ${tab === k ? "text-[#f4eed7]" : "text-zinc-500 hover:text-zinc-300"}`}>
+            {l} {n !== null && <span className="text-xs text-zinc-500">{n}</span>}
+          </button>
         ))}
-      </button>
+      </div>
 
       <div ref={wheelRef} className="wheel relative" style={{ minHeight: leaving ? lockH : undefined }}>
-        {leaving && <Tiles key={`out-${leaving}`} deck={all.filter((d) => (leaving === "arcana") === (d.item.slot === "arcana"))} onOpen={setOpen}
-          className={`pointer-events-none absolute inset-x-0 top-0 wheel-out-ccw`} />}
-        <Tiles key={`in-${tab}`} deck={deck} onOpen={setOpen}
-          className={leaving ? "wheel-in-ccw" : ""} />
+        {leaving && page(leaving, "pointer-events-none absolute inset-x-0 top-0 wheel-out-ccw", true)}
+        {page(tab, leaving ? "wheel-in-ccw" : "")}
       </div>
     </div>
   );
+
+  // one page of the wheel (a plain function, not a component, so crafting keeps its state while it is shown)
+  function page(view: View, className: string, out = false) {
+    const key = `${out ? "out" : "in"}-${view}`;
+    if (view === "crafting") return <div key={key} className={className} inert={out} aria-hidden={out || undefined}><CraftingView char={char} ui={craftUi} setUi={setCraftUi} /></div>;
+    return <Tiles key={key} deck={deckFor(view)} onOpen={setOpen} className={className} />;
+  }
 }
 
 /** The card grid of one view (equipment or Arcana). The gap keeps the rank lights of neighbours apart. */

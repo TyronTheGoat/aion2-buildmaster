@@ -1,0 +1,220 @@
+import { describe, expect, it } from "vitest";
+import { attemptsFor, effectiveChance, expectedAttempts } from "../crafting/prob";
+import { parseCsv } from "../crafting/csv";
+import {
+  attemptCost, attemptEffects, buildCatalog, emptyState, findPrice, importFile, nextStep, nextSteps, priceOf, progress, remainingPath,
+  ctxOf, type AttemptEvent, type CraftState, type Project, type Recipe,
+} from "../crafting/model";
+import { BUILTIN_FILES } from "../crafting/builtin-data";
+
+/* Tests on the real V4/V5 data package (data/crafting/v5), imported in the same order as the app does. */
+const load = () => {
+  let s: CraftState = emptyState();
+  const log: { file: string; kind: string; errors: number }[] = [];
+  for (const [f, t] of BUILTIN_FILES) { const r = importFile(s, f, t); s = r.state; log.push({ file: f, kind: r.kind, errors: r.errors.length }); }
+  return { s, log };
+};
+const { s: data, log } = load();
+const R = (key: string) => data.recipes.find((r) => r.recipeKey === key)!;
+const proj = (target: string, extra: Partial<Project> = {}): Project => ({
+  id: "p1", charKey: "eu/odar/test", character: "Test", faction: "Elyos", server: "odar", slot: "weapon", mastery: null,
+  targetRecipeKey: target, goal: "normal", status: "active", createdAt: "2026-11-22T10:00:00Z", owned: [], ...extra,
+});
+const attempt = (projectId: string, r: Recipe, outcome: AttemptEvent["outcome"]): AttemptEvent =>
+  ({ id: Math.random().toString(36), kind: "attempt", projectId, at: "2026-11-22T11:00:00Z", recipeKey: r.recipeKey, outcome, ...attemptEffects(r, outcome), costLow: 1, costHigh: 2 });
+
+describe("V4 import", () => {
+  it("every file is recognised and imports without errors", () => {
+    expect(log.map((l) => l.kind)).toEqual(["recipes", "materials", "transfers", "keymap", "chain", "gaps", "gaps", "gaps", "catalog"]);
+    expect(log.every((l) => l.errors === 0)).toBe(true);
+  });
+  it("158 recipes with unique keys; 123 still without ingredients stay visible as gaps", () => {
+    expect(data.recipes).toHaveLength(158);
+    expect(new Set(data.recipes.map((r) => r.recipeKey)).size).toBe(158);
+    expect(data.recipes.filter((r) => !r.ingredients.length)).toHaveLength(123);
+    expect(data.gaps.find((g) => g.file.startsWith("07"))!.rows).toHaveLength(123);
+  });
+  it("no ingredient or transfer is attached twice, transfers stay apart from materials", () => {
+    for (const r of data.recipes) {
+      const keys = r.ingredients.map((i) => `${i.kind}:${i.itemId ?? i.name}`);
+      expect(new Set(keys).size).toBe(keys.length);
+    }
+    expect(data.recipes.flatMap((r) => r.ingredients).filter((i) => i.kind === "transfer")).toHaveLength(10);
+  });
+  it("importing the same files again does not double anything", () => {
+    let s = data;
+    for (const [f, t] of BUILTIN_FILES) s = importFile(s, f, t).state;
+    expect(s.recipes).toHaveLength(158);
+    expect(s.recipes.flatMap((r) => r.ingredients)).toHaveLength(data.recipes.flatMap((r) => r.ingredients).length);
+    expect(s.chains).toHaveLength(18);
+  });
+  it("old V3 Orb keys are moved to the new keys (04)", () => {
+    const { rows } = parseCsv(BUILTIN_FILES.find(([f]) => f.startsWith("04"))![1]);
+    for (const r of rows) expect(data.keyMap[r.v3_recipe_key]).toBe(r.new_recipe_key);
+  });
+});
+
+describe("Orb chain Lv18 → 102 (09)", () => {
+  for (const [faction, last, names] of [
+    ["Elyos", "recipe:311093015", ["Truth Orb", "Expert's Truth Orb", "Artisan's Truth Orb", "True Dragon Lord Orb", "Splendent True Dragon Lord Orb", "White Dragon Lord Orb", "Splendent White Dragon Lord Orb", "Wise Dragon Lord Orb", "Splendent Wise Dragon Lord Orb"]],
+    ["Asmodian", "recipe:321093015", ["Truth Orb", "Expert's Truth Orb", "Artisan's Truth Orb", "Star Dragon Lord Orb", "Splendent Star Dragon Lord Orb", "Dark Dragon Lord Orb", "Splendent Dark Dragon Lord Orb", "Ebony Dragon Lord Orb", "Splendent Ebony Dragon Lord Orb"]],
+  ] as const) {
+    it(`${faction}: 9 stages in order, levels 18 → 102`, () => {
+      const chain = data.chains.filter((c) => c.faction === faction).sort((a, b) => a.position - b.position);
+      expect(chain.map((c) => R(c.recipeKey).name)).toEqual(names);
+      expect(chain.map((c) => c.normalLevel)).toEqual([18, 28, 39, 62, 70, 78, 86, 94, 102]);
+      expect(chain.filter((c) => c.extraLv44Base).map((c) => c.normalLevel)).toEqual([78, 94]);
+    });
+    it(`${faction}: full path to 102 uses three Lv44 bases and the safe upgrades`, () => {
+      const p = proj(last, { faction });
+      const path = remainingPath(p, data);
+      const names44 = path.filter((m) => m.recipe.name === "Artisan's Truth Orb");
+      expect(names44).toHaveLength(3);
+      expect(names44.every((m) => m.goal === "combo")).toBe(true);
+      expect(path[path.length - 1].recipe.recipeKey).toBe(last);
+      // every stage of the confirmed chain appears in the path
+      for (const c of data.chains.filter((c) => c.faction === faction)) expect(path.some((m) => m.recipe.recipeKey === c.recipeKey)).toBe(true);
+      // no recipe of the other faction
+      expect(path.every((m) => m.recipe.faction === faction)).toBe(true);
+    });
+    it(`${faction}: start at any stage — owning the 86 item skips everything below it except the extra Lv44 base`, () => {
+      const r86 = data.chains.find((c) => c.faction === faction && c.normalLevel === 86)!;
+      const p = proj(last, { faction, owned: [R(r86.recipeKey).output] });
+      const path = remainingPath(p, data).map((m) => m.recipe.name);
+      expect(path.slice(-2)).toEqual([names[7], names[8]]);
+      expect(path.filter((n) => n === "Artisan's Truth Orb")).toHaveLength(1);
+      expect(nextStep(p, data)!.recipe.name).toBe("Truth Orb");
+    });
+  }
+  it("Lv62 / 78 / 94 combos lead to the Splendent version, Lv18 combo to the Splendent Truth Orb", () => {
+    expect(R("recipe:311096001").comboOutput!.name).toBe("Splendent Truth Orb (Elyos)");
+    expect(R("recipe:311093001").comboOutput!.name).toBe("Splendent True Dragon Lord Orb");
+    expect(R("recipe:311093012").comboOutput!.name).toBe("Splendent White Dragon Lord Orb");
+    expect(R("recipe:321093014").comboOutput!.name).toBe("Splendent Ebony Dragon Lord Orb");
+  });
+});
+
+describe("80 % values against 05", () => {
+  it("n80(25 %) = 6 with expected value 4; n80(0.2304) = 7", () => {
+    expect(attemptsFor(0.25)).toBe(6);
+    expect(expectedAttempts(0.25)).toBe(4);
+    expect(attemptsFor(0.2304)).toBe(7);
+  });
+  it("every row of 05 matches the recipe data", () => {
+    const { rows } = parseCsv(BUILTIN_FILES.find(([f]) => f.startsWith("05"))![1]);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      const r = R(data.keyMap[row.recipe_key] ?? row.recipe_key);
+      expect(r, row.recipe_key).toBeTruthy();
+      expect(attemptsFor(effectiveChance(r, "normal"))).toBe(Number(row.n80_normal_at_required));
+      if (row.n80_combo_at_best) expect(attemptsFor(effectiveChance(r.best!, "combo"))).toBe(Number(row.n80_combo_at_best));
+    }
+  });
+});
+
+describe("progress in %", () => {
+  const last = "recipe:311093015";
+  it("is based on recipe stages, three failures do not raise it, a success does", () => {
+    const p = proj(last);
+    const base = progress(p, data);
+    expect(base.percent).toBe(0);
+    expect(base.total).toBe(remainingPath(p, data, { fromScratch: true }).length);
+    const truth = R("recipe:311096001");
+    const fails = [attempt(p.id, truth, "base_fail"), attempt(p.id, truth, "base_fail"), attempt(p.id, truth, "combo_fail")];
+    expect(progress(p, { ...data, events: fails }).done).toBe(truth.comboFailKeepsNormal === true ? 0 : 0);
+    expect(progress(p, { ...data, events: fails.slice(0, 2) }).percent).toBe(0);
+    const ok = progress(p, { ...data, events: [...fails.slice(0, 2), attempt(p.id, truth, "combo_success")] });
+    expect(ok.done).toBe(1);
+    expect(ok.percent).toBeGreaterThan(0);
+  });
+  it("70 → 86 → 102 with 86 owned is not 100 %", () => {
+    const p = proj(last, { owned: [R("recipe:311093013").output] });
+    const pr = progress(p, data);
+    expect(pr.percent).toBeLessThan(100);
+    expect(pr.done).toBeGreaterThan(0);
+    expect(pr.milestones[pr.milestones.length - 1].done).toBe(false);
+  });
+  it("100 % only once the final item is there", () => {
+    const p = proj(last, { owned: [R(last).output] });
+    expect(progress(p, data).percent).toBe(100);
+  });
+});
+
+describe("prices (manual only)", () => {
+  const bow = "recipe:211046001";
+  const wood = R(bow).ingredients.find((i) => i.name === "Yggdrasil Wood")!;
+  it("the data package brings no prices", () => {
+    expect(data.prices).toEqual([]);
+    expect(priceOf(ctxOf(data, proj(bow)), wood, "low")).toBeNull();
+  });
+  it("wood 10k–12k is used right away; a project-only 15k–18k wins only in that project", () => {
+    const s: CraftState = { ...data, prices: [{ ...wood, id: "w", server: "odar", low: 10000, high: 12000, ref: null, tradeable: true }] };
+    const p = proj(bow);
+    const c = attemptCost(R(bow), ctxOf(s, p), "low");
+    expect(c.partial).toBeGreaterThanOrEqual(3 * 10000);
+    expect(priceOf(ctxOf(s, p), wood, "high")).toBe(12000);
+    const p2 = { ...p, id: "p2", priceOverrides: [{ ...wood, server: "odar", low: 15000, high: 18000, ref: null, tradeable: true }] };
+    expect(priceOf(ctxOf(s, p2), wood, "low")).toBe(15000);
+    expect(findPrice(ctxOf(s, p2), wood)!.scope).toBe("project");
+    expect(priceOf(ctxOf(s, p), wood, "low")).toBe(10000);
+    const step = { ...p, id: "p3", priceOverrides: [{ ...wood, stepKey: bow, low: 15000, high: 18000, ref: null, tradeable: true }] };
+    expect(priceOf(ctxOf(s, step, bow), wood, "low")).toBe(15000);
+    expect(priceOf(ctxOf(s, step, "recipe:other"), wood, "low")).toBe(10000);
+  });
+  it("a price saved for one server is not used on another", () => {
+    const s: CraftState = { ...data, prices: [{ ...wood, server: "odar", low: 10000, high: 12000, ref: null, tradeable: true }] };
+    expect(priceOf(ctxOf(s, proj(bow, { server: "other" })), wood, "low")).toBeNull();
+  });
+  it("logged attempts keep their cost after a price change", () => {
+    const p = proj(bow);
+    const e = attempt(p.id, R(bow), "success");
+    const s: CraftState = { ...data, projects: [p], events: [e], prices: [{ ...wood, server: "odar", low: 99999, high: 99999, ref: null, tradeable: true }] };
+    expect((s.events[0] as AttemptEvent).costLow).toBe(1);
+  });
+  it("missing prices never give 0 Kinah", () => {
+    const c = attemptCost(R(bow), ctxOf(data, proj(bow)), "low");
+    expect(c.cost).toBeNull();
+    expect(c.missing.length).toBeGreaterThan(0);
+  });
+});
+
+describe("price catalogue", () => {
+  it("covers the start catalogue and every recipe result and ingredient", () => {
+    const cat = buildCatalog(data);
+    expect(cat.length).toBeGreaterThanOrEqual(214);
+    for (const r of data.recipes) expect(cat.some((c) => c.recipeKeys.includes(r.recipeKey))).toBe(true);
+    expect(cat.some((c) => c.name === "Yggdrasil Wood")).toBe(true);
+  });
+  it("grows with a new recipe import", () => {
+    const before = buildCatalog(data).length;
+    const s = importFile(data, "neu.csv", "recipe_key,recipe_name,faction,gear_slot\nrecipe:test1,Testring Neu,Elyos,ring\n").state;
+    const cat = buildCatalog(s);
+    expect(cat.length).toBe(before + 1);
+    expect(cat.find((c) => c.name === "Testring Neu")!.category).toBe("ring");
+  });
+});
+
+describe("next steps across projects", () => {
+  it("done projects leave the next steps but keep their history", () => {
+    const p = proj("recipe:311093015");
+    const e = attempt(p.id, R("recipe:311096001"), "combo_success");
+    const s = { ...data, projects: [{ ...p, status: "done" as const }], events: [e] };
+    expect(nextSteps(s, p.charKey)).toHaveLength(0);
+    expect(s.events).toHaveLength(1);
+  });
+});
+
+describe("stored data from Phase 1 (version 1)", () => {
+  it("keeps projects, prices and history and adds the built-in recipes", async () => {
+    const { migrate } = await import("../../components/craft-store");
+    const p = proj("recipe:311093015");
+    const old = { version: 1, recipes: [], overrides: [], prices: [{ name: "Odyle", server: "odar", low: 5, high: 6, ref: null, tradeable: true }], gaps: [], imports: [], inventory: { "n:odyle": 3 }, projects: [p], events: [] };
+    const s = migrate(old as never);
+    expect(s.version).toBe(2);
+    expect(s.recipes).toHaveLength(158);
+    expect(s.projects).toEqual([p]);
+    expect(s.prices).toEqual(old.prices);
+    expect(s.inventory).toEqual(old.inventory);
+    expect(migrate(s)).toEqual(s);
+  });
+});

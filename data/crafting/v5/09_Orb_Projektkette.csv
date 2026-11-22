@@ -1,0 +1,19 @@
+﻿faction,gear_slot,sequence_position,recipe_key,normal_item_level,combo_target_level,guaranteed,requires_extra_lv44_base,notes
+Elyos,orb,1,recipe:311096001,18,22,False,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Elyos,orb,2,recipe:311095001,28,35,False,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Elyos,orb,3,recipe:311094001,39,44,False,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Elyos,orb,4,recipe:311093001,62,70,False,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Elyos,orb,5,recipe:311093011,70,,True,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Elyos,orb,6,recipe:311093012,78,86,False,True,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Elyos,orb,7,recipe:311093013,86,,True,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Elyos,orb,8,recipe:311093014,94,102,False,True,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Elyos,orb,9,recipe:311093015,102,,True,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Asmodian,orb,1,recipe:321096001,18,22,False,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Asmodian,orb,2,recipe:321095001,28,35,False,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Asmodian,orb,3,recipe:321094001,39,44,False,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Asmodian,orb,4,recipe:321093001,62,70,False,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Asmodian,orb,5,recipe:321093011,70,,True,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Asmodian,orb,6,recipe:321093012,78,86,False,True,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Asmodian,orb,7,recipe:321093013,86,,True,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Asmodian,orb,8,recipe:321093014,94,102,False,True,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.
+Asmodian,orb,9,recipe:321093015,102,,True,False,Wechsle je nach echtem Combo-Ausgang auf naechsten Schritt oder sicheren Upgrade-Craft; keine Versuchszahlen einfach addieren.

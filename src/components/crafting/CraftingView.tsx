@@ -1,29 +1,44 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import type { Character } from "@/lib/types";
 import { numberLocale, useLang, useT, type T } from "@/lib/i18n";
+import { iconFor } from "@/lib/knowledge/item-catalog";
 import { charKey } from "../store";
 import { useCraft } from "../craft-store";
+import { Card, CardArt, Filler, SHOW_ITEM_ICONS } from "../deck/Card";
 import {
-  SLOT_PRIORITY, activeAttempts, attemptCost, attemptEffects, importFile, itemKey, nextSteps, pathSimInput, producerOf,
-  projectTarget, remainingPath, sortProjects, spent, stepBudget, uid,
-  type CraftSlot, type CraftState, type ImportError, type NextStep, type Outcome, type Price, type Project, type Recipe, type Scenario,
+  SLOT_PRIORITY, activeAttempts, attemptCost, attemptEffects, buildCatalog, canCraft, craftSlotOf, craftsItself, ctxOf, findPrice, importFile,
+  itemKey, nextStep, nextSteps, normName, openCost, pathSimInput, producerOf, progress, projectTarget, remainingPath, savePrice, sortProjects,
+  spent, stageLevel, stepBudget, uid, validatePrice,
+  type CatalogCategory, type CatalogEntry, type CraftSlot, type CraftState, type ImportError, type ItemRef, type NextStep, type Outcome, type Project, type Scenario,
 } from "@/lib/crafting/model";
 import { effectiveChance, simulateBudget, type ChanceGoal } from "@/lib/crafting/prob";
 
 const BTN = "rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-xs text-[#efe6cc] hover:border-[#d9c58f]/45 disabled:opacity-40";
 const INPUT = "min-w-0 rounded-lg border border-[#d9c58f]/20 bg-white/[0.03] px-2.5 py-1.5 text-sm text-[#f4eed7] outline-none focus:border-[#d9c58f]/50";
 const LABEL = "text-[10px] uppercase tracking-[0.22em] text-zinc-500";
+const MISSING = "text-[#ffa31a]";
+
+/** What the crafting page shows; kept by the parent so it survives switching to Equipment / Arcana and back. */
+export interface CraftUi { sub: "projects" | "next" | "prices"; open?: string; adding?: boolean }
 
 const slotName = (s: CraftSlot, t: T) => ({
   weapon: t("Waffe", "Weapon"), ring: t("Ring", "Ring"), guard: t("Schützer / Nebenhand", "Guard / off-hand"),
   gloves: t("Handschuhe", "Gloves"), jewelry: t("Schmuck", "Jewellery"), armor: t("Rüstung", "Armour"),
 })[s];
 
+const categoryName = (c: CatalogCategory, t: T) => ({
+  raw: t("Rohmaterial", "Raw material"), processed: t("Verarbeitetes Material", "Processed material"), intermediate: t("Zwischenitem", "Intermediate"),
+  weapon: t("Waffe", "Weapon"), guard: t("Schützer", "Guard"), gloves: t("Handschuhe", "Gloves"), ring: t("Ring", "Ring"),
+  jewelry: t("Schmuck", "Jewellery"), armor: t("Rüstung", "Armour"), transfer: t("Transfer-Gegenstand", "Transfer item"), other: t("Sonstiges", "Other"),
+})[c];
+
 const outcomeName = (o: Outcome, t: T) => ({
   base_fail: t("Fehlgeschlagen", "Failed"), success: t("Erfolg", "Success"), combo_success: t("Combo erfolgreich", "Combo success"),
   combo_fail: t("Combo fehlgeschlagen", "Combo failed"), guaranteed_success: t("Garantiert erfolgreich", "Guaranteed success"),
 })[o];
+
+const statusName = (s: Project["status"], t: T) => (s === "active" ? t("aktiv", "active") : s === "paused" ? t("pausiert", "paused") : t("abgeschlossen", "done"));
 
 const pct = (p: number | null) => (p === null ? null : `${(p * 100).toFixed(p < 0.1 ? 2 : 1).replace(/\.0+$/, "")} %`);
 
@@ -31,24 +46,34 @@ function useKinah() {
   const lang = useLang();
   return (n: number | null) => (n === null ? null : `${Math.round(n).toLocaleString(numberLocale(lang))} Kinah`);
 }
+/** "10.000 – 12.000 Kinah" or one value when both are the same. */
+function useRange() {
+  const kinah = useKinah();
+  return (low: number | null, high: number | null) => (low === null && high === null ? null : low === high || high === null ? kinah(low) : low === null ? kinah(high) : `${kinah(low)!.replace(" Kinah", "")} – ${kinah(high)}`);
+}
 
-/** Crafting area of one character: projects, next steps, market prices. Beta while the recipe data is incomplete. */
-export function CraftingView({ char, onBack }: { char: Character; onBack: () => void }) {
+type Update = (fn: (s: CraftState) => CraftState) => void;
+
+/** What the price dialog is open for. */
+interface PriceTarget { item: ItemRef & { catalogKey?: string; bound?: boolean | null }; server: string; project?: Project; stepKey?: string }
+
+/** Crafting page of one character: projects as cards, next steps, market prices. */
+export function CraftingView({ char, ui, setUi }: { char: Character; ui: CraftUi; setUi: Dispatch<SetStateAction<CraftUi>> }) {
   const t = useT();
   const { state, update, exportJson, importJson } = useCraft();
-  const [tab, setTab] = useState<"projects" | "next" | "prices">("next");
   const [report, setReport] = useState<{ file: string; rows: number; errors: ImportError[]; kind: string }[]>();
+  const [priceFor, setPriceFor] = useState<PriceTarget>();
   const fileRef = useRef<HTMLInputElement>(null);
   const backupRef = useRef<HTMLInputElement>(null);
   const key = charKey(char);
+  const open = state.projects.find((p) => p.id === ui.open && p.charKey === key);
 
   const onFiles = async (files: FileList | null) => {
     if (!files?.length) return;
     let s = state;
     const out: NonNullable<typeof report> = [];
     for (const f of Array.from(files)) {
-      const text = await f.text();
-      const r = importFile(s, f.name, text);
+      const r = importFile(s, f.name, await f.text());
       s = r.state;
       out.push({ file: f.name, rows: r.rows, errors: r.errors, kind: r.kind });
     }
@@ -62,16 +87,19 @@ export function CraftingView({ char, onBack }: { char: Character; onBack: () => 
     a.click();
     URL.revokeObjectURL(a.href);
   };
+  const gaps = state.recipes.filter((r) => !r.ingredients.length).length;
+  const subs = [["projects", t("Crafting-Projekte", "Crafting projects")], ["next", "Crafting Next Steps"], ["prices", t("Marktpreise", "Market prices")]] as const;
 
   return (
     <div className="space-y-4">
-      <div className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-2 overflow-hidden rounded-2xl px-3 py-2.5">
-        <button onClick={onBack} className="relative shrink-0 rounded-full border border-[#d9c58f]/20 bg-white/[0.03] px-3 py-1 text-sm text-[#efe6cc]/85 hover:border-[#d9c58f]/40">‹ {t("Zurück", "Back")}</button>
-        <div className="relative min-w-0 flex-1">
-          <div className="truncate text-base font-semibold leading-tight text-[#f4eed7]">Crafting · {char.name}</div>
-          <div className="text-[11px] text-[#ffa31a]/85">{t("Beta · Daten unvollständig", "Beta · data incomplete")}</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div role="tablist" aria-label="Crafting" className="relative grid w-full grid-cols-3 rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-xs sm:text-sm lg:w-auto lg:flex-1">
+          {subs.map(([k, l]) => (
+            <button key={k} role="tab" aria-selected={ui.sub === k} onClick={() => setUi((u) => ({ ...u, sub: k, open: k === "projects" ? u.open : undefined }))}
+              className={`rounded-lg px-2 py-1.5 transition-colors sm:px-3 ${ui.sub === k ? "bg-white/[0.09] text-[#f4eed7] ring-1 ring-[#d9c58f]/40" : "text-zinc-500 hover:text-zinc-300"}`}>{l}</button>
+          ))}
         </div>
-        <div className="relative flex shrink-0 flex-wrap gap-1.5">
+        <div className="flex shrink-0 flex-wrap gap-1.5">
           <button className={BTN} onClick={() => fileRef.current?.click()}>{t("Daten importieren (CSV)", "Import data (CSV)")}</button>
           <button className={BTN} onClick={download}>{t("Export", "Export")}</button>
           <button className={BTN} onClick={() => backupRef.current?.click()}>{t("Sicherung laden", "Load backup")}</button>
@@ -85,25 +113,21 @@ export function CraftingView({ char, onBack }: { char: Character; onBack: () => 
         </div>
       </div>
 
+      <p className="text-[11px] text-zinc-500">
+        <span className="text-[#ffa31a]/85">Beta</span> · {state.recipes.length} {t("Rezepte", "recipes")}
+        {gaps > 0 && <> · <span className={MISSING}>{gaps} {t("noch ohne Zutatenliste (Datenlücke)", "still without ingredient list (data gap)")}</span></>}
+        {" · "}{t("Preise trägst nur du ein.", "Only you enter prices.")}
+      </p>
+
       {report && <ImportReport report={report} onClose={() => setReport(undefined)} />}
 
-      <div className="relative grid grid-cols-3 rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-sm">
-        {([["projects", t("Projekte", "Projects")], ["next", "Next Steps"], ["prices", t("Marktpreise", "Market prices")]] as const).map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)} aria-pressed={tab === k}
-            className={`rounded-lg px-3 py-1.5 transition-colors ${tab === k ? "bg-white/[0.09] text-[#f4eed7] ring-1 ring-[#d9c58f]/40" : "text-zinc-500 hover:text-zinc-300"}`}>{l}</button>
-        ))}
-      </div>
+      {ui.sub === "projects" && (open
+        ? <ProjectDetail p={open} state={state} update={update} onBack={() => setUi((u) => ({ ...u, open: undefined }))} onPrice={setPriceFor} />
+        : <ProjectsTab state={state} update={update} char={char} charKey={key} ui={ui} setUi={setUi} />)}
+      {ui.sub === "next" && <NextStepsTab state={state} update={update} charKey={key} onPrice={setPriceFor} />}
+      {ui.sub === "prices" && <PricesTab state={state} update={update} char={char} onPrice={setPriceFor} />}
 
-      {!state.recipes.length && (
-        <p className="rounded-xl border border-[#ffa31a]/25 bg-[#ffa31a]/[0.05] px-3 py-2 text-sm text-[#efe6cc]/85">
-          {t("Noch keine Rezeptdaten. Importiere die CSV-Dateien (01 Rezepte, 01B eigene Chancen, 02 Materialien, 03 Preise). Ohne Daten zeigt der Planer keine Kosten oder Chancen an.",
-            "No recipe data yet. Import the CSV files (01 recipes, 01B own chances, 02 materials, 03 prices). Without data the planner shows no costs or chances.")}
-        </p>
-      )}
-
-      {tab === "projects" && <ProjectsTab state={state} update={update} char={char} charKey={key} />}
-      {tab === "next" && <NextStepsTab state={state} update={update} charKey={key} />}
-      {tab === "prices" && <PricesTab state={state} update={update} />}
+      {priceFor && <PriceDialog target={priceFor} state={state} onClose={() => setPriceFor(undefined)} onSave={(fn) => { update(fn); setPriceFor(undefined); }} />}
     </div>
   );
 }
@@ -130,52 +154,121 @@ function ImportReport({ report, onClose }: { report: { file: string; rows: numbe
 
 /* ------------------------------------------------------------------ projects ------------------------------------------------------------------ */
 
-type Update = (fn: (s: CraftState) => CraftState) => void;
-
-function ProjectsTab({ state, update, char, charKey: key }: { state: CraftState; update: Update; char: Character; charKey: string }) {
+function ProjectsTab({ state, update, char, charKey: key, ui, setUi }: {
+  state: CraftState; update: Update; char: Character; charKey: string; ui: CraftUi; setUi: Dispatch<SetStateAction<CraftUi>>;
+}) {
   const t = useT();
   const mine = sortProjects(state.projects.filter((p) => p.charKey === key));
-  const [adding, setAdding] = useState(false);
+  const current = mine.filter((p) => p.status !== "done");
+  const done = mine.filter((p) => p.status === "done");
+  const grid = "grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-10 lg:grid-cols-3";
   return (
-    <div className="space-y-3">
-      <button className={BTN} onClick={() => setAdding((a) => !a)} disabled={!state.recipes.length}>{adding ? t("Abbrechen", "Cancel") : t("+ Neues Projekt", "+ New project")}</button>
-      {adding && <NewProject state={state} char={char} charKey={key} onDone={(p) => { if (p) update((s) => ({ ...s, projects: [...s.projects, p] })); setAdding(false); }} />}
-      {!mine.length && !adding && <p className="text-sm text-zinc-500">{t("Noch keine Projekte für diesen Charakter.", "No projects for this character yet.")}</p>}
-      {mine.map((p) => <ProjectCard key={p.id} p={p} state={state} update={update} />)}
+    <div className="space-y-5">
+      <button className={BTN} onClick={() => setUi((u) => ({ ...u, adding: !u.adding }))} disabled={!state.recipes.length}>{ui.adding ? t("Abbrechen", "Cancel") : t("+ Neues Projekt", "+ New project")}</button>
+      {ui.adding && <NewProject state={state} char={char} charKey={key} onDone={(p) => { if (p) update((s) => ({ ...s, projects: [...s.projects, p] })); setUi((u) => ({ ...u, adding: false, open: p?.id ?? u.open })); }} />}
+      {!mine.length && !ui.adding && <p className="text-sm text-zinc-500">{t("Noch keine Projekte für diesen Charakter.", "No projects for this character yet.")}</p>}
+      {current.length > 0 && <ul className={grid}>{current.map((p) => <li key={p.id}><ProjectCard p={p} state={state} onOpen={() => setUi((u) => ({ ...u, open: p.id }))} /></li>)}</ul>}
+      {done.length > 0 && (
+        <section className="space-y-3">
+          <h2 className={LABEL}>{t("Abgeschlossen (Historie)", "Finished (history)")}</h2>
+          <ul className={grid}>{done.map((p) => <li key={p.id}><ProjectCard p={p} state={state} onOpen={() => setUi((u) => ({ ...u, open: p.id }))} /></li>)}</ul>
+        </section>
+      )}
     </div>
+  );
+}
+
+/** Progress bar under a card text, in the card's own colours. */
+function Progress({ percent, done, total }: { percent: number | null; done: number; total: number }) {
+  const t = useT();
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between text-[11px]">
+        <span className="text-zinc-500">{total ? `${done} ${t("von", "of")} ${total} ${t("Rezeptstufen", "recipe stages")}` : t("Pfad unbekannt", "Path unknown")}</span>
+        <span className="font-semibold text-[#f4eed7]">{percent === null ? "–" : `${percent} %`}</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-white/5" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent ?? undefined}>
+        <div className="h-full rounded-full bg-gradient-to-r from-[#beac80] to-[#f4eed7] transition-[width] duration-500 motion-reduce:transition-none" style={{ width: `${percent ?? 0}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function ProjectCard({ p, state, onOpen }: { p: Project; state: CraftState; onOpen: () => void }) {
+  const t = useT();
+  const range = useRange();
+  const target = projectTarget(p, state.recipes);
+  const pr = progress(p, state);
+  const step = p.status === "done" ? null : nextStep(p, state);
+  const cost = { low: openCost(p, state, "low"), high: openCost(p, state, "high") };
+  const last = [...pr.milestones].reverse().find((m) => m.done);
+  const from = last ? stageLevel(last) : null;
+  const to = pr.milestones.length ? stageLevel(pr.milestones[pr.milestones.length - 1]) : null;
+  const icon = SHOW_ITEM_ICONS && target ? iconFor(target) : undefined;
+  return (
+    <Card as="button" onClick={onOpen} label={`${target?.name ?? "?"}: ${pr.percent ?? "–"} %`} className={`flex h-full w-full flex-col gap-3 p-3 ${p.status !== "active" ? "opacity-70" : ""}`}>
+      <div className="relative flex w-full items-center gap-3">
+        <div className="relative w-16 shrink-0">{icon ? <CardArt src={icon} alt={target!.name} /> : <Filler className="aspect-square w-full" />}</div>
+        <div className="relative min-w-0">
+          <div className="truncate text-sm font-semibold text-[#f4eed7]">{target?.name ?? t("Rezept fehlt", "Recipe missing")}</div>
+          <div className="truncate text-xs text-zinc-400">{slotName(p.slot, t)}{p.className ? ` · ${p.className}` : ""} · {statusName(p.status, t)}</div>
+          <div className="truncate text-[11px] text-zinc-500">
+            {from !== null ? `Lv ${from}` : t("Start", "Start")} → {to !== null ? `Lv ${to}` : t("Ziel", "Goal")}
+          </div>
+        </div>
+      </div>
+      <div className="relative w-full space-y-1 text-[11px]">
+        <div className="truncate text-zinc-400">{t("Nächster Schritt", "Next step")}: <span className="text-[#efe6cc]/85">
+          {p.status === "done" ? t("keiner (abgeschlossen)", "none (done)") : step ? (step.goal === "combo" && step.recipe.comboOutput ? step.recipe.comboOutput.name : step.recipe.output.name) : pr.percent === 100 ? t("fertig", "done") : t("unbekannt", "unknown")}
+        </span></div>
+        {p.status !== "done" && (
+          <div className="truncate text-zinc-500">{t("Offene Materialkosten", "Open material cost")}: {cost.low.cost !== null
+            ? <span className="text-[#efe6cc]/85">{range(cost.low.cost, cost.high.cost)}</span>
+            : <span className={MISSING}>{t("Daten fehlen", "Data missing")}{cost.low.partial > 0 ? ` (${t("bekannt", "known")} ${range(cost.low.partial, cost.high.partial)})` : ""}</span>}</div>
+        )}
+      </div>
+      <div className="relative w-full"><Progress percent={pr.percent} done={pr.done} total={pr.total} /></div>
+    </Card>
   );
 }
 
 function NewProject({ state, char, charKey: key, onDone }: { state: CraftState; char: Character; charKey: string; onDone: (p?: Project) => void }) {
   const t = useT();
   const faction = char.race ?? "";
-  const recipes = state.recipes.filter((r) => !r.faction || !faction || ["beide", "both", "all"].includes(r.faction.toLowerCase()) || r.faction.toLowerCase().startsWith(faction.toLowerCase().slice(0, 4)));
+  const recipes = useMemo(() => state.recipes.filter((r) => r.ingredients.length && craftSlotOf(r.slot) !== null && (!r.faction || !faction || ["beide", "both", "all"].includes(r.faction.toLowerCase()) || r.faction.toLowerCase().startsWith(faction.toLowerCase().slice(0, 4)))), [state.recipes, faction]);
   const [slot, setSlot] = useState<CraftSlot>("weapon");
-  const [recipeKey, setRecipeKey] = useState(recipes[0]?.recipeKey ?? "");
+  const inSlot = recipes.filter((r) => craftSlotOf(r.slot) === slot).sort((a, b) => (a.level ?? 0) - (b.level ?? 0) || a.name.localeCompare(b.name));
+  const [recipeKey, setRecipeKey] = useState("");
+  const recipe = inSlot.find((r) => r.recipeKey === recipeKey) ?? inSlot[inSlot.length - 1];
   const [goal, setGoal] = useState<ChanceGoal>("normal");
   const [mastery, setMastery] = useState("");
   const [profession, setProfession] = useState("");
   const [owned, setOwned] = useState<Set<string>>(new Set());
-  const recipe = recipes.find((r) => r.recipeKey === recipeKey);
-  // intermediates on the way to the target, offered as "already owned"
   const draft: Project | undefined = recipe && {
     id: "draft", charKey: key, character: char.name, faction, server: char.server, className: char.className, slot, mastery: null,
     targetRecipeKey: recipe.recipeKey, goal: recipe.comboOutput ? goal : "normal", status: "active", createdAt: "", owned: [],
   };
   const steps = draft ? remainingPath(draft, state) : [];
+  // each intermediate once, in path order
+  const offer = steps.slice(0, -1).filter((s, i, a) => a.findIndex((x) => itemKey(x.item) === itemKey(s.item)) === i);
   const m = mastery.trim() === "" ? null : Number(mastery);
+  const hidden = state.recipes.filter((r) => !r.ingredients.length && craftSlotOf(r.slot) === slot).length;
   return (
     <div className="card-face relative grid gap-3 rounded-2xl px-4 py-3 text-sm sm:grid-cols-2">
       <label className="grid gap-1"><span className={LABEL}>{t("Gear-Slot", "Gear slot")}</span>
-        <select className={INPUT} value={slot} onChange={(e) => setSlot(e.target.value as CraftSlot)}>{SLOT_PRIORITY.map((s) => <option key={s} value={s}>{slotName(s, t)}</option>)}</select></label>
+        <select className={INPUT} value={slot} onChange={(e) => { setSlot(e.target.value as CraftSlot); setRecipeKey(""); setOwned(new Set()); }}>{SLOT_PRIORITY.map((s) => <option key={s} value={s}>{slotName(s, t)}</option>)}</select></label>
       <label className="grid gap-1"><span className={LABEL}>{t("Zielgegenstand (Rezept)", "Target item (recipe)")}</span>
-        <select className={INPUT} value={recipeKey} onChange={(e) => { setRecipeKey(e.target.value); setOwned(new Set()); }}>
-          {recipes.map((r) => <option key={r.recipeKey} value={r.recipeKey}>{r.output.name}{r.comboOutput ? ` / ${r.comboOutput.name}` : ""} · {r.name}</option>)}
-        </select></label>
+        <select className={INPUT} value={recipe?.recipeKey ?? ""} onChange={(e) => { setRecipeKey(e.target.value); setOwned(new Set()); }}>
+          {inSlot.map((r) => <option key={r.recipeKey} value={r.recipeKey}>{r.output.name}{r.level ? ` · Lv ${r.level}` : ""}{r.comboOutput ? ` / Combo Lv ${r.comboLevel ?? "?"}` : ""}</option>)}
+        </select>
+        {!inSlot.length && <span className={`text-xs ${MISSING}`}>{t("Für diesen Slot gibt es noch kein Rezept mit Zutatenliste.", "No recipe with an ingredient list for this slot yet.")}</span>}
+        {hidden > 0 && <span className="text-xs text-zinc-500">{hidden} {t("weitere Rezepte ohne Zutatenliste ausgeblendet (Datenlücke).", "more recipes without ingredient list hidden (data gap).")}</span>}
+      </label>
       {recipe?.comboOutput && (
         <label className="grid gap-1"><span className={LABEL}>{t("Ziel", "Goal")}</span>
           <select className={INPUT} value={goal} onChange={(e) => setGoal(e.target.value as ChanceGoal)}>
-            <option value="normal">{recipe.output.name}</option><option value="combo">{recipe.comboOutput.name} (Combo)</option>
+            <option value="normal">{recipe.output.name}{recipe.level ? ` · Lv ${recipe.level}` : ""}</option>
+            <option value="combo">{recipe.comboOutput.name} (Combo{recipe.comboLevel ? ` · Lv ${recipe.comboLevel}` : ""})</option>
           </select></label>
       )}
       <label className="grid gap-1"><span className={LABEL}>{t("Handwerksberuf", "Profession")}</span>
@@ -183,80 +276,172 @@ function NewProject({ state, char, charKey: key, onDone }: { state: CraftState; 
       <label className="grid gap-1"><span className={LABEL}>{t("Deine Handwerksstufe", "Your crafting level")}</span>
         <input className={INPUT} inputMode="numeric" value={mastery} onChange={(e) => setMastery(e.target.value)} placeholder={t("unbekannt", "unknown")} /></label>
       <div className="text-xs text-zinc-500 sm:col-span-2">{[char.race, char.server, char.className].filter(Boolean).join(" · ")}</div>
-      {steps.length > 1 && (
-        <fieldset className="grid gap-1 sm:col-span-2"><legend className={LABEL}>{t("Zwischenstand: schon vorhanden", "Progress: already owned")}</legend>
-          {steps.slice(0, -1).map(({ recipe: r }, i) => {
-            const k = itemKey(r.output);
+      {offer.length > 0 && (
+        <fieldset className="grid gap-1 sm:col-span-2"><legend className={LABEL}>{t("Einstieg: schon vorhanden", "Starting point: already owned")}</legend>
+          {offer.map((s) => {
+            const k = itemKey(s.item);
+            const lv = stageLevel(s);
             return (
-              <label key={`${r.recipeKey}:${i}`} className="flex items-center gap-2 text-[#efe6cc]/85">
+              <label key={k} className="flex items-center gap-2 text-[#efe6cc]/85">
                 <input type="checkbox" checked={owned.has(k)} onChange={(e) => setOwned((o) => { const n = new Set(o); if (e.target.checked) n.add(k); else n.delete(k); return n; })} />
-                {r.output.name}
+                {s.item.name}{lv ? <span className="text-zinc-500"> · Lv {lv}</span> : ""}
               </label>
             );
           })}
-          <span className="text-xs text-zinc-500">{t("Ein vorhandenes Zwischenitem überspringt nur seinen eigenen Craft. Weitere Basisitems, die spätere Rezepte brauchen, bleiben auf der Liste.",
-            "An owned intermediate only skips its own craft. Other base items later recipes need stay on the list.")}</span>
+          <span className="text-xs text-zinc-500">{t("Ein vorhandenes Zwischenitem überspringt nur seinen eigenen Craft. Weitere Basisitems, die spätere Rezepte brauchen (z. B. die zusätzliche Lv44-Basis), bleiben auf der Liste.",
+            "An owned intermediate only skips its own craft. Other base items later recipes need (e.g. the extra Lv44 base) stay on the list.")}</span>
         </fieldset>
       )}
       <div className="flex gap-2 sm:col-span-2">
         <button className={BTN} disabled={!recipe || (m !== null && !Number.isFinite(m))} onClick={() => recipe && onDone({
           ...draft!, id: uid(), mastery: m, profession: profession || recipe.profession, createdAt: new Date().toISOString(),
-          owned: steps.slice(0, -1).map((s) => s.recipe.output).filter((o) => owned.has(itemKey(o))),
+          owned: offer.map((s) => s.item).filter((o) => owned.has(itemKey(o))),
         })}>{t("Projekt anlegen", "Create project")}</button>
       </div>
     </div>
   );
 }
 
-function ProjectCard({ p, state, update }: { p: Project; state: CraftState; update: Update }) {
+function ProjectDetail({ p, state, update, onBack, onPrice }: { p: Project; state: CraftState; update: Update; onBack: () => void; onPrice: (x: PriceTarget) => void }) {
   const t = useT();
   const kinah = useKinah();
+  const range = useRange();
   const target = projectTarget(p, state.recipes);
-  const path = remainingPath(p, state);
+  const pr = progress(p, state);
   const money = spent(p, state.events);
-  const history = activeAttempts(state.events).filter((e) => e.projectId === p.id).slice(-8).reverse();
+  const step = p.status === "active" ? nextStep(p, state) : null;
+  const history = activeAttempts(state.events).filter((e) => e.projectId === p.id).reverse();
   const set = (patch: Partial<Project>) => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
+  // materials still to get for the whole open path, with their price for this project
+  const mats = useMemo(() => {
+    const out = new Map<string, { item: ItemRef & { bound?: boolean | null }; qty: number | null; craftable: boolean; crafted: boolean; transfer: boolean }>();
+    for (const { recipe } of remainingPath(p, state)) for (const i of recipe.ingredients) {
+      const crafted = !!craftsItself(p, i, state.recipes);
+      if (crafted && !canCraft(p, i, state.recipes)) continue;
+      const k = itemKey(i);
+      const hit = out.get(k);
+      if (hit) hit.qty = hit.qty === null || i.qty === null ? null : hit.qty + i.qty;
+      else out.set(k, { item: i, qty: i.qty, craftable: canCraft(p, i, state.recipes), crafted, transfer: i.kind === "transfer" });
+    }
+    return [...out.values()];
+  }, [p, state]);
+  const toggleBuy = (item: ItemRef, craft: boolean) => {
+    const k = itemKey(item);
+    set({ buy: (p.buy ?? []).filter((x) => x !== k).concat(craft ? [] : [k]), craft: (p.craft ?? []).filter((x) => x !== k).concat(craft ? [k] : []) });
+  };
+  const ownedHas = (i: ItemRef) => p.owned.some((o) => itemKey(o) === itemKey(i));
   return (
-    <div className={`card-face relative space-y-2 rounded-2xl px-4 py-3 text-sm ${p.status !== "active" ? "opacity-60" : ""}`}>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-md border border-[#d9c58f]/25 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-[#beac80]">{slotName(p.slot, t)}</span>
-        <span className="font-semibold text-[#f4eed7]">{target?.name ?? t("Rezept fehlt", "Recipe missing")}</span>
-        <span className="text-xs text-zinc-500">{p.status === "active" ? t("aktiv", "active") : p.status === "paused" ? t("pausiert", "paused") : t("abgeschlossen", "done")}</span>
-        <div className="ml-auto flex gap-1.5">
-          <input className={`${INPUT} w-16 text-xs`} inputMode="numeric" title={t("Reihenfolge im Slot", "Order within slot")} placeholder="#" value={p.order ?? ""}
-            onChange={(e) => set({ order: e.target.value === "" ? undefined : Number(e.target.value) })} />
-          <input className={`${INPUT} w-24 text-xs`} inputMode="numeric" title={t("Handwerksstufe", "Crafting level")} placeholder={t("Stufe ?", "Level ?")} value={p.mastery ?? ""}
-            onChange={(e) => set({ mastery: e.target.value === "" ? null : Number(e.target.value) })} />
-          {p.status === "active"
-            ? <button className={BTN} onClick={() => set({ status: "paused" })}>{t("Pausieren", "Pause")}</button>
-            : <button className={BTN} onClick={() => set({ status: "active" })}>{t("Fortsetzen", "Resume")}</button>}
-          {p.status !== "done" && <button className={BTN} onClick={() => set({ status: "done" })}>{t("Abschließen", "Finish")}</button>}
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="shrink-0 rounded-full border border-[#d9c58f]/20 bg-white/[0.03] px-3.5 py-1.5 text-sm text-[#efe6cc]/85 hover:border-[#d9c58f]/40">‹ {t("Projekte", "Projects")}</button>
+        <h2 className="truncate text-lg font-semibold tracking-tight text-[#f4eed7] sm:text-xl">{target?.name ?? t("Rezept fehlt", "Recipe missing")}</h2>
+      </div>
+
+      <Card className="space-y-3 p-4 text-sm">
+        <div className="relative flex flex-wrap items-center gap-2">
+          <span className="rounded-md border border-[#d9c58f]/25 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-[#beac80]">{slotName(p.slot, t)}</span>
+          <span className="text-xs text-zinc-400">{statusName(p.status, t)} · {p.server}{p.faction ? ` · ${p.faction}` : ""}</span>
+          <div className="ml-auto flex flex-wrap gap-1.5">
+            <input className={`${INPUT} w-16 text-xs`} inputMode="numeric" title={t("Reihenfolge im Slot", "Order within slot")} placeholder="#" value={p.order ?? ""}
+              onChange={(e) => set({ order: e.target.value === "" ? undefined : Number(e.target.value) })} />
+            <input className={`${INPUT} w-24 text-xs`} inputMode="numeric" title={t("Handwerksstufe", "Crafting level")} placeholder={t("Stufe ?", "Level ?")} value={p.mastery ?? ""}
+              onChange={(e) => set({ mastery: e.target.value === "" ? null : Number(e.target.value) })} />
+            {p.status === "active" && <button className={BTN} onClick={() => set({ status: "paused" })}>{t("Pausieren", "Pause")}</button>}
+            {p.status !== "active" && <button className={BTN} onClick={() => set({ status: "active" })}>{p.status === "done" ? t("Wieder öffnen", "Reopen") : t("Fortsetzen", "Resume")}</button>}
+            {p.status !== "done" && <button className={BTN} onClick={() => set({ status: "done" })}>{t("Abschließen", "Finish")}</button>}
+          </div>
         </div>
-      </div>
-      <div className="text-xs text-zinc-400">
-        {t("Offene Crafts", "Open crafts")}: {path.length ? path.map((s) => (s.goal === "combo" ? s.recipe.comboOutput?.name : s.recipe.output.name)).join(" → ") : t("keine", "none")}
-      </div>
-      <div className="text-xs text-zinc-400">
-        {t("Bisher ausgegeben", "Spent so far")}: {kinah(money.low)}{money.high !== money.low ? ` – ${kinah(money.high)}` : ""}
-        {money.unknown > 0 && <span className="text-[#ffa31a]"> · {money.unknown} {t("Versuche ohne Preis", "attempts without price")}</span>}
-      </div>
-      <ProjectBudget p={p} state={state} />
-      {history.length > 0 && (
-        <div>
-          <div className={LABEL}>{t("Verlauf", "History")}</div>
-          <ul className="mt-1 space-y-1 text-xs text-zinc-400">
-            {history.map((e) => (
-              <li key={e.id} className="flex items-center gap-2">
-                <span className="text-zinc-500">{new Date(e.at).toLocaleString()}</span>
-                <span className="text-[#efe6cc]/85">{state.recipes.find((r) => r.recipeKey === e.recipeKey)?.name ?? e.recipeKey}</span>
-                <span>{outcomeName(e.outcome, t)}</span>
-                <button className="ml-auto text-zinc-500 underline hover:text-zinc-300" onClick={() => update((s) => undoAttempt(s, e.id))}>{t("Rückgängig", "Undo")}</button>
+        <div className="relative"><Progress percent={pr.percent} done={pr.done} total={pr.total} /></div>
+        <div className="relative text-xs text-zinc-400">
+          {t("Bisher ausgegeben", "Spent so far")}: {range(money.low, money.high) ?? kinah(0)}
+          {money.unknown > 0 && <span className={MISSING}> · {money.unknown} {t("Versuche ohne Preis", "attempts without price")}</span>}
+          <span className="text-zinc-500"> · {t("Historie bleibt bei Preisänderungen unverändert.", "History stays as it was when prices change.")}</span>
+        </div>
+      </Card>
+
+      {/* milestones of the chosen path */}
+      <section className="card-face relative space-y-2 rounded-2xl px-4 py-3 text-sm">
+        <div className={LABEL}>{t("Rezeptstufen", "Recipe stages")}</div>
+        <ol className="space-y-1 text-xs">
+          {pr.milestones.map((m, i) => {
+            const lv = stageLevel(m);
+            const isOwned = ownedHas(m.item);
+            return (
+              <li key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] px-2 py-1">
+                <span className={m.done ? "text-[#5fbf8a]" : "text-zinc-600"}>{m.done ? "✓" : "○"}</span>
+                <span className="text-[#efe6cc]/85">{m.item.name}</span>
+                {lv !== null && <span className="text-zinc-500">Lv {lv}</span>}
+                {m.goal === "combo" && <span className="text-zinc-500">Combo</span>}
+                {!m.done && p.status !== "done" && <button className="ml-auto text-zinc-500 underline hover:text-zinc-300" onClick={() => set({ owned: [...p.owned, m.item] })}>{t("als vorhanden markieren", "mark as owned")}</button>}
+                {m.done && isOwned && <button className="ml-auto text-zinc-500 underline hover:text-zinc-300" onClick={() => set({ owned: p.owned.filter((o) => itemKey(o) !== itemKey(m.item)) })}>{t("Markierung entfernen", "unmark")}</button>}
+              </li>
+            );
+          })}
+          {!pr.milestones.length && <li className={MISSING}>{t("Pfad unbekannt: Rezeptdaten fehlen.", "Path unknown: recipe data missing.")}</li>}
+        </ol>
+      </section>
+
+      {step && <StepCard s={step} state={state} onLog={(o) => update((st) => logAttempt(st, step, o))} onPrice={onPrice} />}
+
+      {/* whole open material list with prices */}
+      {p.status !== "done" && mats.length > 0 && (
+        <section className="card-face relative space-y-2 rounded-2xl px-4 py-3 text-sm">
+          <div className={LABEL}>{t("Materialien für alle offenen Stufen", "Materials for all open stages")}</div>
+          <ul className="grid gap-1 text-xs lg:grid-cols-2">
+            {mats.map((m) => (
+              <li key={itemKey(m.item)} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-white/[0.03] px-2 py-1">
+                <span className="text-[#efe6cc]/85">{m.item.name}</span>
+                <span className="text-zinc-500">× {m.qty ?? "?"}</span>
+                {m.transfer && <span className="text-zinc-500">· Transfer</span>}
+                {m.craftable && !m.transfer && (
+                  <span className="text-zinc-500">· {m.crafted ? t("selbst craften", "craft myself") : t("kaufen", "buy")}{" "}
+                    <button className="underline hover:text-zinc-300" onClick={() => toggleBuy(m.item, !m.crafted)}>({m.crafted ? t("stattdessen kaufen", "buy instead") : t("selbst craften", "craft myself")})</button></span>
+                )}
+                <span className="ml-auto"><PriceCell item={m.item} ctxProject={p} state={state} onEdit={() => onPrice({ item: m.item, server: p.server, project: p })} hide={m.crafted || m.transfer} /></span>
               </li>
             ))}
           </ul>
-        </div>
+        </section>
       )}
+
+      {p.status !== "done" && <ProjectBudget p={p} state={state} />}
+
+      <section className="card-face relative space-y-2 rounded-2xl px-4 py-3 text-sm">
+        <div className={LABEL}>{t("Craft-Ergebnisprotokoll", "Craft result log")}</div>
+        {!history.length && <p className="text-xs text-zinc-500">{t("Noch keine Versuche eingetragen.", "No attempts logged yet.")}</p>}
+        <ul className="space-y-1 text-xs text-zinc-400">
+          {history.map((e) => (
+            <li key={e.id} className="flex flex-wrap items-center gap-2">
+              <span className="text-zinc-500">{new Date(e.at).toLocaleString()}</span>
+              <span className="text-[#efe6cc]/85">{state.recipes.find((r) => r.recipeKey === e.recipeKey)?.name ?? e.recipeKey}</span>
+              <span>{outcomeName(e.outcome, t)}</span>
+              <span className="text-zinc-500">{e.costLow === null ? t("Kosten unbekannt", "cost unknown") : range(e.costLow, e.costHigh)}</span>
+              <button className="ml-auto text-zinc-500 underline hover:text-zinc-300" onClick={() => update((s) => undoAttempt(s, e.id))}>{t("Rückgängig", "Undo")}</button>
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
+  );
+}
+
+/** Price of an item as used in a project (or for a server), with the edit button. */
+function PriceCell({ item, ctxProject, server, stepKey, state, onEdit, hide }: {
+  item: ItemRef & { bound?: boolean | null }; ctxProject?: Project; server?: string; stepKey?: string; state: CraftState; onEdit: () => void; hide?: boolean;
+}) {
+  const t = useT();
+  const range = useRange();
+  if (hide) return null;
+  const ctx = ctxProject ? ctxOf(state, ctxProject, stepKey) : { prices: state.prices.filter((x) => !server || (x.server ?? "").toLowerCase() === server.toLowerCase()), server };
+  const p = findPrice(ctx, item);
+  const scope = p?.scope === "step" ? t("nur dieser Schritt", "this step only") : p?.scope === "project" ? t("nur dieses Projekt", "this project only") : null;
+  return (
+    <span className="inline-flex items-center gap-2">
+      {p ? <span className="text-[#efe6cc]/90">{range(p.low, p.high) ?? range(p.ref, p.ref)}{scope && <span className="text-zinc-500"> · {scope}</span>}</span>
+        : <span className={MISSING}>{t("Kein Preis hinterlegt", "No price saved")}</span>}
+      {item.bound === true && <span className="text-zinc-500">· {t("gebunden", "bound")}</span>}
+      <button className={BTN} onClick={onEdit}>{p ? t("Bearbeiten", "Edit") : t("Preis eingeben", "Enter price")}</button>
+    </span>
   );
 }
 
@@ -277,17 +462,17 @@ function ProjectBudget({ p, state }: { p: Project; state: CraftState }) {
   const r = result?.key === key ? result.r : undefined;
   if (!input.path.length) return null;
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
+    <div className="card-face relative rounded-2xl px-4 py-3 text-xs">
       <div className="flex flex-wrap items-center gap-2">
         <span className={LABEL}>{t("Gesamtziel · 80 %-Planungswert", "Whole goal · 80 % planning value")}</span>
         <select className={`${INPUT} text-xs`} value={s} onChange={(e) => setS(e.target.value as Scenario)}>
-          <option value="low">{t("Niedrigpreis", "Low price")}</option><option value="high">{t("Hochpreis", "High price")}</option><option value="ref">{t("Referenzpreis", "Reference price")}</option>
+          <option value="low">{t("Mindestpreis", "Minimum price")}</option><option value="high">{t("Höchstpreis", "Maximum price")}</option><option value="ref">{t("Referenzpreis", "Reference price")}</option>
         </select>
         <button className={BTN} disabled={!input.steps || busy} onClick={run}>{busy ? t("Rechnet …", "Running …") : t("Berechnen", "Calculate")}</button>
       </div>
       {!input.steps && (
-        <div className="mt-1 text-[#ffa31a]">
-          {t("Daten fehlen, deshalb keine Kostenangabe:", "Data missing, so no cost shown:")}
+        <div className={`mt-1 ${MISSING}`}>
+          {t("Daten fehlen, deshalb keine vollständige Kostenangabe", "Data missing, so no complete cost")}{input.partial > 0 ? ` (${t("bekannte Teilsumme je 1 Versuch", "known part, 1 attempt each")}: ${kinah(input.partial)})` : ""}:
           <ul className="list-inside list-disc text-zinc-400">{[...new Set(input.missing.map((m) => `${m.step}: ${m.what}${m.item ? ` (${m.item})` : ""}`))].slice(0, 8).map((m) => <li key={m}>{m}</li>)}</ul>
         </div>
       )}
@@ -313,129 +498,277 @@ function undoAttempt(s: CraftState, id: string): CraftState {
   return { ...s, inventory: inv, events: [...s.events, { id: uid(), kind: "undo", at: new Date().toISOString(), target: id }] };
 }
 
+/** Logs one attempt with what it used and what it cost at today's prices (a snapshot that later price edits do not change). */
 function logAttempt(s: CraftState, step: NextStep, outcome: Outcome): CraftState {
   const fx = attemptEffects(step.recipe, outcome);
-  const crafted = (i: { name: string; itemId?: string }) => !!producerOf(i, s.recipes, step.project.faction);
+  const p = s.projects.find((x) => x.id === step.project.id) ?? step.project;
+  const free = (i: ItemRef) => !!producerOf(i, s.recipes, p.faction);
+  const ctx = ctxOf(s, p, step.recipe.recipeKey);
   const cost = (sc: Scenario) => {
-    const r = outcome === "base_fail"
-      ? attemptCost({ ...step.recipe, ingredients: step.recipe.ingredients.filter((i) => fx.consumed.some((c) => itemKey(c) === itemKey(i))) }, s.prices, sc, crafted)
-      : attemptCost(step.recipe, s.prices, sc, crafted);
-    return r.cost;
+    const used = outcome === "base_fail" ? { ...step.recipe, ingredients: step.recipe.ingredients.filter((i) => fx.consumed.some((c) => itemKey(c) === itemKey(i))) } : step.recipe;
+    return attemptCost(used, ctx, sc, free).cost;
   };
   const inv = { ...s.inventory };
-  for (const c of fx.consumed) if (!crafted(c)) inv[itemKey(c)] = Math.max(0, (inv[itemKey(c)] ?? 0) - c.qty);
+  for (const c of fx.consumed) if (!free(c)) inv[itemKey(c)] = Math.max(0, (inv[itemKey(c)] ?? 0) - c.qty);
   return {
     ...s, inventory: inv,
-    events: [...s.events, { id: uid(), kind: "attempt", projectId: step.project.id, at: new Date().toISOString(), recipeKey: step.recipe.recipeKey, outcome, ...fx, costLow: cost("low"), costHigh: cost("high") }],
+    events: [...s.events, { id: uid(), kind: "attempt", projectId: p.id, at: new Date().toISOString(), recipeKey: step.recipe.recipeKey, outcome, ...fx, costLow: cost("low"), costHigh: cost("high") }],
   };
 }
 
-function NextStepsTab({ state, update, charKey: key }: { state: CraftState; update: Update; charKey: string }) {
+function NextStepsTab({ state, update, charKey: key, onPrice }: { state: CraftState; update: Update; charKey: string; onPrice: (x: PriceTarget) => void }) {
   const t = useT();
   const steps = nextSteps(state, key);
-  if (!steps.length) return <p className="text-sm text-zinc-500">{t("Keine offenen Schritte. Lege unter „Projekte“ ein Projekt an.", "No open steps. Create a project under “Projects”.")}</p>;
-  return <div className="space-y-3">{steps.map((s) => <StepCard key={s.project.id} s={s} state={state} onLog={(o) => update((st) => logAttempt(st, s, o))} />)}</div>;
+  if (!steps.length) return <p className="text-sm text-zinc-500">{t("Keine offenen Schritte. Lege unter „Crafting-Projekte“ ein Projekt an.", "No open steps. Create a project under “Crafting projects”.")}</p>;
+  return <div className="space-y-4">{steps.map((s) => <StepCard key={s.project.id} s={s} state={state} onLog={(o) => update((st) => logAttempt(st, s, o))} onPrice={onPrice} showProject />)}</div>;
 }
 
-function StepCard({ s, state, onLog }: { s: NextStep; state: CraftState; onLog: (o: Outcome) => void }) {
+function StepCard({ s, state, onLog, onPrice, showProject }: { s: NextStep; state: CraftState; onLog: (o: Outcome) => void; onPrice: (x: PriceTarget) => void; showProject?: boolean }) {
   const t = useT();
-  const kinah = useKinah();
+  const range = useRange();
   const target = projectTarget(s.project, state.recipes);
   const want = s.goal === "combo" && s.recipe.comboOutput ? s.recipe.comboOutput.name : s.recipe.output.name;
-  const crafted = (i: { name: string; itemId?: string }) => !!producerOf(i, state.recipes, s.project.faction);
-  const next = { low: attemptCost(s.recipe, state.prices, "low", crafted), high: attemptCost(s.recipe, state.prices, "high", crafted) };
+  const free = (i: ItemRef) => !!craftsItself(s.project, i, state.recipes) || (i as { kind?: string }).kind === "transfer" && !!producerOf(i, state.recipes, s.project.faction);
+  const ctx = ctxOf(state, s.project, s.recipe.recipeKey);
+  const next = { low: attemptCost(s.recipe, ctx, "low", free), high: attemptCost(s.recipe, ctx, "high", free) };
   const pActual = s.chance.actual ? effectiveChance(s.chance.actual, s.goal) : null;
-  const budget = { low: stepBudget(s.recipe, pActual, state.prices, "low"), high: stepBudget(s.recipe, pActual, state.prices, "high") };
-  const dataMissing = <span className="text-[#ffa31a]">{t("Daten fehlen", "Data missing")}</span>;
+  const budget = { low: stepBudget(s.recipe, pActual, ctx, "low", free), high: stepBudget(s.recipe, pActual, ctx, "high", free) };
+  const dataMissing = (partial?: number, partialHigh?: number): ReactNode => <span className={MISSING}>{t("Daten fehlen", "Data missing")}{partial ? ` (${t("bekannt", "known")} ${range(partial, partialHigh ?? partial)})` : ""}</span>;
+  const lv = stageLevel(s);
   return (
-    <div className="card-face relative space-y-2 rounded-2xl px-4 py-3 text-sm">
-      <div className="flex flex-wrap items-baseline gap-2">
+    <Card className="space-y-3 p-4 text-sm">
+      <div className="relative flex flex-wrap items-baseline gap-2">
         <span className="rounded-md border border-[#d9c58f]/25 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-[#beac80]">{slotName(s.project.slot, t)}</span>
-        <span className="font-semibold text-[#f4eed7]">{target?.name}</span>
-        <span className="text-xs text-zinc-500">{t("Nächster Schritt", "Next step")}: {want} · {s.recipe.name}{s.recipe.recipeId ? ` (#${s.recipe.recipeId})` : ""}</span>
+        {showProject && <span className="font-semibold text-[#f4eed7]">{target?.name}</span>}
+        <span className="text-xs text-zinc-400">{t("Nächster Schritt", "Next step")}: <span className="text-[#efe6cc]/90">{want}</span>{lv ? ` · Lv ${lv}` : ""}{s.goal === "combo" ? " · Combo" : ""}</span>
       </div>
-      <ul className="grid gap-1 text-xs sm:grid-cols-2">
+      <ul className="relative grid gap-1 text-xs lg:grid-cols-2">
         {s.ingredients.map((i) => {
           const ok = i.qty !== null && i.have >= i.qty;
+          const own = i.crafted || (i.kind === "transfer" && canCraft(s.project, i, state.recipes));
           return (
-            <li key={itemKey(i)} className="flex justify-between gap-2 rounded-lg bg-white/[0.03] px-2 py-1">
-              <span className="text-[#efe6cc]/85">{i.name}{i.crafted ? <span className="text-zinc-500"> · {t("Zwischenitem", "intermediate")}</span> : ""}</span>
+            <li key={`${i.kind}:${itemKey(i)}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-white/[0.03] px-2 py-1">
+              <span className="text-[#efe6cc]/85">{i.name}{i.crafted ? <span className="text-zinc-500"> · {t("Zwischenitem", "intermediate")}</span> : i.kind === "transfer" ? <span className="text-zinc-500"> · Transfer</span> : ""}</span>
               <span className={ok ? "text-[#5fbf8a]" : "text-[#ff3344]"}>{i.have} / {i.qty ?? "?"}</span>
+              <span className="ml-auto"><PriceCell item={i} ctxProject={s.project} stepKey={s.recipe.recipeKey} state={state} hide={own}
+                onEdit={() => onPrice({ item: i, server: s.project.server, project: s.project, stepKey: s.recipe.recipeKey })} /></span>
             </li>
           );
         })}
-        {!s.ingredients.length && <li className="text-[#ffa31a]">{t("Zutaten nicht dokumentiert", "Ingredients not documented")}</li>}
+        {!s.ingredients.length && <li className={MISSING}>{t("Zutaten nicht dokumentiert (Datenlücke)", "Ingredients not documented (data gap)")}</li>}
       </ul>
-      <div className="grid gap-1 text-xs text-zinc-300 sm:grid-cols-2">
-        <div>{t("Chance bei deiner Stufe", "Chance at your level")} {s.project.mastery ?? "?"}: {pct(pActual) ?? <span className="text-[#ffa31a]">{t("unbekannt", "unknown")}</span>}
-          {s.chance.basis === "character" && s.chance.override?.source && <span className="text-zinc-500"> · {s.chance.override.source}{s.chance.override.date ? `, ${s.chance.override.date}` : ""}</span>}</div>
+      <div className="relative grid gap-1 text-xs text-zinc-300 sm:grid-cols-2">
+        <div>{t("Chance bei deiner Stufe", "Chance at your level")} {s.project.mastery ?? "?"}: {pct(pActual) ?? <span className={MISSING}>{t("unbekannt", "unknown")}</span>}
+          {s.chance.basis === "character" && s.chance.override?.source && <span className="text-zinc-500"> · {s.chance.override.source}{s.chance.override.date ? `, ${s.chance.override.date}` : ""}</span>}
+          {s.chance.basis === "fixed" && <span className="text-zinc-500"> · {t("garantiert", "guaranteed")}</span>}</div>
         <div className="text-zinc-500">{t("Dokumentiert bei Stufe", "Documented at level")} {s.chance.documentedMastery ?? "?"}: {pct(s.documentedPlan.p) ?? t("unbekannt", "unknown")}
-          {s.documentedPlan.n80 !== null && Number.isFinite(s.documentedPlan.n80) ? ` · ${s.documentedPlan.n80} ${t("Versuche (80 %)", "attempts (80 %)")}` : ""}</div>
-        <div>{t("80 %-Planungswert", "80 % planning value")}: {s.plan.n80 === null ? <span className="text-[#ffa31a]">{t("unbekannt", "unknown")}</span> : !Number.isFinite(s.plan.n80) ? t("nie (0 %)", "never (0 %)") : <b className="text-[#f4eed7]">{s.plan.n80} {t("Versuche", "attempts")}</b>}
+          {s.documentedPlan.n80 !== null && Number.isFinite(s.documentedPlan.n80) ? ` · ${s.documentedPlan.n80} ${t("Versuche (80 %)", "attempts (80 %)")}` : ""}
+          {s.bestPlan.p !== null && <> · {t("beste dok. Stufe", "best documented level")}: {pct(s.bestPlan.p)}{s.bestPlan.n80 !== null && Number.isFinite(s.bestPlan.n80) ? ` · ${s.bestPlan.n80}` : ""}</>}</div>
+        <div>{t("80 %-Planungswert", "80 % planning value")}: {s.plan.n80 === null ? <span className={MISSING}>{t("unbekannt", "unknown")}</span> : !Number.isFinite(s.plan.n80) ? t("nie (0 %)", "never (0 %)") : <b className="text-[#f4eed7]">{s.plan.n80} {t("Versuche", "attempts")}</b>}
           {s.plan.reached !== null && <span className="text-zinc-500"> ({pct(s.plan.reached)})</span>}</div>
         <div className="text-zinc-500">{t("Erwartungswert", "Expected value")}: {s.plan.expected === null ? "?" : Number.isFinite(s.plan.expected) ? s.plan.expected.toFixed(1) : "∞"}</div>
-        <div>{t("Nächster Versuch", "Next attempt")}: {next.low.cost === null ? dataMissing : `${kinah(next.low.cost)}${next.high.cost !== null && next.high.cost !== next.low.cost ? ` – ${kinah(next.high.cost)}` : ""}`}</div>
-        <div>{t("Bis zu diesem Schritt (80 %)", "Up to this step (80 %)")}: {budget.low.budget === null ? dataMissing : `${kinah(budget.low.budget)}${budget.high.budget !== null && budget.high.budget !== budget.low.budget ? ` – ${kinah(budget.high.budget)}` : ""}`}</div>
+        <div>{t("Nächster Versuch", "Next attempt")}: {next.low.cost === null ? dataMissing(next.low.partial, next.high.partial) : range(next.low.cost, next.high.cost)}</div>
+        <div>{t("Diese Stufe bis 80 %", "This stage up to 80 %")}: {budget.low.budget === null ? dataMissing() : range(budget.low.budget, budget.high.budget)}</div>
       </div>
-      <div className="flex flex-wrap gap-1.5 pt-1">
-        <span className={`${LABEL} self-center`}>{t("Craft versuchen", "Try craft")}:</span>
+      <div className="relative flex flex-wrap gap-1.5 pt-1">
+        <span className={`${LABEL} self-center`}>{t("Ergebnis eintragen", "Log result")}:</span>
         {s.outcomes.map((o) => <button key={o} className={BTN} onClick={() => onLog(o)}>{outcomeName(o, t)}</button>)}
       </div>
-    </div>
+    </Card>
   );
 }
 
 /* ------------------------------------------------------------------ market prices ------------------------------------------------------------------ */
 
-function PricesTab({ state, update }: { state: CraftState; update: Update }) {
+const CATEGORIES: CatalogCategory[] = ["raw", "processed", "intermediate", "transfer", "weapon", "guard", "gloves", "ring", "jewelry", "armor", "other"];
+
+function PricesTab({ state, update, char, onPrice }: { state: CraftState; update: Update; char: Character; onPrice: (x: PriceTarget) => void }) {
   const t = useT();
-  // every material named in a recipe gets a row, even without a price yet
-  const rows = useMemo(() => {
-    const m = new Map<string, Price>();
-    for (const p of state.prices) m.set(itemKey(p), p);
-    for (const r of state.recipes as Recipe[]) for (const i of r.ingredients) if (!m.has(itemKey(i))) m.set(itemKey(i), { name: i.name, itemId: i.itemId, low: null, high: null, ref: null, owned: null, tradeable: null });
-    return [...m.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [state.prices, state.recipes]);
-  const [name, setName] = useState("");
-  const setPrice = (p: Price, patch: Partial<Price>) => update((s) => {
-    const next = { ...p, ...patch, updated: new Date().toISOString() };
-    const i = s.prices.findIndex((x) => itemKey(x) === itemKey(p));
-    return { ...s, prices: i >= 0 ? s.prices.map((x, j) => (j === i ? next : x)) : [...s.prices, next] };
+  const catalog = useMemo(() => buildCatalog(state), [state]);
+  const servers = useMemo(() => [...new Set([char.server, ...state.projects.map((p) => p.server), ...state.prices.map((p) => p.server ?? "")].filter(Boolean))], [char.server, state.projects, state.prices]);
+  const [server, setServer] = useState(char.server);
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState<CatalogCategory | "">("");
+  const [faction, setFaction] = useState("");
+  const [prof, setProf] = useState("");
+  const [onlyPriced, setOnlyPriced] = useState(false);
+  // how many rows are shown; starts again at 60 whenever the filter changes
+  const sig = JSON.stringify([q, cat, faction, prof, onlyPriced, server]);
+  const [shown, setShown] = useState({ sig, n: 60 });
+  const limit = shown.sig === sig ? shown.n : 60;
+  const setLimit = (f: (n: number) => number) => setShown({ sig, n: f(limit) });
+  const professions = useMemo(() => [...new Set(catalog.map((c) => c.profession).filter(Boolean) as string[])].sort(), [catalog]);
+  const priceFor = (e: ItemRef) => findPrice({ prices: state.prices.filter((x) => (x.server ?? "").toLowerCase() === server.toLowerCase()), server }, e);
+  const list = catalog.filter((e) => {
+    if (cat && e.category !== cat) return false;
+    if (faction && e.faction && e.faction.toLowerCase() !== faction) return false;
+    if (prof && e.profession !== prof) return false;
+    if (onlyPriced && !priceFor(e)) return false;
+    const s = normName(q);
+    return !s || normName(e.name).includes(s) || (e.itemId ?? "").includes(q.trim());
   });
-  const numIn = (v: number | null, on: (n: number | null) => void) => (
-    <input className={`${INPUT} w-24 text-right text-xs`} inputMode="numeric" value={v ?? ""} placeholder="?"
-      onChange={(e) => { const x = e.target.value.trim(); const n = Number(x); on(x === "" ? null : Number.isFinite(n) ? n : v); }} />
-  );
+  const [newName, setNewName] = useState("");
+  const [newId, setNewId] = useState("");
+  const [newCat, setNewCat] = useState<CatalogCategory>("raw");
+  const priced = state.prices.filter((x) => (x.server ?? "").toLowerCase() === server.toLowerCase()).length;
   return (
-    <div className="card-face relative space-y-3 overflow-x-auto rounded-2xl px-4 py-3 text-sm">
-      <p className="text-xs text-zinc-500">{t("Preise trägst du selbst ein. Leere Felder bleiben unbekannt und zählen nie als 0 Kinah.", "You enter prices yourself. Empty fields stay unknown and never count as 0 Kinah.")}</p>
-      <table className="w-full min-w-[640px] text-xs">
-        <thead className={LABEL}><tr>
-          <th className="py-1 text-left">{t("Material", "Material")}</th><th>Item-ID</th><th>{t("Niedrig", "Low")}</th><th>{t("Hoch", "High")}</th><th>{t("Referenz", "Reference")}</th><th>{t("Vorhanden", "Owned")}</th><th>{t("Handelbar", "Tradeable")}</th><th>{t("Stand", "Updated")}</th>
-        </tr></thead>
-        <tbody>
-          {rows.map((p) => (
-            <tr key={itemKey(p)} className="border-t border-white/5">
-              <td className="py-1 pr-2 text-[#efe6cc]/90">{p.name}{p.quality ? <span className="text-zinc-500"> · {p.quality}</span> : ""}</td>
-              <td className="text-center text-zinc-500">{p.itemId ?? "–"}</td>
-              <td className="text-center">{numIn(p.low, (n) => setPrice(p, { low: n }))}</td>
-              <td className="text-center">{numIn(p.high, (n) => setPrice(p, { high: n }))}</td>
-              <td className="text-center">{numIn(p.ref, (n) => setPrice(p, { ref: n }))}</td>
-              <td className="text-center">{numIn(state.inventory[itemKey(p)] ?? null, (n) => update((s) => ({ ...s, inventory: { ...s.inventory, [itemKey(p)]: n ?? 0 } })))}</td>
-              <td className="text-center">
-                <select className={`${INPUT} text-xs`} value={p.tradeable === null ? "" : String(p.tradeable)} onChange={(e) => setPrice(p, { tradeable: e.target.value === "" ? null : e.target.value === "true" })}>
-                  <option value="">?</option><option value="true">{t("ja", "yes")}</option><option value="false">{t("nein", "no")}</option>
-                </select>
-              </td>
-              <td className="text-center text-zinc-500">{p.updated ? new Date(p.updated).toLocaleDateString() : "–"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="flex gap-2">
-        <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Material hinzufügen …", "Add material …")} />
-        <button className={BTN} disabled={!name.trim()} onClick={() => { setPrice({ name: name.trim(), low: null, high: null, ref: null, owned: null, tradeable: null }, {}); setName(""); }}>{t("Hinzufügen", "Add")}</button>
+    <div className="space-y-3">
+      <div className="card-face relative grid gap-2 rounded-2xl px-4 py-3 text-sm sm:grid-cols-2 lg:grid-cols-6">
+        <input className={`${INPUT} lg:col-span-2`} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Suche: Name oder Item-ID …", "Search: name or item ID …")} aria-label={t("Suche", "Search")} />
+        <select className={INPUT} value={cat} onChange={(e) => setCat(e.target.value as CatalogCategory | "")} aria-label={t("Kategorie", "Category")}>
+          <option value="">{t("Alle Kategorien", "All categories")}</option>
+          {CATEGORIES.filter((c) => catalog.some((e) => e.category === c)).map((c) => <option key={c} value={c}>{categoryName(c, t)}</option>)}
+        </select>
+        <select className={INPUT} value={faction} onChange={(e) => setFaction(e.target.value)} aria-label={t("Fraktion", "Faction")}>
+          <option value="">{t("Alle Fraktionen", "All factions")}</option><option value="elyos">Elyos</option><option value="asmodian">Asmodian</option>
+        </select>
+        <select className={INPUT} value={prof} onChange={(e) => setProf(e.target.value)} aria-label={t("Beruf", "Profession")}>
+          <option value="">{t("Alle Berufe", "All professions")}</option>{professions.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <select className={INPUT} value={server} onChange={(e) => setServer(e.target.value)} aria-label="Server">
+          {servers.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <label className="flex items-center gap-2 text-xs text-zinc-400 lg:col-span-6">
+          <input type="checkbox" checked={onlyPriced} onChange={(e) => setOnlyPriced(e.target.checked)} /> {t("nur mit Preis", "only with price")}
+          <span className="ml-auto text-zinc-500">{list.length} {t("von", "of")} {catalog.length} {t("Artikeln", "items")} · {t("Preise auf", "Prices on")} {server}: {priced}</span>
+        </label>
+      </div>
+
+      <ul className="space-y-1.5">
+        {list.slice(0, limit).map((e) => <CatalogRow key={e.key} e={e} state={state} server={server} update={update} onPrice={onPrice} />)}
+        {!list.length && <li className="text-sm text-zinc-500">{t("Nichts gefunden.", "Nothing found.")}</li>}
+      </ul>
+      {list.length > limit && <button className={BTN} onClick={() => setLimit((l) => l + 120)}>{t("Mehr anzeigen", "Show more")} ({list.length - limit})</button>}
+
+      <div className="card-face relative grid gap-2 rounded-2xl px-4 py-3 text-sm sm:grid-cols-[1fr_10rem_12rem_auto]">
+        <input className={INPUT} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t("Eigenes Material / Item …", "Own material / item …")} />
+        <input className={INPUT} value={newId} onChange={(e) => setNewId(e.target.value.replace(/\D/g, ""))} placeholder={t("Item-ID (optional)", "Item ID (optional)")} inputMode="numeric" />
+        <select className={INPUT} value={newCat} onChange={(e) => setNewCat(e.target.value as CatalogCategory)}>{CATEGORIES.map((c) => <option key={c} value={c}>{categoryName(c, t)}</option>)}</select>
+        <button className={BTN} disabled={!newName.trim() || catalog.some((c) => normName(c.name) === normName(newName) && (!newId || c.itemId === newId))} onClick={() => {
+          const e: CatalogEntry = { key: `custom:${uid()}`, name: newName.trim(), itemId: newId || undefined, category: newCat, recipeKeys: [], bound: null, custom: true };
+          update((s) => ({ ...s, catalogExtra: [...s.catalogExtra, e] }));
+          setNewName(""); setNewId(""); setQ(e.name);
+        }}>{t("Zum Katalog hinzufügen", "Add to catalogue")}</button>
+      </div>
+      <p className="text-xs text-zinc-500">{t("Der Katalog wird aus allen Rezepten, Zutaten und Transfer-Gegenständen gebaut und wächst mit jedem Import. Ein Preis entsteht nur, wenn du „Preis hinzufügen“ klickst. Bestand ist getrennt von den Preisen.",
+        "The catalogue is built from all recipes, ingredients and transfer items and grows with every import. A price is only created when you click “Add price”. Stock is kept apart from prices.")}</p>
+    </div>
+  );
+}
+
+function CatalogRow({ e, state, server, update, onPrice }: { e: CatalogEntry; state: CraftState; server: string; update: Update; onPrice: (x: PriceTarget) => void }) {
+  const t = useT();
+  const range = useRange();
+  const mine = state.prices.find((x) => (x.server ?? "").toLowerCase() === server.toLowerCase() && findPrice({ prices: [x] }, e));
+  const stock = state.inventory[itemKey(e)];
+  return (
+    <li className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-3 py-2 text-xs">
+      <span className="min-w-0 text-sm text-[#efe6cc]/90">{e.name}</span>
+      <span className="text-zinc-500">{categoryName(e.category, t)}{e.faction ? ` · ${e.faction}` : ""}{e.itemId ? ` · #${e.itemId}` : ""}{e.bound === true ? ` · ${t("gebunden", "bound")}` : ""}{e.custom ? ` · ${t("eigener Eintrag", "own entry")}` : ""}</span>
+      <span className="ml-auto flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1 text-zinc-500">{t("Bestand", "Stock")}
+          <input className={`${INPUT} w-16 text-right text-xs`} inputMode="numeric" value={stock ?? ""} placeholder="–"
+            onChange={(ev) => { const v = ev.target.value.replace(/\D/g, ""); update((s) => { const inv = { ...s.inventory }; if (v === "") delete inv[itemKey(e)]; else inv[itemKey(e)] = Number(v); return { ...s, inventory: inv }; }); }} />
+        </label>
+        {mine ? <>
+          <span className="text-[#efe6cc]/90">{range(mine.low, mine.high) ?? range(mine.ref, mine.ref)}</span>
+          {mine.updated && <span className="text-zinc-500">{new Date(mine.updated).toLocaleDateString()}</span>}
+          <button className={BTN} onClick={() => onPrice({ item: { ...e, catalogKey: e.key }, server })}>{t("Bearbeiten", "Edit")}</button>
+          <button className={BTN} onClick={() => update((s) => ({ ...s, prices: s.prices.filter((x) => x !== mine && (!mine.id || x.id !== mine.id)) }))}>{t("Löschen", "Delete")}</button>
+        </> : <>
+          <span className={MISSING}>{t("Kein Preis hinterlegt", "No price saved")}</span>
+          <button className={BTN} onClick={() => onPrice({ item: { ...e, catalogKey: e.key }, server })}>{t("Preis hinzufügen", "Add price")}</button>
+        </>}
+      </span>
+    </li>
+  );
+}
+
+/* ------------------------------------------------------------------ price dialog ------------------------------------------------------------------ */
+
+const numOrNull = (v: string) => (v.trim() === "" ? null : Number(v.replace(/[.\s]/g, "").replace(",", ".")));
+
+/** One dialog for every price edit: in the catalogue (server price) and inside a project (server, project or step). Shows the effect before saving. */
+function PriceDialog({ target, state, onClose, onSave }: { target: PriceTarget; state: CraftState; onClose: () => void; onSave: (fn: (s: CraftState) => CraftState) => void }) {
+  const t = useT();
+  const range = useRange();
+  const { item, server, project, stepKey } = target;
+  const current = project ? findPrice(ctxOf(state, project, stepKey), item) : findPrice({ prices: state.prices.filter((x) => (x.server ?? "").toLowerCase() === server.toLowerCase()), server }, item);
+  const [low, setLow] = useState(current?.low?.toString() ?? "");
+  const [high, setHigh] = useState(current?.high?.toString() ?? "");
+  const [ref, setRef] = useState(current?.ref?.toString() ?? "");
+  const [note, setNote] = useState(current?.note ?? "");
+  const [tradeable, setTradeable] = useState<boolean | null>(current?.tradeable ?? (item.bound === true ? false : null));
+  const [scope, setScope] = useState<"global" | "project" | "step">(current?.scope === "step" ? "step" : current?.scope === "project" ? "project" : "global");
+  const v = { low: numOrNull(low), high: numOrNull(high), ref: numOrNull(ref), tradeable, note: note.trim() || undefined };
+  const bad = [v.low, v.high, v.ref].some((x) => x !== null && Number.isNaN(x)) ? t("Nur Zahlen eintragen", "Numbers only") : validatePrice(v);
+  const apply = (s: CraftState) => savePrice(s, item, v, scope === "global" ? { kind: "global", server } : { kind: scope, projectId: project!.id, stepKey });
+  const preview = useMemo(() => {
+    if (bad) return [];
+    const after = apply(state);
+    // every open project on this server whose open path uses the item
+    return state.projects.filter((p) => p.status !== "done" && p.server.toLowerCase() === server.toLowerCase() && remainingPath(p, state).some(({ recipe }) => recipe.ingredients.some((i) => findPrice({ prices: [{ ...item, low: 0, high: 0, ref: 0, tradeable: null }] }, i))))
+      .map((p) => {
+        const pa = after.projects.find((x) => x.id === p.id)!;
+        return { p, before: [openCost(p, state, "low"), openCost(p, state, "high")] as const, after: [openCost(pa, after, "low"), openCost(pa, after, "high")] as const };
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [low, high, ref, tradeable, scope, state]);
+  const show = (c: readonly [ReturnType<typeof openCost>, ReturnType<typeof openCost>]) => c[0].cost !== null ? range(c[0].cost, c[1].cost) : <span className={MISSING}>{t("Daten fehlen", "Data missing")}{c[0].partial ? ` (${t("bekannt", "known")} ${range(c[0].partial, c[1].partial)})` : ""}</span>;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const target2 = (p: Project) => projectTarget(p, state.recipes)?.name ?? p.targetRecipeKey;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center" role="dialog" aria-modal="true" aria-label={t("Marktpreis", "Market price")} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg">
+        <Card className="max-h-[90vh] space-y-3 overflow-y-auto p-4 text-sm">
+          <div className="relative">
+            <div className={LABEL}>{t("Marktpreis", "Market price")} · {server}</div>
+            <div className="text-base font-semibold text-[#f4eed7]">{item.name}</div>
+            {item.itemId && <div className="text-xs text-zinc-500">Item-ID {item.itemId}</div>}
+          </div>
+          <div className="relative grid grid-cols-2 gap-2">
+            <label className="grid gap-1"><span className={LABEL}>{t("Mindestpreis (Kinah)", "Minimum price (Kinah)")}</span><input autoFocus className={INPUT} inputMode="numeric" value={low} onChange={(e) => setLow(e.target.value)} placeholder="?" /></label>
+            <label className="grid gap-1"><span className={LABEL}>{t("Höchstpreis (Kinah)", "Maximum price (Kinah)")}</span><input className={INPUT} inputMode="numeric" value={high} onChange={(e) => setHigh(e.target.value)} placeholder="?" /></label>
+            <label className="grid gap-1"><span className={LABEL}>{t("Referenz (optional)", "Reference (optional)")}</span><input className={INPUT} inputMode="numeric" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="–" /></label>
+            <label className="grid gap-1"><span className={LABEL}>{t("Handelbar", "Tradeable")}</span>
+              <select className={INPUT} value={tradeable === null ? "" : String(tradeable)} onChange={(e) => setTradeable(e.target.value === "" ? null : e.target.value === "true")}>
+                <option value="">{t("unbekannt", "unknown")}</option><option value="true">{t("ja", "yes")}</option><option value="false">{t("nein", "no")}</option>
+              </select></label>
+            <label className="col-span-2 grid gap-1"><span className={LABEL}>{t("Notiz", "Note")}</span><input className={INPUT} value={note} onChange={(e) => setNote(e.target.value)} /></label>
+          </div>
+          {project && (
+            <fieldset className="relative grid gap-1 text-xs text-[#efe6cc]/85">
+              <legend className={LABEL}>{t("Gültig für", "Applies to")}</legend>
+              <label className="flex items-center gap-2"><input type="radio" checked={scope === "global"} onChange={() => setScope("global")} />{t(`Für alle Projekte auf ${server} aktualisieren`, `Update for all projects on ${server}`)}</label>
+              <label className="flex items-center gap-2"><input type="radio" checked={scope === "project"} onChange={() => setScope("project")} />{t("Nur in diesem Projekt verwenden", "Use in this project only")}</label>
+              {stepKey && <label className="flex items-center gap-2"><input type="radio" checked={scope === "step"} onChange={() => setScope("step")} />{t("Nur in diesem Schritt verwenden", "Use in this step only")}</label>}
+            </fieldset>
+          )}
+          {bad && (v.low !== null || v.high !== null || v.ref !== null) && <p className="relative text-xs text-[#ff3344]">{bad}</p>}
+          <div className="relative space-y-1">
+            <div className={LABEL}>{t("Vorschau: offene Materialkosten", "Preview: open material cost")}</div>
+            {!bad && !preview.length && <p className="text-xs text-zinc-500">{t("Kein offenes Projekt auf diesem Server nutzt diesen Artikel gerade.", "No open project on this server uses this item right now.")}</p>}
+            <ul className="space-y-1 text-xs">
+              {preview.map(({ p, before, after }) => (
+                <li key={p.id} className="rounded-lg bg-white/[0.03] px-2 py-1">
+                  <div className="text-[#efe6cc]/85">{p.character} · {target2(p)}</div>
+                  <div className="text-zinc-400">{show(before)} → <b className="text-[#f4eed7]">{show(after)}</b></div>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[11px] text-zinc-500">{t("Bereits eingetragene Crafts behalten ihre Kosten.", "Crafts already logged keep their cost.")}</p>
+          </div>
+          <div className="relative flex justify-end gap-2">
+            <button className={BTN} onClick={onClose}>{t("Abbrechen", "Cancel")}</button>
+            <button className={BTN} disabled={!!bad} onClick={() => onSave(apply)}>{t("Speichern", "Save")}</button>
+          </div>
+        </Card>
       </div>
     </div>
   );
 }
+

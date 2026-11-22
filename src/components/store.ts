@@ -70,11 +70,13 @@ function write(list: SavedChar[]) {
   listeners.forEach((l) => l());
 }
 
+const NO_CHARS: SavedChar[] = [];
+
 export function useCharacters() {
   const chars = useSyncExternalStore(
     (cb) => { listeners.add(cb); window.addEventListener("storage", cb); return () => { listeners.delete(cb); window.removeEventListener("storage", cb); }; },
     read,
-    () => [] as SavedChar[],
+    () => NO_CHARS,
   );
   return {
     chars,

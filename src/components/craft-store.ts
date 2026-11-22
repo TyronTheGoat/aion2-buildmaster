@@ -1,6 +1,7 @@
 "use client";
 import { useSyncExternalStore } from "react";
-import { emptyState, type CraftState } from "@/lib/crafting/model";
+import { emptyState, importFile, type CraftState } from "@/lib/crafting/model";
+import { BUILTIN_FILES, BUILTIN_VERSION } from "@/lib/crafting/builtin-data";
 
 /**
  * Crafting data on the device, in its own key: projects, history, prices and imported recipes.
@@ -9,23 +10,40 @@ import { emptyState, type CraftState } from "@/lib/crafting/model";
 const KEY = "bm:craft:v1";
 const BACKUP = "bm:craft:backup";
 const listeners = new Set<() => void>();
-let raw: string | null = null;
+let raw: string | null | undefined; // undefined: not read yet
 let cache: CraftState = emptyState();
+const SERVER = emptyState();
 
 function read(): CraftState {
   if (typeof window === "undefined") return cache;
   const r = localStorage.getItem(KEY);
   if (r !== raw) {
     raw = r;
-    try { cache = r ? migrate(JSON.parse(r)) : emptyState(); } catch { cache = emptyState(); }
+    try { cache = migrate(r ? JSON.parse(r) : {}); } catch { cache = withBuiltin(emptyState()); }
+    if (cache.dataVersion && JSON.stringify(cache) !== r) { raw = JSON.stringify(cache); localStorage.setItem(KEY, raw); }
   }
   return cache;
 }
 
-/** Fills fields added later; a backup of the old data is kept before anything changes. */
-function migrate(s: Partial<CraftState>): CraftState {
-  if (s.version !== 1) localStorage.setItem(`${BACKUP}:${Date.now()}`, JSON.stringify(s));
-  return { ...emptyState(), ...s, version: 1 };
+/**
+ * Fills fields added later and merges the data package built into the app when it is newer.
+ * A backup of the old data is kept before anything changes. Prices, projects, inventory and history are never touched.
+ */
+export function migrate(s: Partial<CraftState> & { version?: number }): CraftState {
+  const old = s.version !== 2 || s.dataVersion !== BUILTIN_VERSION;
+  if (old && typeof localStorage !== "undefined" && (s.projects?.length || s.prices?.length || s.events?.length)) {
+    localStorage.setItem(`${BACKUP}:${Date.now()}`, JSON.stringify(s));
+  }
+  let next: CraftState = { ...emptyState(), ...(s as Partial<CraftState>), version: 2 };
+  if (next.dataVersion !== BUILTIN_VERSION) next = withBuiltin(next);
+  return next;
+}
+
+/** Imports the built-in files in their fixed order (recipes, ingredients, transfers, key fix, chain, gap lists, catalogue). */
+export function withBuiltin(s: CraftState): CraftState {
+  let next = s;
+  for (const [file, text] of BUILTIN_FILES) next = importFile(next, file, text).state;
+  return { ...next, dataVersion: BUILTIN_VERSION };
 }
 
 function write(s: CraftState) {
@@ -37,7 +55,7 @@ export function useCraft() {
   const state = useSyncExternalStore(
     (cb) => { listeners.add(cb); window.addEventListener("storage", cb); return () => { listeners.delete(cb); window.removeEventListener("storage", cb); }; },
     read,
-    () => cache,
+    () => SERVER,
   );
   return {
     state,

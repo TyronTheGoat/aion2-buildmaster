@@ -11,7 +11,7 @@ const recipe = (key: string, out: string, ing: [string, number][], extra: Partia
   recipeKey: key, name: key, faction: "Asmodian", requiredMastery: null, documentedMastery: null, level: null,
   output: { name: out, qty: 1 }, comboFailKeepsNormal: null, transfer: null, consumesOnFail: true,
   pBase: null, pComboActivation: null, pComboSuccess: null, pFinal: null, guaranteed: null,
-  ingredients: ing.map(([name, qty]) => ({ name, qty, bound: null, consumedOnFail: null })), ...extra,
+  ingredients: ing.map(([name, qty]) => ({ name, qty, bound: null, consumedOnFail: null, kind: "material" as const })), ...extra,
 });
 const project = (id: string, target: string, extra: Partial<Project> = {}): Project => ({
   id, charKey: "eu/odar/test", character: "Test", faction: "Asmodian", server: "odar", slot: "weapon", mastery: null,
@@ -100,7 +100,7 @@ describe("CSV import", () => {
     let s: CraftState = { ...emptyState(), projects: [project("p", "a")], events: [{ id: "u", kind: "undo", at: "x", target: "y" }] };
     s = importFile(s, "01_x.csv", "recipe_key,output_name\na,Item A\n").state;
     const m = importFile(s, "02_Crafting_Materialien_Input.csv", "recipe_key,material_name,qty\na,Wood,3\nzz,Ore,1\n");
-    expect(m.state.recipes[0].ingredients).toEqual([{ name: "Wood", itemId: undefined, qty: 3, bound: null, consumedOnFail: null }]);
+    expect(m.state.recipes[0].ingredients).toEqual([{ name: "Wood", itemId: undefined, qty: 3, bound: null, consumedOnFail: null, kind: "material" }]);
     expect(m.errors).toHaveLength(1);
     expect(m.state.projects).toBe(s.projects);
     expect(m.state.events).toBe(s.events);
