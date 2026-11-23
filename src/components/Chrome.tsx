@@ -17,16 +17,21 @@ export function LangSwitch() {
   );
 }
 
-export const NAV_CLS = "rounded-lg border border-[#d9c58f]/25 px-3 py-1 text-sm text-[#efe6cc]/85 hover:border-[#d9c58f]/50";
+export const NAV_CLS = "whitespace-nowrap rounded-lg border border-[#d9c58f]/25 px-2 py-1 text-sm sm:px-3 text-[#efe6cc]/85 hover:border-[#d9c58f]/50";
 
 /** Label of the one navigation tab (the link itself is rendered by the page shell). No next/link here: the offline build has no Next runtime. */
 export function NavLabel() {
   return <>{useT()("Charaktere", "Characters")}</>;
 }
 
-/** Offline shell: one tab back to the character selection. */
+export function GuidesLabel() {
+  const t = useT();
+  return <><span className="sm:hidden">{t("Klassen", "Classes")}</span><span className="hidden sm:inline">{t("Klassenguides", "Class guides")}</span></>;
+}
+
+/** Offline shell: the character selection and the class guides. */
 export function OfflineNav() {
-  return <nav aria-label="Main navigation"><a href="#" className={NAV_CLS}><NavLabel /></a></nav>;
+  return <nav aria-label="Main navigation" className="flex gap-2"><a href="#" className={NAV_CLS}><NavLabel /></a><a href="#/c/klassen" className={NAV_CLS}><GuidesLabel /></a></nav>;
 }
 
 export function OfflineBadge() {

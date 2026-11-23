@@ -6,6 +6,7 @@ import { textToLines } from "@/lib/kisk/html-to-text";
 import { CharacterView } from "./CharacterView";
 import { GRADE_HEX_CSS } from "@/lib/grades";
 import { Sheet } from "./ui";
+import { ClassGuides } from "./ClassGuides";
 import { ItemCatalog } from "./ItemCatalog";
 import { GearDeck, deckOf } from "./deck/GearDeck";
 import { Filler, Portrait, SHOW_ITEM_ICONS } from "./deck/Card";
@@ -52,6 +53,7 @@ export function BuildMasterApp() {
   const lang = useLang();
 
   if (route === "katalog") return <ItemCatalog onBack={() => go()} />;
+  if (route === "klassen") return <ClassGuides onBack={() => go()} />;
 
   if (route && selected) {
     return <CharacterScreen key={route} saved={selected} onBack={() => go()} upsert={upsert}
