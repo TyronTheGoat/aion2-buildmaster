@@ -377,3 +377,40 @@ describe("Odar reference prices (V2 list)", () => {
     expect([p.low, p.high, p.suggested]).toEqual([1, 2, undefined]);
   });
 });
+
+describe("Tyron's chain rules (2026-11-23)", () => {
+  const setup = async () => {
+    const m = await import("../crafting/model");
+    const top = m.topOf(data, "Asmodian", "orb")!;
+    return { m, p: proj(top.recipeKey, { faction: "Asmodian" }) };
+  };
+  it("safe Sterndrachenkönig: one guaranteed craft, so the Master orb is needed exactly 3 times", async () => {
+    const { m, p } = await setup();
+    const plan = m.craftPlan({ ...p, starSafe: true }, data);
+    const star = plan.lines.find((l) => l.recipe.recipeKey === "recipe:321093001")!;
+    expect([star.p, star.attempts]).toEqual([1, 1]);
+    expect(plan.lines.find((l) => /^Artisan’s Splendent/.test(l.item.name))!.need).toBe(3);
+  });
+  it("risky: a failed combo loses the item, so the keep-chance drops with the combo success", async () => {
+    const { m, p } = await setup();
+    const r = data.recipes.find((x) => x.recipeKey === "recipe:321093001")!;
+    const star = (cs: number | null) => m.craftPlan({ ...p, starSafe: false, comboSuccess: cs }, data).lines.find((l) => l.recipe.recipeKey === r.recipeKey)!.p!;
+    expect(star(null)).toBeCloseTo(r.pBase!, 6); // unknown: minimum (combo never fails)
+    expect(star(0.5)).toBeCloseTo(r.pBase! * (1 - 0.25 * 0.5), 6);
+  });
+  it("combo items up to Lv 44: chance = base × activation × combo success; unknown success is flagged", async () => {
+    const { m, p } = await setup();
+    const grey = data.recipes.find((x) => x.recipeKey === "recipe:321096001")!;
+    const line = (cs: number | null) => m.craftPlan({ ...p, starSafe: true, comboSuccess: cs }, data).lines[0];
+    expect(line(null).p).toBeCloseTo(grey.pBase! * 0.25, 6);
+    expect(line(0.8).p).toBeCloseTo(grey.pBase! * 0.25 * 0.8, 6);
+    expect(m.comboAssumed({ ...p, comboSuccess: null })).toBe(true);
+  });
+  it("the Asmodian orb recipes match the in-game screenshots and count as confirmed", async () => {
+    const { m } = await setup();
+    const s = m.applyConfirmations(data);
+    for (const k of m.SCREENSHOT_CONFIRMED) expect(s.recipes.find((r) => r.recipeKey === k)!.ingredientsStatus).toBe("complete");
+    const dark = s.recipes.find((r) => r.recipeKey === "recipe:321093012")!;
+    expect(dark.ingredients.map((i) => `${i.qty}x ${i.name}`)).toContain("29x Enhanced Hard Balaur Scale");
+  });
+});

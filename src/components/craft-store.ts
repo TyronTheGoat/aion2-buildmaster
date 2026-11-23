@@ -1,6 +1,6 @@
 "use client";
 import { useSyncExternalStore } from "react";
-import { emptyState, importFile, type CraftState } from "@/lib/crafting/model";
+import { applyConfirmations, emptyState, importFile, type CraftState } from "@/lib/crafting/model";
 import { BUILTIN_FILES, BUILTIN_VERSION } from "@/lib/crafting/builtin-data";
 
 /**
@@ -43,7 +43,7 @@ export function migrate(s: Partial<CraftState> & { version?: number }): CraftSta
 export function withBuiltin(s: CraftState): CraftState {
   let next = s;
   for (const [file, text] of BUILTIN_FILES) next = importFile(next, file, text).state;
-  return { ...next, dataVersion: BUILTIN_VERSION };
+  return { ...applyConfirmations(next), dataVersion: BUILTIN_VERSION };
 }
 
 function write(s: CraftState) {

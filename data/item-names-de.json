@@ -660,7 +660,12 @@
   "wrathful ego": "Zorniges Ego",
   "wrathful mind": "Zorniger Gedanke",
   "wrathful will": "Zorniger Wille",
-  "yggdrasil log": "Yggdrasil-Holz"
+  "yggdrasil log": "Yggdrasil-Holz",
+  "truth orb": "Wahrheitsorb",
+  "splendent truth orb": "Strahlender Wahrheitsorb",
+  "expert's truth orb": "Wahrheitsorb des Experten",
+  "expert's splendent truth orb": "Strahlender Wahrheitsorb des Experten",
+  "artisan's truth orb": "Wahrheitsorb des Meisters"
  },
  "sources": {
   "artisan's refining stone": "https://shugo.gg/de/items/610530008",
@@ -714,6 +719,11 @@
   "wrathful ego": "https://shugo.gg/de/items/610511015",
   "wrathful mind": "https://shugo.gg/de/items/610511013",
   "wrathful will": "https://shugo.gg/de/items/610511014",
-  "yggdrasil log": "https://shugo.gg/de/items/610650011"
+  "yggdrasil log": "https://shugo.gg/de/items/610650011",
+  "truth orb": "Tyron, In-Game-Screenshots DE (Rezepte test.zip, 2026-11-23)",
+  "splendent truth orb": "Tyron, In-Game-Screenshots DE (Rezepte test.zip, 2026-11-23)",
+  "expert's truth orb": "Tyron, In-Game-Screenshots DE (Rezepte test.zip, 2026-11-23)",
+  "expert's splendent truth orb": "Tyron, In-Game-Screenshots DE (Rezepte test.zip, 2026-11-23)",
+  "artisan's truth orb": "Tyron, In-Game-Screenshots DE (Rezepte test.zip, 2026-11-23)"
  }
 }
