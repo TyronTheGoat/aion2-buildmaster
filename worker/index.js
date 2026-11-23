@@ -25,6 +25,17 @@ export class Store extends DurableObject {
   del(k) {
     this.sql.exec("DELETE FROM kv WHERE k = ?", k);
   }
+  keys(prefix) {
+    return this.sql.exec("SELECT k FROM kv WHERE k >= ? AND k < ?", prefix, prefix + "\uffff").toArray().map((r) => r.k);
+  }
+  get(k) {
+    return this.sql.exec("SELECT v FROM kv WHERE k = ?", k).toArray()[0]?.v ?? null;
+  }
+  putMany(entries, by) {
+    const at = Date.now();
+    for (const [k, v] of entries) this.sql.exec("INSERT INTO kv (k, v, by, at) VALUES (?, ?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, by = excluded.by, at = excluded.at", k, v, by, at);
+    return at;
+  }
 }
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
@@ -77,6 +88,39 @@ async function api(req, env, url) {
   const prices = () => env.STORE.get(env.STORE.idFromName("prices"));
 
   if (path === "/api/me") return json({ email });
+
+  // original item icons, uploaded once as an icon pack (kept out of the repo); shared by all accounts
+  const icons = () => env.STORE.get(env.STORE.idFromName("icons"));
+  if (path === "/api/icons" && req.method === "GET") {
+    const store = icons();
+    const [files, alias] = await Promise.all([store.keys("f:"), store.get("alias")]);
+    return json({ files: files.map((k) => k.slice(2)), alias: alias ? JSON.parse(alias) : {} });
+  }
+  if (path === "/api/icons" && req.method === "PUT") {
+    const text = await req.text();
+    if (text.length > 2_000_000) return json({ error: "zu groß" }, 413);
+    let body;
+    try { body = JSON.parse(text); } catch { return json({ error: "kein JSON" }, 400); }
+    const entries = [];
+    for (const [name, data] of Object.entries(body.files ?? {})) {
+      if (!/^[\w.-]{1,120}$/.test(name) || typeof data !== "string" || !/^data:image\/(webp|png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(data) || data.length > 300_000) return json({ error: `ungültiges Icon ${name}` }, 400);
+      entries.push([`f:${name}`, data]);
+    }
+    if (body.alias) {
+      if (typeof body.alias !== "object" || JSON.stringify(body.alias).length > 500_000) return json({ error: "ungültige Namen" }, 400);
+      const old = await icons().get("alias");
+      entries.push(["alias", JSON.stringify({ ...(old ? JSON.parse(old) : {}), ...body.alias })]);
+    }
+    return json({ at: await icons().putMany(entries, email), count: entries.length });
+  }
+  const icon = path.match(/^\/api\/icon\/([\w.-]{1,120})$/);
+  if (icon && req.method === "GET") {
+    const data = await icons().get(`f:${icon[1]}`);
+    if (!data) return new Response("not found", { status: 404 });
+    const [, mime, b64] = data.match(/^data:([^;]+);base64,(.*)$/);
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    return new Response(bytes, { headers: { "content-type": mime, "cache-control": "private, max-age=604800" } });
+  }
 
   if (path === "/api/user" && req.method === "GET") {
     const rows = await user().list();

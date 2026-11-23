@@ -147,6 +147,8 @@ export async function initCloud(): Promise<CloudStatus> {
     return status;
   }
 
+  await loadIcons();
+
   // mirror every later write of the app
   const proto = Storage.prototype;
   const native = proto.setItem;
@@ -158,4 +160,36 @@ export async function initCloud(): Promise<CloudStatus> {
   setInterval(() => void pullPrices(), 60_000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") void pullPrices(); });
   return status;
+}
+
+/* ---------------------------------------------------------------- original icons (icon pack on the server) ---------------------------------------------------------------- */
+
+/** Points every icon name the server has to its address, so the app shows the uploaded originals. */
+async function loadIcons() {
+  try {
+    const { files, alias } = await call("GET", "/api/icons") as { files: string[]; alias: Record<string, string> };
+    const map = (globalThis.__BM_ICONS__ ??= {});
+    const have = new Set(files);
+    for (const f of files) map[f] ??= `/api/icon/${encodeURIComponent(f)}`;
+    for (const [name, f] of Object.entries(alias)) if (have.has(f)) map[name] ??= `/api/icon/${encodeURIComponent(f)}`;
+  } catch { /* no icons yet */ }
+}
+
+/** Uploads an icon pack (scripts/make-icon-pack.mjs) in parts; reports progress 0..1. */
+export async function uploadIconPack(text: string, onProgress: (done: number) => void) {
+  const pack = JSON.parse(text) as { kind?: string; files?: Record<string, string>; alias?: Record<string, string> };
+  if (pack.kind !== "buildmaster-icons" || !pack.files) throw new Error("keine BuildMaster-Icon-Datei");
+  const entries = Object.entries(pack.files);
+  let batch: Record<string, string> = {}, size = 0, sent = 0, first = true;
+  const flush = async () => {
+    await call("PUT", "/api/icons", { files: batch, ...(first ? { alias: pack.alias ?? {} } : {}) });
+    first = false; sent += Object.keys(batch).length; batch = {}; size = 0;
+    onProgress(sent / entries.length);
+  };
+  for (const [name, data] of entries) {
+    if (size + data.length > 1_500_000) await flush();
+    batch[name] = data; size += data.length;
+  }
+  if (Object.keys(batch).length || first) await flush();
+  return entries.length;
 }

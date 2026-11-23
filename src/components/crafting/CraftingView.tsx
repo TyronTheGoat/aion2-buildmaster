@@ -7,7 +7,7 @@ import { craftIcon } from "@/lib/crafting/craft-icons";
 import { GEAR_GROUPS, MATERIAL_GROUPS, entriesFor, type GearGroup, type MaterialGroup, type PriceArea, type PriceGroup } from "@/lib/crafting/catalog-groups";
 import { charKey } from "../store";
 import { useCraft } from "../craft-store";
-import { useCloud } from "../cloud";
+import { uploadIconPack, useCloud } from "../cloud";
 import { Card, CardArt, Filler, SHOW_ITEM_ICONS } from "../deck/Card";
 import {
   activeAttempts, attemptCost, attemptEffects, buildCatalog, canCraft, craftSlotOf, craftsItself, ctxOf, findPrice, importFile,
@@ -103,6 +103,7 @@ export function CraftingView({ char, ui, setUi }: { char: Character; ui: CraftUi
           <button className={BTN} onClick={() => fileRef.current?.click()}>{t("Daten importieren (CSV)", "Import data (CSV)")}</button>
           <button className={BTN} onClick={download}>{t("Export", "Export")}</button>
           <button className={BTN} onClick={() => backupRef.current?.click()}>{t("Sicherung laden", "Load backup")}</button>
+          {online && <IconPackButton />}
           <input ref={fileRef} type="file" accept=".csv,text/csv" multiple hidden onChange={(e) => { onFiles(e.target.files); e.target.value = ""; }} />
           <input ref={backupRef} type="file" accept=".json,application/json" hidden onChange={async (e) => {
             const f = e.target.files?.[0]; e.target.value = "";
@@ -1036,6 +1037,26 @@ function CatalogRow({ e, state, server, update }: { e: CatalogEntry & { area: Pr
       </span>
     </li>
   );
+}
+
+/** Uploads the icon pack (original icons, kept out of the repo) to the server once; afterwards every account sees the icons. */
+function IconPackButton() {
+  const t = useT();
+  const ref = useRef<HTMLInputElement>(null);
+  const [state, setState] = useState<string>();
+  return <>
+    <button className={BTN} disabled={!!state && state !== "error"} onClick={() => ref.current?.click()}>{state && state !== "error" ? state : t("Icon-Paket hochladen", "Upload icon pack")}</button>
+    <input ref={ref} type="file" accept=".json,application/json" hidden onChange={async (e) => {
+      const f = e.target.files?.[0]; e.target.value = "";
+      if (!f) return;
+      try {
+        setState("0 %");
+        const n = await uploadIconPack(await f.text(), (x) => setState(`${Math.round(x * 100)} %`));
+        alert(t(`${n} Icons hochgeladen. Die Seite lädt neu.`, `${n} icons uploaded. The page reloads.`));
+        location.reload();
+      } catch (err) { setState("error"); alert(`${t("Hochladen fehlgeschlagen", "Upload failed")}: ${(err as Error).message}`); }
+    }} />
+  </>;
 }
 
 /** Market rarity by name prefix, as in the Aion 2 market: plain grey, Fine green, Pure blue, Radiant gold. */
