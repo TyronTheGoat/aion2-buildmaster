@@ -2,26 +2,29 @@
 import { useEffect, useState } from "react";
 import type { Grade } from "@/lib/types";
 
-const GRADE_RING: Record<Grade, string> = {
-  BiS: "ring-amber-400", "S+": "ring-fuchsia-500", S: "ring-violet-500", A: "ring-sky-500",
-  B: "ring-emerald-500", C: "ring-zinc-500", D: "ring-red-600", "?": "ring-zinc-700",
+export const GRADE_RING: Record<Grade, string> = {
+  // same colours as RANK_STYLE in lib/grades (Tailwind needs them spelled out)
+  BiS: "ring-[#ffa31a]", "S+": "ring-[#ffd23f]", S: "ring-[#e6c35c]", A: "ring-[#3d9bff]",
+  B: "ring-[#6a8fc7]", C: "ring-[#5fbf8a]", D: "ring-[#ff3344]", "?": "ring-[#7a8594]",
 };
 
 /** Game icon from kisk/NC CDN with a text fallback when offline or missing. */
 export function ItemIcon({ src, name, grade = "?", enhance, size = 48, tall = false }: {
   src?: string; name: string; grade?: Grade; enhance?: number; size?: number; tall?: boolean;
 }) {
-  const [failed, setFailed] = useState(false);
+  // remember which URL failed, so switching to another item tries its icon again
+  const [failedSrc, setFailedSrc] = useState<string>();
+  const failed = !!src && failedSrc === src;
   const w = size, h = tall ? Math.round(size * 1.4) : size;
   return (
     <div className={`relative shrink-0 overflow-hidden rounded-lg bg-gradient-to-br from-zinc-700 to-zinc-900 ring-2 ${GRADE_RING[grade]}`} style={{ width: w, height: h }}>
       {src && !failed ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt={name} width={w} height={h} loading="lazy" referrerPolicy="no-referrer"
-          className="h-full w-full object-cover" onError={() => setFailed(true)} />
+          className="h-full w-full object-cover" onError={() => setFailedSrc(src)} />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-sm font-bold text-zinc-300">
-          {name.split(/\s+/).filter((x) => /^[A-Z]/.test(x)).slice(0, 2).map((x) => x[0]).join("") || "?"}
+        <div className="flex h-full w-full items-center justify-center text-zinc-500" title={`${name}: kein Originalbild vorhanden`}>
+          <GearGlyph size={Math.round(Math.min(w, h) * 0.55)} />
         </div>
       )}
       {enhance !== undefined && (
@@ -60,7 +63,7 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
-      <button className="absolute inset-0 bg-black/70" aria-label="Schließen" onClick={onClose} />
+      <button className="absolute inset-0 bg-black/70" aria-label="Close / Schließen" onClick={onClose} />
       <div className="relative max-h-[88vh] w-full overflow-y-auto rounded-t-2xl border border-white/10 bg-[#13131c] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:max-w-lg sm:rounded-2xl">
         <div className="mx-auto mb-3 h-1 w-10 rounded bg-white/20 sm:hidden" />
         <div className="mb-3 flex items-start justify-between gap-3">
@@ -70,5 +73,15 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
         {children}
       </div>
     </div>
+  );
+}
+
+/** Neutral equipment symbol shown when no original item icon is available (never a fake item picture). */
+export function GearGlyph({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" opacity="0.9" />
+      <path d="M12 7v10M8.5 10.5h7" opacity="0.6" />
+    </svg>
   );
 }

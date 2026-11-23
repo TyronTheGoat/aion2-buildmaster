@@ -1,0 +1,19 @@
+﻿v3_recipe_key,new_recipe_key,recipe_id,faction,source_url,notes
+alchemy:Elyos:orb:0,recipe:311096001,311096001,Elyos,https://aion2data.com/recipes/311096001-truth-orb,"Alte V3-Fantasy-Key/Index-ID nicht weiter verwenden. Referenzen migrieren, keine doppelten Rezepte importieren."
+alchemy:Elyos:orb:1,recipe:311095001,311095001,Elyos,https://aion2data.com/recipes/311095001-experts-truth-orb,"Alte V3-Fantasy-Key/Index-ID nicht weiter verwenden. Referenzen migrieren, keine doppelten Rezepte importieren."
+alchemy:Elyos:orb:2,recipe:311094001,311094001,Elyos,https://aion2data.com/recipes/311094001-artisans-truth-orb,"Alte V3-Fantasy-Key/Index-ID nicht weiter verwenden. Referenzen migrieren, keine doppelten Rezepte importieren."
+alchemy:Elyos:orb:3,recipe:311093001,311093001,Elyos,https://aion2data.com/recipes/311093001-true-dragon-lord-orb,"Alte V3-Fantasy-Key/Index-ID nicht weiter verwenden. Referenzen migrieren, keine doppelten Rezepte importieren."
+alchemy:transfer:Elyos:orb:0,recipe:311093011,311093011,Elyos,https://aion2data.com/recipes/311093011-splendent-true-dragon-lord-orb,Alten Index-Key in echte Recipe ID ueberfuehren.
+alchemy:transfer:Elyos:orb:1,recipe:311093012,311093012,Elyos,https://aion2data.com/recipes/311093012-white-dragon-lord-orb,Alten Index-Key in echte Recipe ID ueberfuehren.
+alchemy:transfer:Elyos:orb:2,recipe:311093013,311093013,Elyos,https://aion2data.com/recipes/311093013-splendent-white-dragon-lord-orb,Alten Index-Key in echte Recipe ID ueberfuehren.
+alchemy:transfer:Elyos:orb:3,recipe:311093014,311093014,Elyos,https://aion2data.com/recipes/311093014-wise-dragon-lord-orb,Alten Index-Key in echte Recipe ID ueberfuehren.
+alchemy:transfer:Elyos:orb:4,recipe:311093015,311093015,Elyos,https://aion2data.com/recipes/311093015-splendent-wise-dragon-lord-orb,Alten Index-Key in echte Recipe ID ueberfuehren.
+alchemy:Asmodian:orb:0,recipe:321096001,321096001,Asmodian,https://aion2data.com/recipes/321096001-truth-orb,"Alte V3-Fantasy-Key/Index-ID nicht weiter verwenden. Referenzen migrieren, keine doppelten Rezepte importieren."
+alchemy:Asmodian:orb:1,recipe:321095001,321095001,Asmodian,https://aion2data.com/recipes/321095001-experts-truth-orb,"Alte V3-Fantasy-Key/Index-ID nicht weiter verwenden. Referenzen migrieren, keine doppelten Rezepte importieren."
+alchemy:Asmodian:orb:2,recipe:321094001,321094001,Asmodian,https://aion2data.com/recipes/321094001-artisans-truth-orb,"Alte V3-Fantasy-Key/Index-ID nicht weiter verwenden. Referenzen migrieren, keine doppelten Rezepte importieren."
+alchemy:Asmodian:orb:3,recipe:321093001,321093001,Asmodian,https://aion2data.com/recipes/321093001-star-dragon-lord-orb,"Alte V3-Fantasy-Key/Index-ID nicht weiter verwenden. Referenzen migrieren, keine doppelten Rezepte importieren."
+alchemy:transfer:Asmodian:orb:0,recipe:321093011,321093011,Asmodian,https://aion2data.com/recipes/321093011-splendent-star-dragon-lord-orb,Alten Index-Key in echte Recipe ID ueberfuehren.
+alchemy:transfer:Asmodian:orb:1,recipe:321093012,321093012,Asmodian,https://aion2data.com/recipes/321093012-dark-dragon-lord-orb,Alten Index-Key in echte Recipe ID ueberfuehren.
+alchemy:transfer:Asmodian:orb:2,recipe:321093013,321093013,Asmodian,https://aion2data.com/recipes/321093013-splendent-dark-dragon-lord-orb,Alten Index-Key in echte Recipe ID ueberfuehren.
+alchemy:transfer:Asmodian:orb:3,recipe:321093014,321093014,Asmodian,https://aion2data.com/recipes/321093014-ebony-dragon-lord-orb,Alten Index-Key in echte Recipe ID ueberfuehren.
+alchemy:transfer:Asmodian:orb:4,recipe:321093015,321093015,Asmodian,https://aion2data.com/recipes/321093015-splendent-ebony-dragon-lord-orb,Alten Index-Key in echte Recipe ID ueberfuehren.

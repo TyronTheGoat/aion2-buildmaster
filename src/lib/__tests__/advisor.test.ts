@@ -25,7 +25,7 @@ describe("buildPlan (Florentina)", () => {
   it("suggests rerolling all four torso lines toward ideal lines", () => {
     const torso = plan.steps.find((s) => s.item.slot === "torso")!;
     expect(torso.kind).toBe("reroll");
-    expect(torso.details.join("\n")).toContain("Damage Boost");
+    expect(torso.details.join("\n")).toContain("Schadensverstärkung");
   });
 
   it("does not include unscored items", () => {

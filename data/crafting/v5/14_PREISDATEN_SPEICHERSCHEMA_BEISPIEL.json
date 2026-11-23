@@ -1,0 +1,31 @@
+{
+  "_description": "Speicherstruktur-Beispiel, enthält KEINE echten Marktpreise. Hier abgelegte Zahlwerte sind absichtlich nicht vorhanden.",
+  "schema_version": 1,
+  "market_prices": [],
+  "market_price_fields": {
+    "id": "zufällige UUID für gespeicherte Preiszeile",
+    "region": "EU",
+    "server": "vom Nutzer gewählter Server",
+    "item_id": "optional echte Game-Item-ID; recipe_id ist niemals eine Item-ID",
+    "catalog_key": "Katalogreferenz bei fehlender echter Item-ID",
+    "display_name": "Benutzeranzeige",
+    "price_low_kinah": "nullable integer >=0",
+    "price_high_kinah": "nullable integer >= price_low_kinah",
+    "reference_price_kinah": "nullable integer",
+    "updated_at": "ISO8601 UTC timestamp",
+    "manually_created": "true",
+    "source": "user_manual"
+  },
+  "project_price_overrides": [],
+  "project_price_override_fields": {
+    "project_id": "Referenz auf Crafting-Projekt",
+    "step_id": "optional Rezept/Schritt",
+    "item_id_or_catalog_key": "Referenz auf Material/Item",
+    "price_low_kinah": "nullable integer >=0",
+    "price_high_kinah": "nullable integer >=0",
+    "scope": "step_only / project_only",
+    "updated_at": "ISO8601 UTC timestamp"
+  },
+  "crafting_event_history": [],
+  "history_rule": "Bei Craftversuch verbrauchte Ressourcen und tatsächlich gezahltes Kinah als Snapshot speichern; spätere Preisänderung berührt das nicht."
+}

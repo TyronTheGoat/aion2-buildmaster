@@ -1,0 +1,15 @@
+{
+  "note": "Höchste Crafting-Stufe in AION 2 Global: Splendent Wise (Licht) / Splendent Ebony (Dunkel) Dragon Lord, Item-Level 102, Unique. Licht = Elyos, Dunkel = Asmodier.",
+  "evidence": [
+    { "region": "EU", "source": "aion2atlas.app – Global-Clientdaten, Item-Level 102 (alle 19 Slots, Crafting)", "url": "https://aion2atlas.app/equipment/item-level/102/", "date": "2026-11-22" },
+    { "region": "EU", "source": "corpus.gg – Crafting-Leiter für Global-Server (Stufe 6: Wise / Ebony Dragon Lord, Splendent = IL 102)", "url": "https://corpus.gg/blog/aion-2/crafting-guide", "date": "2026-11-22" }
+  ],
+  "level": 102,
+  "rarity": "Unique",
+  "slots": {
+    "Greatsword": "Greatsword", "Longsword": "Longsword", "Dagger": "Dagger", "Bow": "Bow", "Spellbook": "Spellbook",
+    "Orb": "Orb", "Mace": "Mace", "Staff": "Staff", "Guard": "Guard",
+    "Helm": "Helm", "Breastplate": "Top", "Greaves": "Legs", "Pauldrons": "Pauldrons", "Gloves": "Gloves",
+    "Boots": "Shoes", "Cloak": "Cloak", "Necklace": "Necklace", "Earrings": "Earrings", "Ring": "Ring"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "created": "2026-11-22",
+  "base_package": "BuildMaster_AION2_Crafting_Inputpaket_V3.zip",
+  "supplement_package": "BuildMaster_AION2_Crafting_Ergaenzung_V4.zip",
+  "original_chance_rows": 150,
+  "original_material_rows": 40,
+  "original_missing_recipe_direct_ingredients": 142,
+  "v4_curated_recipe_rows": 27,
+  "v4_direct_material_rows": 106,
+  "v4_transfer_prereq_rows": 10,
+  "v4_old_aliases_corrected": 18,
+  "v4_original_missing_recipes_now_covered": 19,
+  "original_missing_recipes_still_open": 123,
+  "new_price_input_rows": 23,
+  "coverage_warning": "Kein kompletter Daten-Dump. Quellen sind sekundäre aus Global-Dateien abgeleitete Seiten, teils veraltete Einzelrezeptseiten. Fehlende Materialien/alternative Transferitems bleiben offen.",
+  "sources": [
+    "https://aion2data.com/crafting/alchemy",
+    "https://aion2data.com/crafting/blacksmithing",
+    "https://aion2data.com/recipes/311093001-true-dragon-lord-orb",
+    "https://aion2data.com/recipes/321093015-splendent-ebony-dragon-lord-orb",
+    "https://aion2data.com/recipes/213033001-true-dragon-lord-ring"
+  ]
+}

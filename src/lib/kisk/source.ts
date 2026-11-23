@@ -1,7 +1,7 @@
 import "server-only";
 import { cacheLife } from "next/cache";
 import type { Character } from "../types";
-import { htmlToLines } from "./html-to-text";
+import { extractPortrait, htmlToLines } from "./html-to-text";
 import { parseKiskGear } from "./parse";
 
 export const KISK_BASE = "https://kisk.app";
@@ -20,7 +20,7 @@ export async function loadFromKisk(region: string, server: string, name: string)
   const { status, html } = await fetchKiskHtml(url);
   if (status === 404) throw new KiskError("Charakter auf kisk.app nicht gefunden.", 404);
   if (status !== 200) throw new KiskError(`kisk.app antwortet mit ${status}.`, status);
-  return parseKiskGear(htmlToLines(html), { region, server, name, url, mode: "live" });
+  return { ...parseKiskGear(htmlToLines(html), { region, server, name, url, mode: "live" }), portrait: extractPortrait(html) };
 }
 
 export class KiskError extends Error {

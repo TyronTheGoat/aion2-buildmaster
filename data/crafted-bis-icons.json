@@ -1,0 +1,12 @@
+{
+  "note": "Original icon file names of the IL 102 crafted pieces that the TW catalog has no entry for. Wise and Ebony share one item ID and icon. Looked up per item ID on gamewith.ai (2026-11-22).",
+  "pieces": {
+    "Pauldrons": { "itemId": "210430040", "icon": "Icon_Equip_AR_L_0005_T05_Shoulder.png", "url": "https://gamewith.ai/aion2/en/items/210430040" },
+    "Gloves": { "itemId": "210530040", "icon": "Icon_Equip_AR_L_0005_T05_Gloves.png", "url": "https://gamewith.ai/aion2/en/items/210530040" },
+    "Boots": { "itemId": "210630040", "icon": "Icon_Equip_AR_L_0005_T05_Boots.png", "url": "https://gamewith.ai/aion2/en/items/210630040" },
+    "Cloak": { "itemId": "210730040", "icon": "Icon_Equip_AR_L_0005_T05_Cape.png", "url": "https://gamewith.ai/aion2/en/items/210730040" },
+    "Necklace": { "itemId": "310130040", "icon": "Icon_ACC_NL_0047.png", "url": "https://gamewith.ai/aion2/en/items/310130040" },
+    "Earrings": { "itemId": "310230040", "icon": "Icon_ACC_ER_0047.png", "url": "https://gamewith.ai/aion2/en/items/310230040" },
+    "Ring": { "itemId": "310330040", "icon": "Icon_ACC_Ring_0047.png", "url": "https://gamewith.ai/aion2/en/items/310330040" }
+  }
+}

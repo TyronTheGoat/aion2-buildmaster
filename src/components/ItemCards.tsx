@@ -1,4 +1,5 @@
 "use client";
+import { itemName } from "@/lib/item-names";
 import { useState } from "react";
 import type { Character, Item, StatLine } from "@/lib/types";
 import { compareIdeal, type IdealRow } from "@/lib/compare";
@@ -6,6 +7,8 @@ import { buildPlan, shareOf, GOOD_SHARE } from "@/lib/advisor";
 import { SLOT_LABEL_DE } from "@/lib/knowledge/slots";
 import { findCatalogItem, iconFor } from "@/lib/knowledge/item-catalog";
 import { GradeBadge } from "./GradeBadge";
+import { useLang } from "@/lib/i18n";
+import { statLabel } from "@/lib/stat-names";
 import { ItemIcon, SkillIcon, Sheet, isSkillLine } from "./ui";
 
 function lineState(char: Character, item: Item, l: StatLine): "good" | "bad" | "neutral" {
@@ -19,11 +22,12 @@ const STATE_CLS = { good: "text-emerald-300", bad: "text-red-300/90", neutral: "
 const STATE_MARK = { good: "✓", bad: "✗", neutral: "·" };
 
 function LineRow({ l, state }: { l: StatLine; state: "good" | "bad" | "neutral" }) {
+  const lang = useLang();
   return (
     <li className="flex items-center justify-between gap-2 text-[13px] leading-5">
       <span className={`flex min-w-0 items-center gap-1.5 ${STATE_CLS[state]}`}>
         {isSkillLine(l.value) ? <SkillIcon name={l.name} size={16} /> : <span className="w-4 text-center text-[11px]">{STATE_MARK[state]}</span>}
-        <span className="truncate">{l.name}</span>
+        <span className="truncate">{statLabel(l.name, lang)}</span>
       </span>
       <span className="shrink-0 tabular-nums text-zinc-400">{l.value}</span>
     </li>
@@ -48,7 +52,7 @@ export function ItemCards({ char, items, arcana = false }: { char: Character; it
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-[10px] uppercase tracking-wide text-zinc-500">{SLOT_LABEL_DE[item.slot]}</div>
-                        <div className="truncate font-semibold leading-snug">{item.name}</div>
+                        <div className="truncate font-semibold leading-snug">{itemName(item.name)}</div>
                         <SourceLine name={item.name} />
                       </div>
                       {item.scored ? <GradeBadge grade={item.grade} score={item.score} size="sm" /> : <span className="text-[10px] text-zinc-500">ohne Wertung</span>}
@@ -80,7 +84,7 @@ export function ItemCards({ char, items, arcana = false }: { char: Character; it
             <ItemIcon src={iconFor(open)} name={open.name} grade={open.grade} enhance={open.enhance} size={44} tall={open.slot === "arcana"} />
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-wide text-zinc-500">{SLOT_LABEL_DE[open.slot]}</div>
-              <div className="font-semibold leading-snug">{open.name}</div>
+              <div className="font-semibold leading-snug">{itemName(open.name)}</div>
               <SourceLine name={open.name} />
               <div className="mt-0.5"><GradeBadge grade={open.grade} score={open.score} size="sm" /></div>
             </div>
@@ -99,6 +103,7 @@ const ROW_STYLE: Record<IdealRow["state"], { mark: string; cls: string; label: s
 };
 
 function BisDetail({ char, item }: { char: Character; item: Item }) {
+  const lang = useLang();
   const cmp = compareIdeal(item);
   const step = buildPlan(char).steps.find((s) => s.item === item);
   // The table above already shows missing/extra lines; only keep the extra advice here.
@@ -124,7 +129,7 @@ function BisDetail({ char, item }: { char: Character; item: Item }) {
                     <span className={`flex min-w-0 items-center gap-2 ${st.cls}`}>
                       <span className="w-4 text-center">{st.mark}</span>
                       {isSkillLine(r.target) && <SkillIcon name={r.name} size={18} />}
-                      <span className="truncate">{r.name}</span>
+                      <span className="truncate">{statLabel(r.name, lang)}</span>
                     </span>
                     <span className="text-right tabular-nums text-zinc-400">{r.have?.value ?? "–"}</span>
                     <span className="text-right font-semibold tabular-nums text-zinc-100">{r.target}</span>

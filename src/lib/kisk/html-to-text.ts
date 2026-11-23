@@ -2,6 +2,12 @@ const ENTITIES: Record<string, string> = {
   amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", "#39": "'", times: "×", rarr: "→",
 };
 
+/** The character portrait kisk.app links (NCSOFT profile image server only). */
+export function extractPortrait(html: string): string | undefined {
+  const m = html.match(/https:\/\/profileimg\.plaync\.com\/[^"'\s<>]+/);
+  return m ? m[0].replace(/&amp;/g, "&") : undefined;
+}
+
 /** Turns an HTML page into trimmed, non-empty text lines (one per block element). */
 export function htmlToLines(html: string): string[] {
   const text = html
