@@ -175,6 +175,13 @@ export interface Project {
   confidence?: number;
   /** the route is to buy the final item instead of crafting it */
   buyFinal?: boolean;
+  /**
+   * Sterndrachenkönig stage (Lv 62/70): true = safe craft (always 62, then the safe upgrade to 70),
+   * false = risky craft (can fail; combo gives 70 directly). undefined = not asked yet.
+   */
+  starSafe?: boolean;
+  /** chance that a triggered combo also succeeds (0..1), entered by the player; null / undefined = unknown */
+  comboSuccess?: number | null;
 }
 
 /** Default planning confidence per stage: with this many attempts the needed hits come in 3 of 4 cases. */
@@ -1207,7 +1214,8 @@ export interface PlanMaterial { item: ItemRef & { bound?: boolean | null }; tota
  * project confidence, or the mean in mode "mean"); every attempt uses its inputs, so the stage below must deliver
  * attempts × qty items. Stock (owned / crafted items, then the inventory) is used first. Lines come lowest stage first.
  */
-export function craftPlan(p: Project, state: CraftState, mode: "conf" | "mean" = "conf") {
+export function craftPlan(p: Project, state0: CraftState, mode: "conf" | "mean" = "conf") {
+  const state = planState(p, state0);
   const conf = p.confidence ?? PLAN_CONFIDENCE;
   const held = holdings(p, state.events);
   const unknown: string[] = [];
@@ -1276,6 +1284,54 @@ export function craftPlan(p: Project, state: CraftState, mode: "conf" | "mean" =
 }
 const takeHeld = (h: Holdings, i: ItemRef, n: number) => { const t = Math.min(h.get(i), n); if (t > 0) h.add(i, -t); return t; };
 
+/**
+ * Ingredient lists checked against in-game screenshots (Tyron, 2026-11-23, "Rezepte test.zip", Asmodian orb line):
+ * every material and amount matched the data, so these count as complete.
+ */
+export const SCREENSHOT_CONFIRMED = ["recipe:321096001", "recipe:321095001", "recipe:321094001", "recipe:321093001", "recipe:321093011",
+  "recipe:321093012", "recipe:321093013", "recipe:321093014", "recipe:321093015"];
+export function applyConfirmations(state: CraftState): CraftState {
+  const set = new Set(SCREENSHOT_CONFIRMED);
+  return { ...state, recipes: state.recipes.map((r) => (set.has(r.recipeKey) && r.ingredients.length ? { ...r, ingredientsStatus: "complete" as const, liveUnconfirmed: false } : r)) };
+}
+
+/** The Sterndrachenkönig stage of a line: the risky craft from Lv 60 on whose 62 result is upgraded to 70 (Tyron's chain, all weapons). */
+export const isStarStage = (r: Recipe) => r.recipeType === "chance_with_combo" && (r.level ?? 0) >= 60;
+/** The project's line has a Sterndrachenkönig stage (risky or safe choice). */
+export function hasStarStage(p: Project, state: Pick<CraftState, "recipes" | "chains">) {
+  const slot = p.gearSlot ?? state.recipes.find((r) => r.recipeKey === p.targetRecipeKey)?.slot ?? "";
+  return ladderFor(state, p.faction, slot).some(isStarStage);
+}
+
+/**
+ * The recipes as the plan uses them (Tyron's crafting rules, 2026-11-23):
+ * - up to Lv 44 every craft can fail; a triggered combo must succeed as well, else item and materials are lost.
+ *   Chance of the combo item per attempt = base × combo activation × combo success.
+ * - Sterndrachenkönig: safe = guaranteed 62 (no combo), then the safe upgrade to 70; risky = 62 on success, but a failed
+ *   combo destroys it, so the chance to keep at least the 62 is base × (1 − activation × (1 − combo success)).
+ * - from there on all crafts are safe (guaranteed); the plan counts the upgrade craft, a combo hit saves it.
+ * Combo success unknown: the plan uses 100 % and says it is a minimum (comboAssumed).
+ */
+export function planState(p: Project, state: CraftState): CraftState {
+  const cs = p.comboSuccess ?? null;
+  const assumed = cs === null ? 1 : cs;
+  let changed = false;
+  const recipes = state.recipes.map((r) => {
+    if (r.faction && p.faction && !factionOk(r, p.faction)) return r;
+    let x = r;
+    if (x.pComboActivation != null && x.pComboSuccess == null && x.pFinal == null) x = { ...x, pComboSuccess: assumed };
+    if (isStarStage(x)) {
+      if (p.starSafe === true) x = { ...x, guaranteed: true, pBase: 1, pComboActivation: null, pComboSuccess: null, pFinal: null, comboOutput: undefined };
+      else if (x.pBase != null && x.pComboActivation != null) x = { ...x, pBase: x.pBase * (1 - x.pComboActivation * (1 - assumed)) };
+    }
+    if (x !== r) changed = true;
+    return x;
+  });
+  return changed ? { ...state, recipes } : state;
+}
+/** The plan still uses 100 % for the unknown combo success (results are a minimum). */
+export const comboAssumed = (p: Project) => p.comboSuccess === null || p.comboSuccess === undefined;
+
 /** Kinah for what the plan still has to buy (missing materials × price); null while a price is missing. */
 export function planCost(plan: ReturnType<typeof craftPlan>, ctx: PriceCtx, s: Scenario) {
   let cost = 0, known = 0;
@@ -1340,8 +1396,9 @@ export function missingRoutePrices(opts: ReturnType<typeof routeOptions>): ItemR
 }
 
 /** The craft to do now: the lowest stage of the plan that still misses items (null when nothing is left or the path is unknown). */
-export function currentCraft(p: Project, state: CraftState) {
-  const plan = craftPlan(p, state);
+export function currentCraft(p: Project, state0: CraftState) {
+  const plan = craftPlan(p, state0);
+  const state = planState(p, state0);
   const line = plan.lines.find((l) => l.missing > 0);
   return { plan, line, step: line ? stepFor(p, state, line.recipe, line.goal) : null };
 }

@@ -11,7 +11,7 @@ import { uploadIconPack, useCloud } from "../cloud";
 import { Card, CardArt, Filler, SHOW_ITEM_ICONS } from "../deck/Card";
 import {
   activeAttempts, attemptCost, attemptEffects, buildCatalog, canCraft, craftSlotOf, craftsItself, ctxOf, findPrice, importFile,
-  GEAR_SLOTS, PLAN_CONFIDENCE, craftPlan, currentCraft, itemKey, ladderItems, levelOf, normName, ownedCount, planCost, prioritySlot, missingRoutePrices, routeItems, routeOf, routeOptions, sameItem, topOf, weaponTypeOf, withOwnedCount, withRoute, producerOf, progress, projectTarget, savePrice, sortProjects,
+  GEAR_SLOTS, PLAN_CONFIDENCE, craftPlan, currentCraft, itemKey, ladderItems, levelOf, normName, ownedCount, planCost, prioritySlot, comboAssumed, hasStarStage, missingRoutePrices, routeItems, routeOf, routeOptions, sameItem, topOf, weaponTypeOf, withOwnedCount, withRoute, producerOf, progress, projectTarget, savePrice, sortProjects,
   spent, stageLevel, uid, validatePrice,
   type CatalogEntry, type CraftSlot, type CraftState, type ImportError, type ItemRef, type NextStep, type PlanLine, type Outcome, type Project, type Scenario,
 } from "@/lib/crafting/model";
@@ -400,6 +400,12 @@ function ProjectDetail({ p, state, update, char, onBack, onPrice }: { p: Project
         <span className="min-w-[12rem] flex-1"><Progress percent={pr.percent} done={pr.done} total={pr.total} /></span>
       </div>
       {p.status === "paused" && <p className="text-xs text-zinc-500">{t("Pausiert. Über ⋯ fortsetzen.", "Paused. Resume via ⋯.")}</p>}
+      {(hasStarStage(p, state) || comboAssumed(p)) && (
+        <p className="text-xs text-zinc-400">
+          {hasStarStage(p, state) && <>{t("Sterndrachenkönig", "Star Dragon Lord")}: <b className="text-[#efe6cc]">{p.starSafe === true ? "Safe" : p.starSafe === false ? t("Risiko", "Risky") : t("noch nicht gewählt", "not chosen yet")}</b>. </>}
+          {comboAssumed(p) && <span className={MISSING}>{t("Combo-Erfolg unbekannt: Versuche und Kosten sind ein Minimum (unter „Weg ändern“ eintragen).", "Combo success unknown: attempts and cost are a minimum (enter it under “Change route”).")}</span>}
+        </p>
+      )}
 
       {p.buyFinal ? (
         <Card className="p-4 text-center text-sm">
@@ -625,6 +631,52 @@ function PriceSlider({ item, state, update, server, wide }: { item: ItemRef & { 
 }
 
 /**
+ * Tyron's chain rules in the route step: risky or safe Sterndrachenkönig craft (with the cost of both), and the
+ * combo success chance (unknown in the data; without it the plan shows a minimum).
+ */
+function ChainChoices({ p, state, update }: { p: Project; state: CraftState; update: Update }) {
+  const t = useT();
+  const kinah = useKinah();
+  const set = (patch: Partial<Project>) => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }));
+  const [cs, setCs] = useState(p.comboSuccess == null ? "" : String(Math.round(p.comboSuccess * 1000) / 10));
+  const star = hasStarStage(p, state);
+  const costOf = (safe: boolean) => { const v = { ...p, starSafe: safe }; return planCost(craftPlan(v, state), ctxOf(state, v), "ref"); };
+  const show = (c: ReturnType<typeof planCost>) => c.cost !== null ? kinah(c.cost) : c.known > 0 ? `${t("mind.", "at least")} ${kinah(c.known)}` : t("Preise fehlen", "prices missing");
+  const card = (safe: boolean, title: string, text: string) => (
+    <label className={`flex cursor-pointer gap-2 rounded-xl px-3 py-2 text-xs ring-1 ${p.starSafe === safe ? "bg-white/[0.08] ring-[#d9c58f]/50" : "bg-white/[0.02] ring-white/10 hover:ring-[#d9c58f]/30"}`}>
+      <input type="radio" name="star" checked={p.starSafe === safe} onChange={() => set({ starSafe: safe })} />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm text-[#efe6cc]/90">{title}</span>
+        <span className="block text-zinc-400">{text}</span>
+        <span className="block text-zinc-300">{t("Kosten mit deinem Lager", "Cost with your stock")}: <b className="text-[#f4eed7]">{show(costOf(safe))}</b></span>
+      </span>
+    </label>
+  );
+  const commitCs = () => {
+    const n = cs.trim() === "" ? null : Number(cs.replace(",", "."));
+    if (n !== null && (!Number.isFinite(n) || n < 0 || n > 100)) return;
+    set({ comboSuccess: n === null ? null : n / 100 });
+  };
+  return (
+    <section className="space-y-2 rounded-xl bg-white/[0.02] p-3 ring-1 ring-[#d9c58f]/25">
+      {star && <>
+        <div className="text-sm font-semibold text-[#f4eed7]">{t("Möchtest du beim Sterndrachenkönig (Lv 62 → 70) Risiko spielen?", "Do you want to play risky at the Star Dragon Lord stage (Lv 62 → 70)?")}</div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {card(false, t("Risiko", "Risky"), t("Normaler Craft mit Combo-Chance: Combo → direkt Lv 70 (spart den Upgrade-Craft). Aber: Fehlschlag oder Combo-Fehlschlag = Meister-Orb und Material weg. Erfolg ohne Combo = Lv 62, dann Upgrade.", "Normal craft with combo chance: combo → Lv 70 directly (saves the upgrade). But a fail or failed combo loses the Master item and materials. Success without combo = Lv 62, then upgrade."))}
+          {card(true, t("Safe", "Safe"), t("Craft ohne Combo-Chance: immer Lv 62, nichts geht kaputt. Danach der sichere Upgrade-Craft auf Lv 70.", "Craft without combo chance: always Lv 62, nothing breaks. Then the safe upgrade craft to Lv 70."))}
+        </div>
+        <p className="text-[11px] text-zinc-500">{t("Ab hier sind alle Crafts sicher. Gerechnet wird mit Upgrade-Craft; triffst du die Combo (25 %), sparst du ihn.", "From here every craft is safe. The plan counts the upgrade craft; a combo hit (25 %) saves it.")}</p>
+      </>}
+      <label className="flex flex-wrap items-center gap-2 text-xs text-zinc-300">
+        {t("Combo-Erfolg: wie oft gelingt eine ausgelöste Combo?", "Combo success: how often does a triggered combo succeed?")}
+        <input className={`${INPUT} w-20 text-right text-xs`} inputMode="decimal" value={cs} placeholder="?" onChange={(e) => setCs(e.target.value)} onBlur={commitCs} onKeyDown={(e) => e.key === "Enter" && commitCs()} /> %
+      </label>
+      {comboAssumed(p) && <p className={`text-[11px] ${MISSING}`}>{t("Unbekannt: Die Rechnung zeigt das Minimum, als ob eine ausgelöste Combo nie fehlschlägt. Trag den Wert ein, sobald du ihn kennst.", "Unknown: the plan shows the minimum, as if a triggered combo never fails. Enter the value once you know it.")}</p>}
+    </section>
+  );
+}
+
+/**
  * Buy or craft: every route with what is still to buy and where it starts (lowest stage still missing after the stock).
  * The default is to craft everything from the lowest stage; the cheapest known route is only suggested.
  * Prices the comparison lacks are listed right here to fill in.
@@ -662,6 +714,7 @@ function RouteStep({ p, state, update, onBack }: { p: Project; state: CraftState
         </div>}
         {best?.key === "all" && <div className="mt-1 text-[#5fbf8a]">{t("Empfehlung: alles selbst craften ist am günstigsten.", "Suggestion: crafting everything is cheapest.")}</div>}
       </div>
+      <ChainChoices p={p} state={state} update={update} />
       <label className="flex items-center gap-2 text-xs text-zinc-400">{t("Sicherheit pro Stufe", "Confidence per stage")}
         <select className={`${INPUT} text-xs`} value={conf} onChange={(e) => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...x, confidence: Number(e.target.value) } : x)) }))}>
           {[0.75, 0.8, 0.9].map((c) => <option key={c} value={c}>{Math.round(c * 100)} %</option>)}
@@ -697,7 +750,8 @@ function RouteStep({ p, state, update, onBack }: { p: Project; state: CraftState
       </section>}
       <div className="flex flex-wrap gap-2">
         <button className={BTN} onClick={onBack}>‹ {t("Zurück", "Back")}</button>
-        <button className={`${BTN} border-[#d9c58f]/50 text-[#f4eed7]`} onClick={() => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...withRoute(x, s, pick), setup: undefined } : x)) }))}>{t("Weg übernehmen und loslegen", "Take this route and start")} ›</button>
+        <button className={`${BTN} border-[#d9c58f]/50 text-[#f4eed7]`} disabled={hasStarStage(p, state) && p.starSafe === undefined} title={hasStarStage(p, state) && p.starSafe === undefined ? t("Erst oben Risiko oder Safe wählen", "Pick risky or safe above first") : undefined}
+          onClick={() => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...withRoute(x, s, pick), setup: undefined } : x)) }))}>{t("Weg übernehmen und loslegen", "Take this route and start")} ›</button>
       </div>
     </>
   );
@@ -751,8 +805,13 @@ function CurrentCraft({ s, line, conf, state, onLog, onPrice }: { s: NextStep; l
         <ul className="order-2 space-y-1.5 md:order-1">{s.ingredients.slice(0, half).map(tile)}</ul>
         <div className="order-1 text-center md:order-2">
           <div className="mx-auto w-32 sm:w-40">{icon ? <CardArt src={icon} alt={want.name} /> : <Filler className="aspect-square w-full" />}</div>
-          <div className="mt-2 font-semibold text-[#f4eed7]">{shown(want.name)}</div>
-          <div className="text-xs text-zinc-400">{lv ? `Lv ${lv}` : ""}{s.goal === "combo" ? " · Combo" : ""}</div>
+          {s.goal === "combo" ? <>
+            <div className="mt-2 font-semibold text-[#f4eed7]">{shown(s.recipe.output.name)} {t("craften", "craft")}</div>
+            <div className="text-xs text-zinc-400">{t("Ziel: Combo", "Goal: combo")} → <b className="text-[#efe6cc]">{shown(want.name)}</b>{lv ? ` · Lv ${lv}` : ""}</div>
+          </> : <>
+            <div className="mt-2 font-semibold text-[#f4eed7]">{shown(want.name)}</div>
+            <div className="text-xs text-zinc-400">{lv ? `Lv ${lv}` : ""}{s.recipe.guaranteed === true ? ` · ${t("sicher", "safe")}` : ""}</div>
+          </>}
           <div className="mt-2 rounded-xl bg-white/[0.04] px-3 py-2 ring-1 ring-[#d9c58f]/25">
             <div className="text-lg font-semibold text-[#f4eed7]">{t("Noch", "Still")} {line.missing}× {t("craften", "to craft")}</div>
             <div className="text-[11px] text-zinc-400">{t("gebraucht", "needed")} {line.need} · {t("im Lager", "in stock")} {line.have}</div>
