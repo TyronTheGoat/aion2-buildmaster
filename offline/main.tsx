@@ -1,6 +1,8 @@
 import { createRoot } from "react-dom/client";
 import { BuildMasterApp } from "@/components/BuildMasterApp";
 import { FooterNote, LangSwitch, OfflineBadge, OfflineNav } from "@/components/Chrome";
+import { initCloud } from "@/components/cloud";
+import { listenKiskImport, takeKiskImport } from "@/components/kisk-import";
 
 function App() {
   return (
@@ -21,4 +23,16 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+const showResult = (r: { route?: string; error?: string }) => {
+  if (r.route) location.hash = `/c/${encodeURIComponent(r.route)}`;
+  else { history.replaceState(null, "", location.pathname); alert(`kisk-Import: ${r.error}`); }
+};
+
+(async () => {
+  // online: the account's data and the shared prices first, so the app starts with them
+  await initCloud();
+  const sent = await takeKiskImport();
+  if (sent) showResult(sent);
+  else listenKiskImport(showResult);
+  createRoot(document.getElementById("root")!).render(<App />);
+})();

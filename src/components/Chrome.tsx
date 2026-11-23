@@ -1,4 +1,5 @@
 "use client";
+import { useCloud } from "./cloud";
 import { setLang, useLang, useT } from "@/lib/i18n";
 
 /** Small language switch (EN / DE) in the header, on every page. */
@@ -30,6 +31,12 @@ export function OfflineNav() {
 
 export function OfflineBadge() {
   const t = useT();
+  const cloud = useCloud();
+  if (cloud.mode === "online") {
+    return <span className="truncate text-xs text-zinc-500" title={cloud.error ? t("Speichern auf dem Server klappt gerade nicht, die Daten bleiben auf diesem Gerät", "Saving to the server fails right now, the data stays on this device") : t("Deine Daten werden online gespeichert", "Your data is saved online")}>
+      <span className={cloud.error ? "text-[#ffa31a]" : "text-[#5fbf8a]"}>●</span> {cloud.email}
+    </span>;
+  }
   return <span className="text-xs text-zinc-500">{t("Offline-Version", "Offline version")}</span>;
 }
 

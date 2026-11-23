@@ -16,11 +16,14 @@ export interface SavedChar {
 
 const KEY = "bm:chars";
 const SEEDED = "bm:seeded";
-const SEED_VERSION = "4";
+export const SEED_VERSION = "5";
+export const SEEDED_KEY = SEEDED;
+export const CHARS_KEY = KEY;
+export const GENDER_KEY = "bm:gender";
 /** fetchedAt of the short version-2 snapshots (no stat lines), replaced by the full ones in version 3 */
 const SHORT_SNAPSHOT = "2026-11-22T13:50:00Z";
 /** Gender per character, kept separately so it stays even if the character is removed and added again */
-const GENDER = "bm:gender";
+const GENDER = GENDER_KEY;
 const listeners = new Set<() => void>();
 let cacheRaw: string | null = null;
 let cache: SavedChar[] = [];
@@ -39,19 +42,14 @@ function read(): SavedChar[] {
   if (typeof window === "undefined") return cache;
   const seeded = localStorage.getItem(SEEDED);
   if (seeded !== SEED_VERSION) {
-    // Version 1 seeded Florentina only; version 2 added the five Odar characters as short data;
-    // version 3 brings their full data; version 4 replaces any saved copy older than the built-in snapshot
-    // (newer kisk data, e.g. Florentina 2026-11-22). Entries the user refreshed later or added are not touched.
+    // A new box starts empty: everyone adds their own characters.
+    // Boxes that got the demo characters earlier (versions 1-3) keep them; older saved copies get the newer built-in snapshot.
     let list: SavedChar[] = seeded ? JSON.parse(localStorage.getItem(KEY) ?? "[]") : [];
-    const seeds = seeded ? ODAR_CHARS : [FLORENTINA, ...ODAR_CHARS];
     list = list.map((x) => {
       const full = [FLORENTINA, ...ODAR_CHARS].find((s) => charKey(s) === charKey(x));
       const at = x.snapshot?.source.fetchedAt;
-      return full && (at === SHORT_SNAPSHOT || !at || at < full.source.fetchedAt) ? { ...x, snapshot: full } : x;
+      return full && at && (at === SHORT_SNAPSHOT || at < full.source.fetchedAt) && x.snapshot?.source.mode === "demo" ? { ...x, snapshot: full } : x;
     });
-    for (const s of seeds) {
-      if (!list.some((x) => charKey(x) === charKey(s))) list.push({ region: s.region, server: s.server, name: s.name, snapshot: s });
-    }
     localStorage.setItem(KEY, JSON.stringify(list));
     localStorage.setItem(SEEDED, SEED_VERSION);
   }
@@ -74,6 +72,13 @@ function write(list: SavedChar[]) {
 
 const NO_CHARS: SavedChar[] = [];
 
+/** Adds or updates a character in the box (outside React, e.g. the kisk import). */
+export function upsertChar(c: SavedChar) {
+  const list = read();
+  const i = list.findIndex((x) => charKey(x) === charKey(c));
+  write(i >= 0 ? list.map((x, j) => (j === i ? { ...x, ...c, snapshot: c.snapshot ?? x.snapshot } : x)) : [...list, c]);
+}
+
 export function useCharacters() {
   const chars = useSyncExternalStore(
     (cb) => { listeners.add(cb); window.addEventListener("storage", cb); return () => { listeners.delete(cb); window.removeEventListener("storage", cb); }; },
@@ -82,11 +87,7 @@ export function useCharacters() {
   );
   return {
     chars,
-    upsert(c: SavedChar) {
-      const list = read();
-      const i = list.findIndex((x) => charKey(x) === charKey(c));
-      write(i >= 0 ? list.map((x, j) => (j === i ? { ...x, ...c, snapshot: c.snapshot ?? x.snapshot } : x)) : [...list, c]);
-    },
+    upsert: upsertChar,
     remove(key: string) {
       write(read().filter((x) => charKey(x) !== key));
     },

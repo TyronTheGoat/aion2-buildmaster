@@ -48,3 +48,4 @@ next-env.d.ts
 # Hologram character models, hero backgrounds and references (rights not cleared): keep out of the public repo
 /public/models/
 /public/hero/
+/.wrangler/

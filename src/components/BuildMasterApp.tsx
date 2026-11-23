@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Character } from "@/lib/types";
 import { parseKiskGear } from "@/lib/kisk/parse";
 import { textToLines } from "@/lib/kisk/html-to-text";
@@ -12,6 +12,8 @@ import { Filler, Portrait, SHOW_ITEM_ICONS } from "./deck/Card";
 import { iconFor } from "@/lib/knowledge/item-catalog";
 import { charKey, parseKiskLink, portraitOf, useCharacters, type SavedChar } from "./store";
 import { numberLocale, useLang, useT } from "@/lib/i18n";
+import { useCloud } from "./cloud";
+import { bookmarklet } from "./kisk-import";
 
 function useHashRoute(): [string | undefined, (k?: string) => void] {
   const [route, setRoute] = useState<string>();
@@ -139,6 +141,7 @@ function AddCharacterSheet({ open, onClose, onAdd }: { open: boolean; onClose: (
   const [text, setText] = useState("");
   const parsed = parseKiskLink(link);
   const t = useT();
+  const online = useCloud().mode === "online";
   const input = "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-base outline-none focus:border-amber-400";
 
   function submit() {
@@ -158,7 +161,8 @@ function AddCharacterSheet({ open, onClose, onAdd }: { open: boolean; onClose: (
         </label>
         {link && !parsed && <p className="text-xs text-red-300">{t("Das sieht nicht wie ein kisk.app-Charakterlink aus.", "That does not look like a kisk.app character link.")}</p>}
         {parsed && <p className="text-xs text-emerald-300">{parsed.name} · {parsed.server} · {parsed.region.toUpperCase()}</p>}
-        <details className="rounded-lg border border-white/10 p-3 text-sm" open={isOffline()}>
+        {online && <KiskBookmarklet />}
+        <details className="rounded-lg border border-white/10 p-3 text-sm" open={isOffline() && !online}>
           <summary className="cursor-pointer text-zinc-300">{t("Seiteninhalt einfügen", "Paste page content")} {isOffline() ? t("(nötig in der Offline-Version)", "(required in the offline version)") : "(optional)"}</summary>
           <p className="mt-2 text-xs text-zinc-500">{t("Öffne die Gear-Seite auf kisk.app, markiere alles, kopiere es und füge es hier ein.", "Open the gear page on kisk.app, select everything, copy it and paste it here.")}</p>
           <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} className={`${input} mt-2`} placeholder={t("Seiteninhalt…", "Page content…")} />
@@ -166,6 +170,34 @@ function AddCharacterSheet({ open, onClose, onAdd }: { open: boolean; onClose: (
         <button onClick={submit} disabled={!parsed} className="w-full rounded-lg bg-amber-400 py-3 font-semibold text-black disabled:opacity-40">{t("Hinzufügen", "Add")}</button>
       </div>
     </Sheet>
+  );
+}
+
+/** The "Zu BuildMaster senden" bookmark: drag it to the bookmarks bar, then click it on a kisk.app character page. */
+function KiskBookmarklet() {
+  const t = useT();
+  const ref = useRef<HTMLAnchorElement>(null);
+  const code = typeof location !== "undefined" ? bookmarklet(location.origin) : "";
+  const [copied, setCopied] = useState(false);
+  // React blocks javascript: links in JSX; the bookmark needs one, so it is set on the element directly
+  useEffect(() => { ref.current?.setAttribute("href", code); }, [code]);
+  return (
+    <div className="space-y-2 rounded-lg border border-[#d9c58f]/25 bg-white/[0.02] p-3 text-sm">
+      <div className="font-semibold text-[#f4eed7]">{t("Am einfachsten: Lesezeichen „Zu BuildMaster senden“", "Easiest: the “Send to BuildMaster” bookmark")}</div>
+      <ol className="list-decimal space-y-1 pl-5 text-xs text-zinc-400">
+        <li>{t("Zieh den Knopf unten in deine Lesezeichenleiste (einmalig).", "Drag the button below to your bookmarks bar (once).")}</li>
+        <li>{t("Öffne auf kisk.app die Gear-Seite deines Charakters.", "Open your character's gear page on kisk.app.")}</li>
+        <li>{t("Klick dort auf das Lesezeichen. BuildMaster öffnet sich und übernimmt den Charakter. Nochmal klicken aktualisiert ihn.", "Click the bookmark there. BuildMaster opens and takes over the character. Clicking again updates it.")}</li>
+      </ol>
+      <div className="flex flex-wrap items-center gap-2">
+        <a ref={ref} onClick={(e) => { e.preventDefault(); alert(t("Nicht hier klicken: zieh den Knopf in die Lesezeichenleiste und klick ihn auf der kisk-Seite.", "Do not click it here: drag it to the bookmarks bar and click it on the kisk page.")); }}
+          className="cursor-grab rounded-lg bg-amber-400 px-3 py-2 text-xs font-semibold text-black">⇪ Zu BuildMaster senden</a>
+        <button className="rounded-lg border border-white/15 px-3 py-2 text-xs text-zinc-300" onClick={async () => { await navigator.clipboard.writeText(code); setCopied(true); }}>
+          {copied ? t("Kopiert", "Copied") : t("Code kopieren (Handy)", "Copy code (phone)")}
+        </button>
+      </div>
+      <p className="text-[11px] text-zinc-500">{t("Handy: neues Lesezeichen anlegen und als Adresse den kopierten Code einfügen. BuildMaster fragt kisk.app nie selbst ab, es liest nur die Seite, die du geöffnet hast.", "Phone: create a bookmark and paste the copied code as its address. BuildMaster never queries kisk.app itself, it only reads the page you opened.")}</p>
+    </div>
   );
 }
 
@@ -177,6 +209,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
   const [pasting, setPasting] = useState(false);
   const [text, setText] = useState("");
   const [view, setView] = useState<"deck" | "list">("deck");
+  const online = useCloud().mode === "online";
   const t = useT();
   const lang = useLang();
 
@@ -217,6 +250,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
         {t("Öffne", "Open")} <a className="underline" target="_blank" rel="noreferrer" href={`https://kisk.app/c/${saved.region}/${saved.server}/${encodeURIComponent(saved.name)}/gear`}>{saved.name} {t("auf", "on")} kisk.app</a>,
         {" "}{t("markiere alles, kopiere es und füge es hier ein.", "select everything, copy it and paste it here.")}
       </p>
+      {online && <p className="mb-2 text-xs text-[#5fbf8a]">{t("Schneller: auf der kisk-Seite das Lesezeichen „Zu BuildMaster senden“ klicken.", "Faster: click the “Send to BuildMaster” bookmark on the kisk page.")}</p>}
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={8} className={input} />
       <button onClick={applyPaste} disabled={!text.trim()} className="mt-3 w-full rounded-lg bg-amber-400 py-3 font-semibold text-black disabled:opacity-40">{t("Übernehmen", "Apply")}</button>
     </Sheet>
@@ -244,7 +278,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
 
   const offlineNote = isOffline() && saved.snapshot ? (
     <p className="rounded-lg bg-white/[0.03] px-3 py-2 text-xs text-zinc-400">
-      {t("Offline-Version: Stand vom", "Offline version: data from")} {new Date(saved.snapshot.source.fetchedAt).toLocaleString(numberLocale(lang))}. {t("Neuen Stand über „Aktualisieren“ einfügen.", "Paste a new snapshot via “Refresh”.")}
+      {online ? t("Stand vom", "Data from") : t("Offline-Version: Stand vom", "Offline version: data from")} {new Date(saved.snapshot.source.fetchedAt).toLocaleString(numberLocale(lang))}. {online ? t("Neuen Stand: auf der kisk-Seite das Lesezeichen „Zu BuildMaster senden“ klicken.", "New snapshot: click the “Send to BuildMaster” bookmark on the kisk page.") : t("Neuen Stand über „Aktualisieren“ einfügen.", "Paste a new snapshot via “Refresh”.")}
     </p>
   ) : null;
   const statusNote = status === "loading"

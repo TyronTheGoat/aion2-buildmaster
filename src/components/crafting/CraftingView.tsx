@@ -7,6 +7,7 @@ import { craftIcon } from "@/lib/crafting/craft-icons";
 import { GEAR_GROUPS, MATERIAL_GROUPS, entriesFor, type GearGroup, type MaterialGroup, type PriceArea, type PriceGroup } from "@/lib/crafting/catalog-groups";
 import { charKey } from "../store";
 import { useCraft } from "../craft-store";
+import { useCloud } from "../cloud";
 import { Card, CardArt, Filler, SHOW_ITEM_ICONS } from "../deck/Card";
 import {
   activeAttempts, attemptCost, attemptEffects, buildCatalog, canCraft, craftSlotOf, craftsItself, ctxOf, findPrice, importFile,
@@ -56,6 +57,7 @@ interface PriceTarget { item: ItemRef & { catalogKey?: string; bound?: boolean |
 export function CraftingView({ char, ui, setUi }: { char: Character; ui: CraftUi; setUi: Dispatch<SetStateAction<CraftUi>> }) {
   const t = useT();
   const { state, update, exportJson, importJson } = useCraft();
+  const online = useCloud().mode === "online";
   const [report, setReport] = useState<{ file: string; rows: number; errors: ImportError[]; kind: string }[]>();
   const [priceFor, setPriceFor] = useState<PriceTarget>();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -116,7 +118,7 @@ export function CraftingView({ char, ui, setUi }: { char: Character; ui: CraftUi
         {" · "}{complete} {t("mit geprüfter Zutatenliste", "with checked ingredient list")}
         {unconfirmed > 0 && <> · <span className={MISSING}>{unconfirmed} {t("Zutaten unbestätigt", "ingredients unconfirmed")}</span></>}
         {gaps > 0 && <> · <span className={MISSING}>{gaps} {t("noch ohne Zutatenliste", "still without ingredient list")}</span></>}
-        {" · "}{t("Preise trägst nur du ein.", "Only you enter prices.")}
+        {" · "}{online ? t("Marktpreise sind für alle Accounts gemeinsam: was du änderst, sehen alle sofort.", "Market prices are shared by all accounts: what you change, everyone sees at once.") : t("Preise trägst nur du ein.", "Only you enter prices.")}
       </p>
 
       {report && <ImportReport report={report} onClose={() => setReport(undefined)} />}
@@ -256,7 +258,7 @@ function ProjectCard({ p, state, onOpen }: { p: Project; state: CraftState; onOp
   const pr = progress(p, state);
   const cur = p.status === "done" || p.setup ? null : currentCraft(p, state);
   const step = cur?.step;
-  const cost = cur ? planCost(cur.plan, ctxOf(state, p), "low") : null;
+  const cost = cur ? planCost(cur.plan, ctxOf(state, p), "ref") : null;
   const kinah = useKinah();
   const last = [...pr.milestones].reverse().find((m) => m.done);
   const from = last ? stageLevel(last) : null;
@@ -385,7 +387,7 @@ function ProjectDetail({ p, state, update, char, onBack, onPrice }: { p: Project
   if (p.setup) return <div className="space-y-4">{header}<Setup p={p} state={state} update={update} char={char} /></div>;
 
   const { plan, line, step } = currentCraft(p, state);
-  const cost = planCost(plan, ctxOf(state, p), "low");
+  const cost = planCost(plan, ctxOf(state, p), "ref");
   const conf = Math.round((p.confidence ?? PLAN_CONFIDENCE) * 100);
   return (
     <div className="space-y-4">
@@ -498,7 +500,7 @@ function Setup({ p, state, update, char }: { p: Project; state: CraftState; upda
               <li key={itemKey(i)} className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-2 py-1.5 text-xs ring-1 ring-white/5">
                 <ItemIcon src={iconOf(i, p.faction)} />
                 <span className="min-w-0 flex-1"><span className="block truncate text-[#efe6cc]/90">{shown(i.name)}</span><span className="text-[11px] text-zinc-500">{levelOfItem(i) ? `Lv ${levelOfItem(i)}` : ""}</span></span>
-                <PriceInput item={i} state={state} update={update} server={p.server} />
+                <PriceSlider item={i} state={state} update={update} server={p.server} />
               </li>
             ))}
           </ul>
@@ -509,7 +511,7 @@ function Setup({ p, state, update, char }: { p: Project; state: CraftState; upda
                 <li key={itemKey(m.item)} className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-2 py-1.5 text-xs ring-1 ring-white/5" style={rarityEdge(m.item.name)}>
                   <ItemIcon src={iconOf(m.item, p.faction)} rarity={rarityOf(m.item.name)} />
                   <span className="min-w-0 flex-1 truncate text-[#efe6cc]/90">{shown(m.item.name)}</span>
-                  <PriceInput item={m.item} state={state} update={update} server={p.server} />
+                  <PriceSlider item={m.item} state={state} update={update} server={p.server} />
                 </li>
               ))}
             </ul>
@@ -552,7 +554,7 @@ function PriceInput({ item, state, update, server }: { item: ItemRef; state: Cra
   const t = useT();
   const lang = useLang();
   const cur = findPrice({ prices: state.prices.filter((x) => (x.server ?? "").toLowerCase() === server.toLowerCase()), server }, item);
-  const value = cur?.low ?? cur?.ref ?? null;
+  const value = cur?.ref ?? cur?.low ?? null;
   const [text, setText] = useState<string>();
   const commit = () => {
     if (text === undefined) return;
@@ -560,7 +562,9 @@ function PriceInput({ item, state, update, server }: { item: ItemRef; state: Cra
     setText(undefined);
     if (n === null) { update((s) => ({ ...s, prices: s.prices.filter((x) => !(sameItem(x, item) && (x.server ?? "").toLowerCase() === server.toLowerCase())) })); return; }
     if (!Number.isFinite(n) || n < 0) return;
-    update((s) => savePrice(s, item, { low: n, high: n, ref: null, tradeable: true, note: cur?.suggested ? undefined : cur?.note }, { kind: "global", server }));
+    // the typed price becomes the current one; min / max widen when it lies outside
+    const low = cur?.low ?? null, high = cur?.high ?? null;
+    update((s) => savePrice(s, item, { low: low === null ? n : Math.min(low, n), high: high === null ? n : Math.max(high, n), ref: n, tradeable: true, note: cur?.suggested ? undefined : cur?.note }, { kind: "global", server }));
   };
   return (
     <label className="flex shrink-0 items-center gap-1 text-zinc-500">
@@ -568,6 +572,54 @@ function PriceInput({ item, state, update, server }: { item: ItemRef; state: Cra
         value={text ?? (value === null ? "" : value.toLocaleString(numberLocale(lang)))} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} />
       {cur && <SuggestedTag p={cur} />}
     </label>
+  );
+}
+
+/** Nice slider steps: about 100 per range, rounded to 1, 2 or 5 × 10^n. */
+function sliderStep(span: number) {
+  const raw = span / 100;
+  if (raw <= 1) return 1;
+  const p = 10 ** Math.floor(Math.log10(raw));
+  return [1, 2, 5, 10].map((m) => m * p).find((x) => x >= raw)!;
+}
+
+/**
+ * Market price as a slider between min and max (the value is the price used for the calculation), with
+ * "Min-Max anpassen" to change the range; the slider follows. Without a range: a plain price field.
+ * Changes are saved at once (and shared online).
+ */
+function PriceSlider({ item, state, update, server, wide }: { item: ItemRef & { catalogKey?: string; bound?: boolean | null }; state: CraftState; update: Update; server: string; wide?: boolean }) {
+  const t = useT();
+  const kinah = useKinah();
+  const [editing, setEditing] = useState(false);
+  const cur = findPrice({ prices: state.prices.filter((x) => (x.server ?? "").toLowerCase() === server.toLowerCase()), server }, item);
+  const low = cur?.low ?? null, high = cur?.high ?? null;
+  const value = cur ? cur.ref ?? low ?? high : null;
+  const [drag, setDrag] = useState<number>();
+  const hasRange = low !== null && high !== null && high > low;
+  const commit = () => {
+    if (drag === undefined || !cur) return;
+    const v = drag;
+    setDrag(undefined);
+    if (v === value) return;
+    update((s) => savePrice(s, item, { low, high, ref: v, tradeable: cur.tradeable ?? true, note: cur.suggested ? undefined : cur.note }, { kind: "global", server }));
+  };
+  return (
+    <span className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 ${wide ? "w-full sm:w-auto sm:min-w-[20rem]" : ""}`}>
+      {hasRange ? (
+        <span className="flex min-w-[12rem] flex-1 items-center gap-2">
+          <span className="text-[10px] text-zinc-500">{kinah(low)!.replace(" Kinah", "")}</span>
+          <input type="range" className="min-w-0 flex-1 accent-[#d9c58f]" min={low!} max={high!} step={sliderStep(high! - low!)}
+            value={Math.min(high!, Math.max(low!, drag ?? value ?? low!))} aria-label={`${item.name}: ${t("Preis", "price")}`}
+            onChange={(e) => setDrag(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} onBlur={commit} onTouchEnd={commit} />
+          <span className="text-[10px] text-zinc-500">{kinah(high)!.replace(" Kinah", "")}</span>
+          <b className="shrink-0 text-xs text-[#f4eed7]">{kinah(drag ?? value)}</b>
+        </span>
+      ) : <PriceInput item={item} state={state} update={update} server={server} />}
+      {cur && <SuggestedTag p={cur} />}
+      <button className="text-[11px] text-zinc-400 underline hover:text-zinc-200" onClick={() => setEditing(true)}>{t("Min-Max anpassen", "Adjust min-max")}</button>
+      {editing && <PriceDialog target={{ item, server }} state={state} onClose={() => setEditing(false)} onSave={(fn) => { update(fn); setEditing(false); }} />}
+    </span>
   );
 }
 
@@ -579,7 +631,7 @@ function PriceInput({ item, state, update, server }: { item: ItemRef; state: Cra
 function RouteStep({ p, state, update, onBack }: { p: Project; state: CraftState; update: Update; onBack: () => void }) {
   const t = useT();
   const kinah = useKinah();
-  const opts = routeOptions(p, state, "low");
+  const opts = routeOptions(p, state, "ref");
   const current = routeOf(p, state);
   const [pick, setPick] = useState(current);
   const conf = p.confidence ?? PLAN_CONFIDENCE;
@@ -637,7 +689,7 @@ function RouteStep({ p, state, update, onBack }: { p: Project; state: CraftState
             <li key={itemKey(i)} className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-2 py-1.5 text-xs ring-1 ring-white/5" style={rarityEdge(i.name)}>
               <ItemIcon src={iconOf(i, p.faction)} rarity={rarityOf(i.name)} />
               <span className="min-w-0 flex-1 truncate text-[#efe6cc]/90">{shown(i.name)}</span>
-              <PriceInput item={i} state={state} update={update} server={p.server} />
+              <PriceSlider item={i} state={state} update={update} server={p.server} />
             </li>
           ))}
         </ul>
@@ -959,9 +1011,8 @@ function PricesTab({ state, update, char, onPrice }: { state: CraftState; update
   );
 }
 
-function CatalogRow({ e, state, server, update, onPrice }: { e: CatalogEntry & { area: PriceArea; group: PriceGroup }; state: CraftState; server: string; update: Update; onPrice: (x: PriceTarget) => void }) {
+function CatalogRow({ e, state, server, update }: { e: CatalogEntry & { area: PriceArea; group: PriceGroup }; state: CraftState; server: string; update: Update; onPrice: (x: PriceTarget) => void }) {
   const t = useT();
-  const range = useRange();
   const mine = state.prices.find((x) => (x.server ?? "").toLowerCase() === server.toLowerCase() && findPrice({ prices: [x] }, e));
   const stock = state.inventory[itemKey(e)];
   const icon = SHOW_ITEM_ICONS ? craftIcon(e) : undefined;
@@ -979,15 +1030,9 @@ function CatalogRow({ e, state, server, update, onPrice }: { e: CatalogEntry & {
               onChange={(ev) => { const v = ev.target.value.replace(/\D/g, ""); update((s) => { const inv = { ...s.inventory }; if (v === "") delete inv[itemKey(e)]; else inv[itemKey(e)] = Number(v); return { ...s, inventory: inv }; }); }} />
           </label>
         )}
-        {mine ? <>
-          <span className="text-[#efe6cc]/90">{range(mine.low, mine.high) ?? range(mine.ref, mine.ref)}<SuggestedTag p={mine} /></span>
-          {mine.updated && <span className="text-zinc-500">{new Date(mine.updated).toLocaleDateString()}</span>}
-          <button className={BTN} onClick={() => onPrice({ item: { ...e, catalogKey: e.key }, server })}>{t("Bearbeiten", "Edit")}</button>
-          <button className={BTN} onClick={() => update((s) => ({ ...s, prices: s.prices.filter((x) => x !== mine && (!mine.id || x.id !== mine.id)) }))}>{t("Löschen", "Delete")}</button>
-        </> : <>
-          <span className={MISSING}>{t("Kein Preis hinterlegt", "No price saved")}</span>
-          <button className={BTN} onClick={() => onPrice({ item: { ...e, catalogKey: e.key }, server })}>{t("Preis hinzufügen", "Add price")}</button>
-        </>}
+        <PriceSlider item={{ ...e, catalogKey: e.key }} state={state} update={update} server={server} wide />
+        {mine?.updated && <span className="text-zinc-500">{new Date(mine.updated).toLocaleDateString()}</span>}
+        {mine && <button className={BTN} onClick={() => update((s) => ({ ...s, prices: s.prices.filter((x) => x !== mine && (!mine.id || x.id !== mine.id)) }))}>{t("Löschen", "Delete")}</button>}
       </span>
     </li>
   );
@@ -1068,7 +1113,7 @@ function PriceDialog({ target, state, onClose, onSave }: { target: PriceTarget; 
           <div className="relative grid grid-cols-2 gap-2">
             <label className="grid gap-1"><span className={LABEL}>{t("Mindestpreis (Kinah)", "Minimum price (Kinah)")}</span><input autoFocus className={INPUT} inputMode="numeric" value={low} onChange={(e) => setLow(e.target.value)} placeholder="?" /></label>
             <label className="grid gap-1"><span className={LABEL}>{t("Höchstpreis (Kinah)", "Maximum price (Kinah)")}</span><input className={INPUT} inputMode="numeric" value={high} onChange={(e) => setHigh(e.target.value)} placeholder="?" /></label>
-            <label className="grid gap-1"><span className={LABEL}>{t("Referenz (optional)", "Reference (optional)")}</span><input className={INPUT} inputMode="numeric" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="–" /></label>
+            <label className="grid gap-1"><span className={LABEL}>{t("Aktueller Preis (Regler)", "Current price (slider)")}</span><input className={INPUT} inputMode="numeric" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="–" /></label>
             <label className="grid gap-1"><span className={LABEL}>{t("Handelbar", "Tradeable")}</span>
               <select className={INPUT} value={tradeable === null ? "" : String(tradeable)} onChange={(e) => setTradeable(e.target.value === "" ? null : e.target.value === "true")}>
                 <option value="">{t("unbekannt", "unknown")}</option><option value="true">{t("ja", "yes")}</option><option value="false">{t("nein", "no")}</option>

@@ -1,6 +1,10 @@
-// Cloudflare (Workers with static assets): the single-file app built by `npm run build:pages` into ./out
+// Cloudflare Worker: the single-file app built by `npm run build:pages` into ./out, plus the API in worker/index.js
+// (private data per Cloudflare Access account, shared market prices) on SQLite Durable Objects.
 {
   "name": "aion2-buildmaster",
+  "main": "worker/index.js",
   "compatibility_date": "2026-11-01",
-  "assets": { "directory": "./out" }
+  "assets": { "directory": "./out", "binding": "ASSETS" },
+  "durable_objects": { "bindings": [{ "name": "STORE", "class_name": "Store" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Store"] }]
 }
