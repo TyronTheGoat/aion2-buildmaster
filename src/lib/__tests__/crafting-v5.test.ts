@@ -342,6 +342,9 @@ describe("craft plan (top-down calculator) and routes", () => {
     const opts = routeOptions(p, priced);
     expect(opts.find((o) => o.recommended)?.key).toBe("final");
     expect(opts.find((o) => o.key === "all")!.conf.cost).toBeNull();
+    // Tyron 2026-11-23: final item at 1 bn while the craft routes still miss data → no suggestion, never "buy at 1 bn"
+    const dear = savePrice(data, craftPlan(withRoute(p, data, "final"), data).materials[0].item, { low: 1e9, high: 1e9, ref: 1e9, tradeable: true }, { kind: "global", server: "odar" });
+    expect(routeOptions(p, dear).some((o) => o.recommended)).toBe(false);
   });
 });
 
@@ -450,6 +453,7 @@ describe("mixed buy / craft plan (Tyron, 2026-11-23)", () => {
     const { m, p } = await setup();
     const r = m.mixPlan(p, data);
     expect(r.compareMissing.some((i) => i.name === "Fine Sapphire Gemstone")).toBe(true);
+    expect(r.cost).toBeNull(); // no total while the craft side cannot be priced
     const noFinal = m.mixPlan(p, { ...data, prices: [] });
     expect(noFinal.cost).toBeNull();
   });

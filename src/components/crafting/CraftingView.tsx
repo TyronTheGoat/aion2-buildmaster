@@ -780,6 +780,7 @@ function RouteStep({ p, state, update, onBack }: { p: Project; state: CraftState
           <span><span className="text-[#5fbf8a]">{t("Empfehlung", "Suggestion")}:</span> {label(best)}{best.start ? <> · {t("Einstieg bei", "start at")} {shown(best.start.name)}</> : null}{all.conf.cost !== null && best.conf.cost !== null && <> · {t("spart", "saves")} {kinah(all.conf.cost - best.conf.cost)}</>}</span>
           {pick !== best.key && <button className={BTN} onClick={() => setPick(best.key)}>{t("Empfehlung wählen", "Pick suggestion")}</button>}
         </div>}
+        {!best && opts.some((o) => o.conf.cost !== null) && <div className={`mt-1 ${MISSING}`}>{t("Noch keine Empfehlung: Für die Craft-Wege fehlen Rezeptdaten oder Preise, sie können also nicht verglichen werden. Ein vollständig berechenbarer Weg ist deshalb nicht automatisch der günstigere.", "No suggestion yet: the craft routes lack recipe data or prices, so they cannot be compared. A route that can be fully priced is not automatically the cheaper one.")}</div>}
         {best?.key === "all" && <div className="mt-1 text-[#5fbf8a]">{t("Empfehlung: alles selbst craften ist am günstigsten.", "Suggestion: crafting everything is cheapest.")}</div>}
       </div>
       <ChainChoices p={p} state={state} update={update} />

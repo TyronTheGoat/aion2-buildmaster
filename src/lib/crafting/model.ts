@@ -1389,7 +1389,9 @@ export function routeOptions(p: Project, state: CraftState, s: Scenario = "low")
     return { ...r, conf, mean, unknown: plan.unknown, start, recommended: false };
   });
   const best = opts.filter((o) => o.conf.cost !== null).sort((a, b) => a.conf.cost! - b.conf.cost!)[0];
-  if (best) best.recommended = true;
+  // only a real comparison is a recommendation: every other route is known, or already costs more at its known minimum
+  // (a route with missing recipe data or prices is never counted as cheap; Tyron 2026-11-23, 1 bn final staff "recommended")
+  if (best && opts.every((o) => o === best || o.conf.cost !== null || o.conf.known >= best.conf.cost!)) best.recommended = true;
   return opts;
 }
 
@@ -1513,7 +1515,9 @@ export function mixPlan(p: Project, state0: CraftState, s: Scenario = "ref") {
   const all = [...lines.values()].filter((l) => l.stock + l.craft + l.buy > EPS);
   const stages = all.filter((l) => l.crafted).sort((a, b) => rank.get(itemKey(a.item))! - rank.get(itemKey(b.item))!);
   const materials = all.filter((l) => !l.crafted);
-  return { stages, materials, cost: blocked || !root ? null : total, known: total, missingPrices, compareMissing: compareMissing.filter((i) => !missingPrices.some((x) => sameItem(x, i))), unknown: [...unknown] };
+  const cmp = compareMissing.filter((i) => !missingPrices.some((x) => sameItem(x, i)));
+  // while a price for the craft side is missing, buying only looks cheaper: no total then
+  return { stages, materials, cost: blocked || !root || cmp.length ? null : total, known: total, missingPrices, compareMissing: cmp, unknown: [...unknown] };
 }
 
 /** The craft to do now: the lowest stage of the plan that still misses items (null when nothing is left or the path is unknown). */
