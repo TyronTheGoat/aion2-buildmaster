@@ -26,7 +26,8 @@ const attempt = (projectId: string, r: Recipe, outcome: AttemptEvent["outcome"])
 describe("V4/V5 + V7 import", () => {
   it("every file is recognised and imports without errors", () => {
     expect(log.map((l) => l.kind)).toEqual(["recipes", "materials", "transfers", "keymap", "chain", "gaps", "catalog",
-      "recipes", "keymap", "materials", "transfers", "chain", "coverage", "coverage", "gaps", "sources", "catalog", "suggestions"]);
+      "recipes", "keymap", "materials", "transfers", "chain", "coverage", "coverage", "gaps", "sources", "catalog", "suggestions",
+      "recipes", "materials", "transfers", "chain"]); // + Tyron's staff / spellbook screenshots
     expect(log.every((l) => l.errors === 0)).toBe(true);
   });
   it("409 V7 rows give 391 recipes: the 18 placeholder spellbook keys merge into their real recipe", () => {
@@ -36,11 +37,14 @@ describe("V4/V5 + V7 import", () => {
     const { rows } = parseCsv(BUILTIN_FILES.find(([f]) => f === "v7/01_EU_GLOBAL_REZEPTE_409.csv")![1]);
     expect(rows).toHaveLength(409);
   });
-  it("ingredient coverage: 18 checked complete, the rest unconfirmed or missing — never shown as complete", () => {
+  it("ingredient coverage: 18 checked complete, the rest unconfirmed or missing — never shown as complete", async () => {
     const by = (s: string) => data.recipes.filter((r) => r.ingredientsStatus === s).length;
     expect(by("complete")).toBe(18);
-    expect(data.recipes.filter((r) => r.ingredients.length).length).toBe(74);
-    expect(by("none")).toBe(data.recipes.filter((r) => !r.ingredients.length).length);
+    expect(data.recipes.filter((r) => r.ingredients.length).length).toBe(91); // 74 + 17 staff / spellbook recipes from screenshots
+    // the screenshot recipes count as complete only through applyConfirmations (as the app loads them)
+    const shots = (await import("../crafting/model")).SCREENSHOT_CONFIRMED.filter((k) => R(k).ingredientsStatus === "none").length;
+    expect(shots).toBe(17);
+    expect(by("none")).toBe(data.recipes.filter((r) => !r.ingredients.length).length + shots);
     const longsword = R("recipe:111013001");
     expect(longsword.ingredientsStatus).toBe("complete");
     expect(longsword.ingredients.filter((i) => i.kind === "material")).toHaveLength(6);
@@ -50,7 +54,7 @@ describe("V4/V5 + V7 import", () => {
       const keys = r.ingredients.map((i) => `${i.kind}:${i.itemId ?? i.name}`);
       expect(new Set(keys).size).toBe(keys.length);
     }
-    expect(data.recipes.flatMap((r) => r.ingredients).filter((i) => i.kind === "transfer")).toHaveLength(10);
+    expect(data.recipes.flatMap((r) => r.ingredients).filter((i) => i.kind === "transfer")).toHaveLength(20); // + 10 from the staff / spellbook screenshots
   });
   it("importing the same files again does not double anything", () => {
     let s = data;
@@ -448,5 +452,32 @@ describe("mixed buy / craft plan (Tyron, 2026-11-23)", () => {
     expect(r.compareMissing.some((i) => i.name === "Fine Sapphire Gemstone")).toBe(true);
     const noFinal = m.mixPlan(p, { ...data, prices: [] });
     expect(noFinal.cost).toBeNull();
+  });
+});
+
+
+describe("staff and spellbook from Tyron's screenshots (2026-11-23)", () => {
+  const S = () => import("../crafting/model").then((m) => ({ m, s: m.applyConfirmations(data) }));
+  it("the screenshot files import without errors", () => {
+    expect(log.filter((l) => l.file.startsWith("screens/")).map((l) => [l.kind, l.errors])).toEqual([["recipes", 0], ["materials", 0], ["transfers", 0], ["chain", 0]]);
+  });
+  it.each(["staff", "spellbook"])("Asmodian %s: full line to 102 like the orb, all ingredients confirmed, Sterndrachenkönig choice", async (slot) => {
+    const { m, s } = await S();
+    const top = m.topOf(s, "Asmodian", slot)!;
+    const p = { ...proj(top.recipeKey, { faction: "Asmodian", gearSlot: slot }), starSafe: true };
+    const plan = m.craftPlan(p, s);
+    expect(plan.unknown).toEqual([]);
+    expect(plan.lines).toHaveLength(9);
+    expect(plan.lines.every((l) => l.recipe.ingredientsStatus === "complete")).toBe(true);
+    expect(plan.lines[2].need).toBe(3); // three Lv44 bases, as for the orb
+    expect(m.hasStarStage(p, s)).toBe(true);
+    const orb = m.craftPlan({ ...proj(m.topOf(s, "Asmodian", "orb")!.recipeKey, { faction: "Asmodian" }), starSafe: true }, s);
+    expect(plan.lines.map((l) => l.attempts)).toEqual(orb.lines.map((l) => l.attempts));
+  });
+  it("only the gem / wood material changes: staff uses Asvata wood, spellbook ruby", async () => {
+    const { m, s } = await S();
+    const mats = (slot: string) => m.craftPlan({ ...proj(m.topOf(s, "Asmodian", slot)!.recipeKey, { faction: "Asmodian", gearSlot: slot }), starSafe: true }, s).materials.map((x) => x.item.name);
+    expect(mats("staff")).toEqual(expect.arrayContaining(["Asvata Wood", "Feines Asvata-Holz", "Reines Asvata-Holz", "Radiant Asvata Log"]));
+    expect(mats("spellbook")).toEqual(expect.arrayContaining(["Magic Crystal", "Feiner Rubin-Edelstein", "Reiner Rubin-Edelstein", "Radiant Ruby Gemstone"]));
   });
 });

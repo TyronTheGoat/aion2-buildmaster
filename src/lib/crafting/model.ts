@@ -1289,7 +1289,12 @@ const takeHeld = (h: Holdings, i: ItemRef, n: number) => { const t = Math.min(h.
  * every material and amount matched the data, so these count as complete.
  */
 export const SCREENSHOT_CONFIRMED = ["recipe:321096001", "recipe:321095001", "recipe:321094001", "recipe:321093001", "recipe:321093011",
-  "recipe:321093012", "recipe:321093013", "recipe:321093014", "recipe:321093015"];
+  "recipe:321093012", "recipe:321093013", "recipe:321093014", "recipe:321093015",
+  // staff and spellbook (Asmodian), "Rezepte.zip" of 2026-11-23, data in data/crafting/screens
+  "recipe:221106001", "recipe:221105001", "recipe:221104001", "recipe:221103001", "recipe:261103002", "recipe:221103011", "recipe:221103012",
+  "recipe:221103013", "recipe:221103014", "recipe:221103015",
+  "recipe:321056001", "recipe:321055001", "recipe:321054001", "recipe:321053001", "recipe:321053011", "recipe:321053012", "recipe:321053013",
+  "recipe:321053014", "recipe:321053015"];
 export function applyConfirmations(state: CraftState): CraftState {
   const set = new Set(SCREENSHOT_CONFIRMED);
   return { ...state, recipes: state.recipes.map((r) => (set.has(r.recipeKey) && r.ingredients.length ? { ...r, ingredientsStatus: "complete" as const, liveUnconfirmed: false } : r)) };

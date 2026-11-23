@@ -737,6 +737,10 @@ function MixCard({ p, mix, bestMean }: { p: Project; mix: ReturnType<typeof mixP
           })}
         </ul>}
       </div>}
+      <div className="flex flex-wrap items-center gap-2">
+        <button className={`${BTN} cursor-not-allowed opacity-50`} disabled title={t("Kommt später: der Mix als eigener Weg", "Coming later: the mix as its own route")}>{t("Mix als Weg übernehmen", "Use mix as route")}</button>
+        <span className="text-[11px] text-zinc-500">{t("kommt später", "coming later")}</span>
+      </div>
       {mix.unknown.length > 0 && <div className={MISSING}>{t("Ohne Rezeptdaten nur Kaufen möglich", "Without recipe data only buying is possible")}: {mix.unknown.join(" · ")}</div>}
     </section>
   );
