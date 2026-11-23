@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { Grade } from "@/lib/types";
-import { assetUrl } from "./holo/assets";
+import { assetUrl } from "./assets";
 import { GRADE_RING } from "./ui";
 
 /**
