@@ -156,12 +156,12 @@ function AddCharacterSheet({ open, onClose, onAdd }: { open: boolean; onClose: (
   return (
     <Sheet open={open} onClose={onClose} title={<h2 className="text-lg font-semibold">{t("Charakter hinzufügen", "Add character")}</h2>}>
       <div className="space-y-3">
+        {online && <KiskBookmarklet />}
         <label className="block text-sm text-zinc-400">{t("kisk.app-Link", "kisk.app link")}
           <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://kisk.app/c/eu/odar/Name" className={`${input} mt-1`} autoCapitalize="none" inputMode="url" />
         </label>
         {link && !parsed && <p className="text-xs text-red-300">{t("Das sieht nicht wie ein kisk.app-Charakterlink aus.", "That does not look like a kisk.app character link.")}</p>}
         {parsed && <p className="text-xs text-emerald-300">{parsed.name} · {parsed.server} · {parsed.region.toUpperCase()}</p>}
-        {online && <KiskBookmarklet />}
         <details className="rounded-lg border border-white/10 p-3 text-sm" open={isOffline() && !online}>
           <summary className="cursor-pointer text-zinc-300">{t("Seiteninhalt einfügen", "Paste page content")} {isOffline() ? t("(nötig in der Offline-Version)", "(required in the offline version)") : "(optional)"}</summary>
           <p className="mt-2 text-xs text-zinc-500">{t("Öffne die Gear-Seite auf kisk.app, markiere alles, kopiere es und füge es hier ein.", "Open the gear page on kisk.app, select everything, copy it and paste it here.")}</p>
@@ -173,30 +173,73 @@ function AddCharacterSheet({ open, onClose, onAdd }: { open: boolean; onClose: (
   );
 }
 
-/** The "Zu BuildMaster senden" bookmark: drag it to the bookmarks bar, then click it on a kisk.app character page. */
+type Device = "iphone" | "android" | "pc";
+const deviceOf = (): Device => typeof navigator === "undefined" ? "pc"
+  : /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ? "iphone"
+    : /Android/.test(navigator.userAgent) ? "android" : "pc";
+
+/**
+ * The "Zu BuildMaster senden" bookmark with a step-by-step guide per device (PC: drag; iPhone / Android: copy the code
+ * into a bookmark, then call it from the address bar on the kisk page).
+ */
 function KiskBookmarklet() {
   const t = useT();
   const ref = useRef<HTMLAnchorElement>(null);
   const code = typeof location !== "undefined" ? bookmarklet(location.origin) : "";
   const [copied, setCopied] = useState(false);
+  const [device, setDevice] = useState<Device>(deviceOf);
   // React blocks javascript: links in JSX; the bookmark needs one, so it is set on the element directly
-  useEffect(() => { ref.current?.setAttribute("href", code); }, [code]);
+  useEffect(() => { ref.current?.setAttribute("href", code); }, [code, device]);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(code); setCopied(true); }
+    catch { setCopied(false); alert(t("Kopieren ging nicht. Halte im Feld darunter gedrückt und wähle „Alles auswählen“ und „Kopieren“.", "Copy failed. Long-press the field below and choose “Select all” and “Copy”.")); }
+  };
+  const copyBtn = (
+    <button className="w-full rounded-lg bg-amber-400 px-3 py-3 text-sm font-semibold text-black" onClick={copy}>
+      {copied ? t("✓ Code kopiert", "✓ Code copied") : t("Code kopieren", "Copy code")}
+    </button>
+  );
+  const steps: Record<Device, string[]> = {
+    iphone: [
+      t("Tippe auf den gelben Knopf „Code kopieren“.", "Tap the yellow “Copy code” button."),
+      t("Tippe in Safari auf das Teilen-Symbol (Quadrat mit Pfeil) → „Lesezeichen hinzufügen“. Name: BuildMaster → „Sichern“.", "In Safari tap the share icon (square with arrow) → “Add Bookmark”. Name: BuildMaster → “Save”."),
+      t("Öffne die Lesezeichen (Buch-Symbol) → „Bearbeiten“ → tippe auf „BuildMaster“. Lösche die Adresse, füge den kopierten Code ein (gedrückt halten → „Einsetzen“) → „Fertig“.", "Open bookmarks (book icon) → “Edit” → tap “BuildMaster”. Delete the address, paste the copied code (long-press → “Paste”) → “Done”."),
+      t("Öffne auf kisk.app die Gear-Seite deines Charakters. Tippe oben in die Adressleiste, schreib „BuildMaster“ und tippe in der Liste auf das Lesezeichen (Buch-Symbol).", "Open your character's gear page on kisk.app. Tap the address bar, type “BuildMaster” and tap the bookmark (book icon) in the list."),
+      t("BuildMaster öffnet sich mit deinem Charakter. Zum Aktualisieren später einfach Schritt 4 wiederholen.", "BuildMaster opens with your character. To update later, just repeat step 4."),
+    ],
+    android: [
+      t("Tippe auf den gelben Knopf „Code kopieren“.", "Tap the yellow “Copy code” button."),
+      t("Chrome: ⋮ → Stern-Symbol (Lesezeichen). Dann unten „Bearbeiten“: Name BuildMaster, bei URL alles löschen und den Code einfügen → zurück.", "Chrome: ⋮ → star icon (bookmark). Then “Edit” at the bottom: name BuildMaster, delete the URL and paste the code → back."),
+      t("Öffne auf kisk.app die Gear-Seite deines Charakters. Tippe in die Adressleiste, schreib „BuildMaster“ und tippe auf das Lesezeichen in der Liste.", "Open your character's gear page on kisk.app. Tap the address bar, type “BuildMaster” and tap the bookmark in the list."),
+      t("BuildMaster öffnet sich mit deinem Charakter. Zum Aktualisieren später einfach Schritt 3 wiederholen.", "BuildMaster opens with your character. To update later, just repeat step 3."),
+    ],
+    pc: [
+      t("Zieh den gelben Knopf unten in deine Lesezeichenleiste (einmalig; Leiste einblenden mit Strg+Umschalt+B).", "Drag the yellow button below to your bookmarks bar (once; show the bar with Ctrl+Shift+B)."),
+      t("Öffne auf kisk.app die Gear-Seite deines Charakters.", "Open your character's gear page on kisk.app."),
+      t("Klick dort auf das Lesezeichen. BuildMaster öffnet sich mit deinem Charakter. Nochmal klicken aktualisiert ihn.", "Click the bookmark there. BuildMaster opens with your character. Clicking again updates it."),
+    ],
+  };
   return (
-    <div className="space-y-2 rounded-lg border border-[#d9c58f]/25 bg-white/[0.02] p-3 text-sm">
-      <div className="font-semibold text-[#f4eed7]">{t("Am einfachsten: Lesezeichen „Zu BuildMaster senden“", "Easiest: the “Send to BuildMaster” bookmark")}</div>
-      <ol className="list-decimal space-y-1 pl-5 text-xs text-zinc-400">
-        <li>{t("Zieh den Knopf unten in deine Lesezeichenleiste (einmalig).", "Drag the button below to your bookmarks bar (once).")}</li>
-        <li>{t("Öffne auf kisk.app die Gear-Seite deines Charakters.", "Open your character's gear page on kisk.app.")}</li>
-        <li>{t("Klick dort auf das Lesezeichen. BuildMaster öffnet sich und übernimmt den Charakter. Nochmal klicken aktualisiert ihn.", "Click the bookmark there. BuildMaster opens and takes over the character. Clicking again updates it.")}</li>
-      </ol>
-      <div className="flex flex-wrap items-center gap-2">
-        <a ref={ref} onClick={(e) => { e.preventDefault(); alert(t("Nicht hier klicken: zieh den Knopf in die Lesezeichenleiste und klick ihn auf der kisk-Seite.", "Do not click it here: drag it to the bookmarks bar and click it on the kisk page.")); }}
-          className="cursor-grab rounded-lg bg-amber-400 px-3 py-2 text-xs font-semibold text-black">⇪ Zu BuildMaster senden</a>
-        <button className="rounded-lg border border-white/15 px-3 py-2 text-xs text-zinc-300" onClick={async () => { await navigator.clipboard.writeText(code); setCopied(true); }}>
-          {copied ? t("Kopiert", "Copied") : t("Code kopieren (Handy)", "Copy code (phone)")}
-        </button>
+    <div className="space-y-3 rounded-lg border border-[#d9c58f]/25 bg-white/[0.02] p-3 text-sm">
+      <div className="font-semibold text-[#f4eed7]">{t("Charakter von kisk holen: Lesezeichen „BuildMaster“", "Get a character from kisk: the “BuildMaster” bookmark")}</div>
+      <p className="text-xs text-zinc-400">{t("Einmal einrichten, danach reicht auf kisk ein Tipp. BuildMaster fragt kisk.app nie selbst ab, es liest nur die Seite, die du geöffnet hast.", "Set up once, afterwards one tap on kisk is enough. BuildMaster never queries kisk.app itself, it only reads the page you opened.")}</p>
+      <div className="flex gap-1 text-xs" role="tablist">
+        {(["iphone", "android", "pc"] as const).map((d) => (
+          <button key={d} role="tab" aria-selected={device === d} onClick={() => setDevice(d)}
+            className={`flex-1 rounded-lg px-2 py-1.5 ring-1 ${device === d ? "bg-white/10 text-[#f4eed7] ring-[#d9c58f]/50" : "text-zinc-400 ring-white/10"}`}>
+            {d === "iphone" ? "iPhone" : d === "android" ? "Android" : "PC"}
+          </button>
+        ))}
       </div>
-      <p className="text-[11px] text-zinc-500">{t("Handy: neues Lesezeichen anlegen und als Adresse den kopierten Code einfügen. BuildMaster fragt kisk.app nie selbst ab, es liest nur die Seite, die du geöffnet hast.", "Phone: create a bookmark and paste the copied code as its address. BuildMaster never queries kisk.app itself, it only reads the page you opened.")}</p>
+      {device !== "pc" && copyBtn}
+      <ol className="list-decimal space-y-1.5 pl-5 text-xs text-zinc-300">{steps[device].map((x) => <li key={x}>{x}</li>)}</ol>
+      {device === "pc" ? (
+        <a ref={ref} onClick={(e) => { e.preventDefault(); alert(t("Nicht hier klicken: zieh den Knopf in die Lesezeichenleiste und klick ihn auf der kisk-Seite.", "Do not click it here: drag it to the bookmarks bar and click it on the kisk page.")); }}
+          className="inline-block cursor-grab rounded-lg bg-amber-400 px-3 py-2 text-xs font-semibold text-black">⇪ BuildMaster</a>
+      ) : <>
+        <textarea readOnly value={code} rows={2} onFocus={(e) => e.currentTarget.select()} aria-label={t("Lesezeichen-Code", "Bookmark code")}
+          className="w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1 font-mono text-[10px] text-zinc-500" />
+      </>}
     </div>
   );
 }

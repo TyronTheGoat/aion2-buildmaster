@@ -16,11 +16,13 @@ export function bookmarklet(origin: string): string {
   const o = JSON.stringify(origin);
   const code = `(async()=>{if(!/kisk\\.app$/.test(location.hostname)||!/\\/c\\//.test(location.pathname)){alert('Bitte auf einer kisk.app-Charakterseite ausführen.');return}`
     + `const d=document.documentElement.cloneNode(true);d.querySelectorAll('script,style,noscript,svg,template,link').forEach(e=>e.remove());`
+    // only what the parser reads stays: picture sources and meta contents (keeps the link short on phones)
+    + `d.querySelectorAll('*').forEach(e=>{for(const a of [...e.attributes])if(!/^(src|content|property)$/.test(a.name))e.removeAttribute(a.name)});`
     + `const b=new Uint8Array(await new Response(new Blob([d.outerHTML]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());`
     + `let t='';for(let i=0;i<b.length;i+=32768)t+=String.fromCharCode.apply(null,b.subarray(i,i+32768));`
     + `const z=btoa(t).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,''),u=location.href,o=${o};`
-    + `const w=window.open(o+'/${PREFIX}?u='+encodeURIComponent(u)+'&z='+z,'_blank');`
-    + `addEventListener('message',e=>{if(e.origin===o&&e.data==='bm-kisk-ready'&&w)w.postMessage({type:'bm-kisk',url:u,z},o)})})()`;
+    // same tab: a new window after the await would be blocked as a pop-up (iPhone Safari)
+    + `location.href=o+'/${PREFIX}?u='+encodeURIComponent(u)+'&z='+z})()`;
   return `javascript:${encodeURIComponent(code)}`;
 }
 
