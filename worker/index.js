@@ -56,18 +56,28 @@ async function verifyAccessJwt(token, env) {
   const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, dec(s), new TextEncoder().encode(`${h}.${p}`));
   const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
   if (!ok || !aud.includes(env.ACCESS_AUD) || payload.exp * 1000 < Date.now()) return null;
-  return payload.email ?? null;
+  return payload;
 }
 
-/** The logged-in e-mail. With ACCESS_TEAM_DOMAIN and ACCESS_AUD set, the Access token is checked as well. */
+const b64json = (part) => JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(part.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0))));
+
+/**
+ * Who is calling: a person (the e-mail Cloudflare Access logged in) or a service token (Access "Service Auth" policy, no e-mail).
+ * With ACCESS_TEAM_DOMAIN and ACCESS_AUD set, the Access token is checked as well.
+ */
 async function identity(req, env) {
-  const email = req.headers.get("cf-access-authenticated-user-email");
+  const token = req.headers.get("cf-access-jwt-assertion");
+  let payload = null;
   if (env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD) {
-    const token = req.headers.get("cf-access-jwt-assertion");
-    const checked = token ? await verifyAccessJwt(token, env).catch(() => null) : null;
-    return checked ? checked.toLowerCase() : null;
+    payload = token ? await verifyAccessJwt(token, env).catch(() => null) : null;
+    if (!payload) return null;
+  } else if (token) {
+    try { payload = b64json(token.split(".")[1]); } catch { payload = null; }
   }
-  return email ? email.toLowerCase() : null;
+  const email = payload?.email ?? req.headers.get("cf-access-authenticated-user-email");
+  if (email) return { id: email.toLowerCase(), service: false };
+  if (payload?.common_name) return { id: `service:${payload.common_name}`, service: true };
+  return null;
 }
 
 /* ---------------------------------------------------------------- API ---------------------------------------------------------------- */
@@ -79,15 +89,18 @@ function validPrice(p) {
 }
 
 async function api(req, env, url) {
-  const email = await identity(req, env);
-  if (!email) return json({ error: "nicht angemeldet" }, 401);
+  const who = await identity(req, env);
+  if (!who) return json({ error: "nicht angemeldet" }, 401);
+  const email = who.id;
+  // a service token may only maintain shared data (icon pack, market prices), never an account's characters or projects
+  if (who.service && !/^\/api\/(me|icons?|prices)(\/|$)/.test(url.pathname)) return json({ error: "nur für Personen-Logins" }, 403);
   // writes need our own header: a plain cross-site form or fetch cannot send it without a CORS preflight we never allow
   if (req.method !== "GET" && req.headers.get("x-bm") !== "1") return json({ error: "forbidden" }, 403);
   const path = url.pathname.replace(/\/+$/, "");
   const user = () => env.STORE.get(env.STORE.idFromName(`user:${email}`));
   const prices = () => env.STORE.get(env.STORE.idFromName("prices"));
 
-  if (path === "/api/me") return json({ email });
+  if (path === "/api/me") return json({ email: who.service ? null : email, service: who.service || undefined });
 
   // original item icons, uploaded once as an icon pack (kept out of the repo); shared by all accounts
   const icons = () => env.STORE.get(env.STORE.idFromName("icons"));
