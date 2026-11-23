@@ -3,12 +3,12 @@ import type { SlotKind } from "./types";
 import { SLOT_LABEL_DE } from "./knowledge/slots";
 
 /**
- * UI language. The page always starts in English; the small switch in the header changes it for the
- * current visit (not stored, so a reload is English again).
+ * UI language. The page always starts in German; the small switch in the header changes it for the
+ * current visit (not stored, so a reload is German again).
  */
 export type Lang = "en" | "de";
 
-let current: Lang = "en";
+let current: Lang = "de";
 const listeners = new Set<() => void>();
 
 export function setLang(l: Lang) {
@@ -24,7 +24,7 @@ export function useLang(): Lang {
   return useSyncExternalStore(
     (cb) => { listeners.add(cb); return () => { listeners.delete(cb); }; },
     () => current,
-    () => "en" as Lang,
+    () => "de" as Lang,
   );
 }
 
