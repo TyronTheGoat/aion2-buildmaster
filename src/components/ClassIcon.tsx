@@ -11,7 +11,7 @@ import { GRADE_RING } from "./ui";
  */
 const SLUG: Record<string, string> = {
   gladiator: "gladiator", templar: "templar", assassin: "assassin", ranger: "ranger", sorcerer: "sorcerer",
-  spiritmaster: "spiritmaster", cleric: "cleric", chanter: "chanter", fighter: "fighter",
+  spiritmaster: "spiritmaster", elementalist: "spiritmaster", cleric: "cleric", chanter: "chanter", fighter: "fighter",
   // German client names
   templer: "templar", assassine: "assassin", jäger: "ranger", zauberer: "sorcerer",
   beschwörer: "spiritmaster", kleriker: "cleric", kantor: "chanter",
