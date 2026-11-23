@@ -11,9 +11,9 @@ import { uploadIconPack, useCloud } from "../cloud";
 import { Card, CardArt, Filler, SHOW_ITEM_ICONS } from "../deck/Card";
 import {
   activeAttempts, attemptCost, attemptEffects, buildCatalog, canCraft, craftSlotOf, craftsItself, ctxOf, findPrice, importFile,
-  GEAR_SLOTS, PLAN_CONFIDENCE, craftPlan, currentCraft, itemKey, ladderItems, levelOf, normName, ownedCount, planCost, prioritySlot, comboAssumed, hasStarStage, missingRoutePrices, routeItems, routeOf, routeOptions, sameItem, topOf, weaponTypeOf, withOwnedCount, withRoute, producerOf, progress, projectTarget, savePrice, sortProjects,
+  GEAR_SLOTS, PLAN_CONFIDENCE, craftPlan, currentCraft, itemKey, ladderItems, levelOf, normName, ownedCount, planCost, prioritySlot, comboAssumed, hasStarStage, missingRoutePrices, mixPlan, routeItems, routeOf, routeOptions, sameItem, topOf, weaponTypeOf, withOwnedCount, withRoute, producerOf, progress, projectTarget, savePrice, sortProjects,
   spent, stageLevel, uid, validatePrice,
-  type CatalogEntry, type CraftSlot, type CraftState, type ImportError, type ItemRef, type NextStep, type PlanLine, type Outcome, type Project, type Scenario,
+  type CatalogEntry, type CraftSlot, type CraftState, type MixLine, type ImportError, type ItemRef, type NextStep, type PlanLine, type Outcome, type Project, type Scenario,
 } from "@/lib/crafting/model";
 
 const BTN = "rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-xs text-[#efe6cc] hover:border-[#d9c58f]/45 disabled:opacity-40";
@@ -681,6 +681,67 @@ function ChainChoices({ p, state, update }: { p: Project; state: CraftState; upd
  * The default is to craft everything from the lowest stage; the cheapest known route is only suggested.
  * Prices the comparison lacks are listed right here to fill in.
  */
+/** Whole pieces for a mixed-plan line: from stock, crafted, bought (the plan works with mean values). */
+function mixCounts(l: MixLine) {
+  const total = Math.ceil(l.stock + l.craft + l.buy - 1e-6);
+  const craft = Math.min(Math.round(l.craft), total);
+  if (l.buy < 1e-6) return { total, stock: total - craft, craft, buy: 0 };
+  const stock = Math.min(Math.round(l.stock), total - craft);
+  return { total, stock, craft, buy: Math.max(1, total - stock - craft) };
+}
+
+/** Mixed suggestion per stage: craft what pays off (stock is free), buy the rest. */
+function MixCard({ p, mix, bestMean }: { p: Project; mix: ReturnType<typeof mixPlan>; bestMean: number | null }) {
+  const t = useT();
+  const kinah = useKinah();
+  const [open, setOpen] = useState(false);
+  if (!mix.stages.length && !mix.materials.length) return null;
+  const buyMats = mix.materials.filter((l) => mixCounts(l).buy > 0);
+  const fromStock = mix.materials.filter((l) => mixCounts(l).stock > 0);
+  return (
+    <section className="space-y-2 rounded-xl bg-white/[0.03] p-3 text-xs ring-1 ring-[#5fbf8a]/30">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="text-sm font-semibold text-[#f4eed7]">{t("Günstigster Mix pro Stufe", "Cheapest mix per stage")}</span>
+        <span className="text-zinc-400">{mix.cost !== null ? <>Ø <b className="text-[#f4eed7]">{kinah(mix.cost)}</b>{bestMean !== null && bestMean - mix.cost >= 1 && <> · <span className="text-[#5fbf8a]">{t("spart", "saves")} {kinah(bestMean - mix.cost)}</span> {t("ggü. bestem Weg", "vs. best route")}</>}</>
+          : <span className={MISSING}>{t("Preise fehlen, siehe unten", "prices missing, see below")}</span>}</span>
+      </div>
+      <p className="text-zinc-500">{t("Pro Stufe: craften, solange es billiger als Kaufen ist, den Rest kaufen. Was im Lager liegt, zählt als kostenlos und wird zuerst verbraucht. Rechnet mit Marktpreisen (Regler) und Ø-Versuchen.", "Per stage: craft while it is cheaper than buying, buy the rest. Stock counts as free and is used first. Uses market prices (slider) and mean attempts.")}</p>
+      <ul className="space-y-1">
+        {mix.stages.map((l) => {
+          const c = mixCounts(l);
+          return (
+            <li key={itemKey(l.item)} className="flex items-center gap-2 rounded-lg bg-white/[0.02] px-2 py-1 ring-1 ring-white/5">
+              <ItemIcon src={iconOf(l.item, p.faction)} />
+              <span className="min-w-0 flex-1 truncate text-[#efe6cc]/90">{shown(l.item.name)}</span>
+              <span className="flex flex-wrap justify-end gap-x-2 text-right">
+                {c.stock > 0 && <span className="text-zinc-400">{c.stock}× {t("aus Lager", "from stock")}</span>}
+                {c.craft > 0 && <span className="text-[#5fbf8a]">{c.craft}× {t("craften", "craft")} <span className="text-zinc-500">(Ø {t(l.attempts.toFixed(1).replace(".", ","), l.attempts.toFixed(1))} {t("Versuche", "attempts")})</span></span>}
+                {c.buy > 0 && <span className="text-[#e6b450]">{c.buy}× {t("kaufen", "buy")}{l.price !== null && <span className="text-zinc-500"> à {kinah(l.price)}</span>}</span>}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {(buyMats.length > 0 || fromStock.length > 0) && <div>
+        <button className="text-zinc-400 underline hover:text-zinc-200" onClick={() => setOpen(!open)}>{open ? "▾" : "▸"} {t("Materialien", "Materials")}: {fromStock.length} {t("aus Lager", "from stock")}, {buyMats.length} {t("zu kaufen", "to buy")}</button>
+        {open && <ul className="mt-1 grid gap-1 sm:grid-cols-2">
+          {mix.materials.map((l) => {
+            const c = mixCounts(l);
+            return (
+              <li key={itemKey(l.item)} className="flex items-center gap-2 text-zinc-300">
+                <ItemIcon src={iconOf(l.item, p.faction)} rarity={rarityOf(l.item.name)} />
+                <span className="min-w-0 flex-1 truncate">{shown(l.item.name)}</span>
+                <span className="text-right">{c.stock > 0 && <span className="text-zinc-400">{c.stock} {t("Lager", "stock")}</span>}{c.stock > 0 && c.buy > 0 && " · "}{c.buy > 0 && <span className="text-[#e6b450]">{c.buy} {t("kaufen", "buy")}</span>}</span>
+              </li>
+            );
+          })}
+        </ul>}
+      </div>}
+      {mix.unknown.length > 0 && <div className={MISSING}>{t("Ohne Rezeptdaten nur Kaufen möglich", "Without recipe data only buying is possible")}: {mix.unknown.join(" · ")}</div>}
+    </section>
+  );
+}
+
 function RouteStep({ p, state, update, onBack }: { p: Project; state: CraftState; update: Update; onBack: () => void }) {
   const t = useT();
   const kinah = useKinah();
@@ -690,7 +751,10 @@ function RouteStep({ p, state, update, onBack }: { p: Project; state: CraftState
   const conf = p.confidence ?? PLAN_CONFIDENCE;
   const best = opts.find((o) => o.recommended);
   const all = opts.find((o) => o.key === "all")!;
-  const missing = missingRoutePrices(opts);
+  const mix = mixPlan(p, state, "ref");
+  const missing = [...missingRoutePrices(opts)];
+  for (const i of [...mix.missingPrices, ...mix.compareMissing]) if (!missing.some((x) => sameItem(x, i))) missing.push(i);
+  const bestMean = opts.filter((o) => o.mean.cost !== null).sort((a, b) => a.mean.cost! - b.mean.cost!)[0];
   const label = (o: (typeof opts)[number]) => o.key === "all" ? t("Alles selbst craften (ab der untersten Stufe)", "Craft everything myself (from the lowest stage)")
     : o.key === "final" ? `${t("Endwaffe direkt kaufen", "Buy the final item")}: ${shown(o.item?.name ?? "?")}`
       : `${shown(o.item!.name)} ${t("kaufen, ab da selbst craften", "buy, craft from there")}`;
@@ -715,6 +779,7 @@ function RouteStep({ p, state, update, onBack }: { p: Project; state: CraftState
         {best?.key === "all" && <div className="mt-1 text-[#5fbf8a]">{t("Empfehlung: alles selbst craften ist am günstigsten.", "Suggestion: crafting everything is cheapest.")}</div>}
       </div>
       <ChainChoices p={p} state={state} update={update} />
+      <MixCard p={p} mix={mix} bestMean={bestMean?.mean.cost ?? null} />
       <label className="flex items-center gap-2 text-xs text-zinc-400">{t("Sicherheit pro Stufe", "Confidence per stage")}
         <select className={`${INPUT} text-xs`} value={conf} onChange={(e) => update((s) => ({ ...s, projects: s.projects.map((x) => (x.id === p.id ? { ...x, confidence: Number(e.target.value) } : x)) }))}>
           {[0.75, 0.8, 0.9].map((c) => <option key={c} value={c}>{Math.round(c * 100)} %</option>)}

@@ -414,3 +414,39 @@ describe("Tyron's chain rules (2026-11-23)", () => {
     expect(dark.ingredients.map((i) => `${i.qty}x ${i.name}`)).toContain("29x Enhanced Hard Balaur Scale");
   });
 });
+
+describe("mixed buy / craft plan (Tyron, 2026-11-23)", () => {
+  const setup = async () => {
+    const m = await import("../crafting/model");
+    const top = m.topOf(data, "Asmodian", "orb")!;
+    const p = { ...proj(top.recipeKey, { faction: "Asmodian" }), starSafe: true, comboSuccess: 0.8 };
+    const priced = m.savePrice(data, { name: "Fine Sapphire Gemstone", itemId: "610660028" }, { low: 300000, high: 300000, ref: 300000, tradeable: true }, { kind: "global", server: "odar" });
+    const low = ["recipe:321096001", "recipe:321095001", "recipe:321094001"].flatMap((k) => data.recipes.find((r) => r.recipeKey === k)!.ingredients);
+    const inventory = { ...priced.inventory };
+    for (const i of low) if (!/Orb/.test(i.name)) inventory[m.itemKey(i)] = 60;
+    return { m, p, priced, stocked: { ...priced, inventory } };
+  };
+  const artisan = (l: { item: { name: string } }) => /^Artisan’s Splendent/.test(l.item.name);
+  it("without stock the 44 orbs are bought when that is cheaper than crafting them", async () => {
+    const { m, p, priced } = await setup();
+    const a = m.mixPlan(p, priced).stages.find(artisan)!;
+    expect([a.craft, a.buy]).toEqual([0, 3]);
+  });
+  it("stock counts as free: some are crafted from it, the rest is bought, and the total gets cheaper", async () => {
+    const { m, p, priced, stocked } = await setup();
+    const before = m.mixPlan(p, priced), after = m.mixPlan(p, stocked);
+    const a = after.stages.find(artisan)!;
+    expect(a.craft).toBeGreaterThan(0);
+    expect(a.buy).toBeGreaterThan(0);
+    expect(a.craft + a.buy).toBeCloseTo(3, 6);
+    expect(after.cost!).toBeLessThan(before.cost!);
+    expect(after.materials.find((l) => l.item.name === "Fine Sapphire Gemstone")!.stock).toBeGreaterThan(0);
+  });
+  it("a missing price is asked for, never counted as 0", async () => {
+    const { m, p } = await setup();
+    const r = m.mixPlan(p, data);
+    expect(r.compareMissing.some((i) => i.name === "Fine Sapphire Gemstone")).toBe(true);
+    const noFinal = m.mixPlan(p, { ...data, prices: [] });
+    expect(noFinal.cost).toBeNull();
+  });
+});

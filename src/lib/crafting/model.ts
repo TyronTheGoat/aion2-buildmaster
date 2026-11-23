@@ -1395,6 +1395,122 @@ export function missingRoutePrices(opts: ReturnType<typeof routeOptions>): ItemR
   return out;
 }
 
+/** One item of the mixed plan: how much comes from stock, how much is crafted (with Ø attempts) and how much is bought. */
+export interface MixLine { item: ItemRef; crafted: boolean; stock: number; craft: number; attempts: number; buy: number; price: number | null; cost: number }
+
+/**
+ * Mixed buy / craft plan (Tyron, 2026-11-23): for every stage, unit by unit, craft when that is cheaper than buying,
+ * otherwise buy, so a stage can end as "craft 3, buy 4". Stock counts as free (it is there and gets used up first),
+ * everything else costs the market price (scenario s). Mean values (Ø attempts = count / chance), lowest stage first.
+ * A crafted unit is priced with its inputs: stock first, then the cheaper of buying and crafting them.
+ */
+export function mixPlan(p: Project, state0: CraftState, s: Scenario = "ref") {
+  const state = planState(p, state0);
+  const free: Project = { ...p, buy: (p.buy ?? []).filter((k) => !state.recipes.some((r) => itemKey(r.output) === k || (r.comboOutput && itemKey(r.comboOutput) === k))), buyFinal: false };
+  const root = state.recipes.find((r) => r.recipeKey === p.targetRecipeKey);
+  const target = projectTarget(p, state.recipes);
+  const ctx = ctxOf(state, p);
+  const held = holdings(p, state.events);
+  const missingPrices: ItemRef[] = [];
+  /** prices that would let the plan compare crafting with buying (crafting is not considered while one is missing) */
+  const compareMissing: ItemRef[] = [];
+  const unknown = new Set<string>();
+  type Node = { item: ItemRef; recipe: Recipe; chance: number | null };
+  const nodes = new Map<string, Node>();
+  const order: string[] = [];
+  const visit = (item: ItemRef, forced?: { recipe: Recipe; goal: ChanceGoal }) => {
+    const k = itemKey(item);
+    if (nodes.has(k)) return;
+    const recipe = forced?.recipe ?? craftsItself(free, item, state.recipes);
+    if (!recipe) return;
+    const c = chanceFor(free, state, recipe, forced?.goal ?? goalFor(recipe, item)).p;
+    const ok = c !== null && c > 0 && recipe.ingredients.length > 0 && recipe.ingredients.every((i) => i.qty !== null);
+    if (!ok) unknown.add(`${recipe.name}: ${c === null || c === 0 ? "Chance unbekannt" : "Zutaten fehlen"}`);
+    nodes.set(k, { item, recipe, chance: ok ? c : null });
+    for (const ing of recipe.ingredients) if (craftsItself(free, ing, state.recipes)) visit(ing);
+    order.push(k);
+  };
+  const priceFor = (item: ItemRef) => {
+    const pr = findPrice(ctx, item);
+    const v = pr ? pr[s] ?? pr.low ?? pr.ref : null;
+    return v === null || v === undefined ? null : v;
+  };
+  type Stock = Map<string, number>;
+  const stockOf = (st: Stock, item: ItemRef) => {
+    const k = itemKey(item);
+    if (!st.has(k)) st.set(k, held.get(item) + (state.inventory[k] ?? 0));
+    return st.get(k)!;
+  };
+  const EPS = 1e-9;
+  // quick estimate (no unit-by-unit choice below): stock first, the rest at the cheaper of buying and crafting
+  const quote = (item: ItemRef, n: number, st: Stock): number | null => {
+    const k = itemKey(item);
+    const take = Math.min(stockOf(st, item), n);
+    st.set(k, stockOf(st, item) - take);
+    const rest = n - take;
+    if (rest <= EPS) return 0;
+    const buyP = priceFor(item);
+    const node = nodes.get(k);
+    if (!node || node.chance === null) {
+      if (buyP === null && !compareMissing.some((x) => sameItem(x, item))) compareMissing.push(item);
+      return buyP === null ? null : buyP * rest;
+    }
+    const trial = new Map(st);
+    const craft = quoteCraft(node, rest, trial);
+    if (craft !== null && (buyP === null || craft < buyP * rest)) { for (const [a, b] of trial) st.set(a, b); return craft; }
+    return buyP === null ? null : buyP * rest;
+  };
+  const quoteCraft = (node: Node, n: number, st: Stock): number | null => {
+    let sum = 0;
+    for (const ing of node.recipe.ingredients) {
+      const c = quote(ing, (n / node.chance!) * ing.qty!, st);
+      if (c === null) return null;
+      sum += c;
+    }
+    return sum;
+  };
+  // the real plan: unit by unit, records what is taken, crafted and bought
+  const lines = new Map<string, MixLine>();
+  const line = (item: ItemRef) => {
+    const k = itemKey(item);
+    if (!lines.has(k)) lines.set(k, { item, crafted: nodes.has(k), stock: 0, craft: 0, attempts: 0, buy: 0, price: priceFor(item), cost: 0 });
+    return lines.get(k)!;
+  };
+  const stock: Stock = new Map();
+  let blocked = false;
+  const acquire = (item: ItemRef, n: number): number => {
+    const k = itemKey(item);
+    const l = line(item);
+    const take = Math.min(stockOf(stock, item), n);
+    stock.set(k, stockOf(stock, item) - take);
+    l.stock += take;
+    let rest = n - take, cost = 0;
+    const buyP = l.price;
+    const node = nodes.get(k);
+    while (rest > EPS) {
+      const u = Math.min(1, rest);
+      const craft = node && node.chance !== null ? quoteCraft(node, u, new Map(stock)) : null;
+      if (craft !== null && (buyP === null || craft < buyP * u)) {
+        l.craft += u; l.attempts += u / node!.chance!;
+        for (const ing of node!.recipe.ingredients) cost += acquire(ing, (u / node!.chance!) * ing.qty!);
+      } else if (buyP !== null) { l.buy += u; l.cost += buyP * u; cost += buyP * u; }
+      else { blocked = true; if (!missingPrices.some((x) => sameItem(x, item))) missingPrices.push(item); l.buy += u; }
+      rest -= u;
+    }
+    return cost;
+  };
+  let total = 0;
+  if (root && target) {
+    visit(target, { recipe: root, goal: rootGoal(p, root) });
+    total = acquire(target, 1);
+  }
+  const rank = new Map(order.map((k, i) => [k, i]));
+  const all = [...lines.values()].filter((l) => l.stock + l.craft + l.buy > EPS);
+  const stages = all.filter((l) => l.crafted).sort((a, b) => rank.get(itemKey(a.item))! - rank.get(itemKey(b.item))!);
+  const materials = all.filter((l) => !l.crafted);
+  return { stages, materials, cost: blocked || !root ? null : total, known: total, missingPrices, compareMissing: compareMissing.filter((i) => !missingPrices.some((x) => sameItem(x, i))), unknown: [...unknown] };
+}
+
 /** The craft to do now: the lowest stage of the plan that still misses items (null when nothing is left or the path is unknown). */
 export function currentCraft(p: Project, state0: CraftState) {
   const plan = craftPlan(p, state0);
