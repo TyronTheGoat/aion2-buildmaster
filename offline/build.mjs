@@ -39,25 +39,13 @@ const cssDir = path.join(root, ".next/static/chunks");
 const css = readdirSync(cssDir, { recursive: true }).filter((f) => String(f).endsWith(".css"))
   .map((f) => readFileSync(path.join(cssDir, String(f)), "utf8")).join("\n");
 const icon = readFileSync(path.join(root, "public/icon.svg"), "utf8");
-// Embed the optional hologram assets (see scripts/import-assets.mjs) that are installed.
-const MIME = { glb: "model/gltf-binary", webp: "image/webp", png: "image/png" };
+// Embed the optional local assets that are installed (official class icons, git-ignored).
+const MIME = { webp: "image/webp", png: "image/png" };
 const assets = {};
-const installed = (dir, f) => { try { return readdirSync(path.join(root, "public", dir)).includes(f); } catch { return false; } };
-// files the app never loads once their successor is installed (keeps the offline file smaller)
-const superseded = (dir, f) => {
-  // newer character versions replace older ones: v4 (rigged) > v3 (static, textured) > v2 (+ painted reference)
-  const newer = (g, v) => (v < 4 && installed("models", `bildmaster_${g}_v4_RIG.glb`)) || (v < 3 && installed("models", `bildmaster_${g}_v3_WEB.glb`));
-  const m = f.match(/^bildmaster_(male|female)_v([23])_WEB\.glb$/);
-  if (dir === "models" && m) return newer(m[1], +m[2]);
-  const r = f.match(/^hologram_(male|female)_detailed_ref\.webp$/);
-  if (dir === "hero" && r) return newer(r[1], 2);
-  if (dir === "weapons" && f === "bildmaster_orb_hologram_v2.glb") return installed("weapons", "bildmaster_orb_solid_v3.glb");
-  return false;
-};
 for (const dir of ["class-icons"]) {
   let files = [];
   try { files = readdirSync(path.join(root, "public", dir)); } catch { /* not installed */ }
-  for (const f of files.filter((x) => !superseded(dir, x))) {
+  for (const f of files) {
     const mime = MIME[path.extname(f).slice(1)];
     if (mime) assets[`${dir}/${f}`] = `data:${mime};base64,${readFileSync(path.join(root, "public", dir, f)).toString("base64")}`;
   }
