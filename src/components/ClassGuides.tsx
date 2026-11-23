@@ -128,7 +128,7 @@ export function ClassGuideBody({ g, compare }: { g: ClassGuide; compare?: ReactN
           </div>
       {compare && <div className="border-t border-white/10 pt-6">{compare}</div>}
       <div className="border-t border-white/10 pt-6"><ClassSkillSetup slug={classSlug(g.cls)} /></div>
-      <p className="text-xs text-zinc-500">{t("Quelle", "Source")}: <a href={CLASS_GUIDE_SOURCE} target="_blank" rel="noreferrer" className="underline hover:text-zinc-300">wakayashi.gg</a>{t(" (Texte, Skill-Setup und Bilder).", " (texts, skill setup and pictures).")}</p>
+      <p className="text-xs text-zinc-500">{t("Quelle", "Source")}: <a href={CLASS_GUIDE_SOURCE} target="_blank" rel="noreferrer" className="underline hover:text-zinc-300">wakayashi.gg</a>{t(" (Texte, Skills und Bilder).", " (texts, skills and pictures).")}</p>
     </div>
   );
 }
