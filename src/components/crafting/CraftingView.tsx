@@ -561,14 +561,14 @@ function StockGroup({ title, items, p, update, levelOf: lv }: { title: string; i
 function PriceInput({ item, state, update, server }: { item: ItemRef; state: CraftState; update: Update; server: string }) {
   const t = useT();
   const lang = useLang();
-  const cur = findPrice({ prices: state.prices.filter((x) => (x.server ?? "").toLowerCase() === server.toLowerCase()), server }, item);
+  const cur = findPrice({ prices: state.prices, server }, item);
   const value = cur?.ref ?? cur?.low ?? null;
   const [text, setText] = useState<string>();
   const commit = () => {
     if (text === undefined) return;
     const n = numOrNull(text);
     setText(undefined);
-    if (n === null) { update((s) => ({ ...s, prices: s.prices.filter((x) => !(sameItem(x, item) && (x.server ?? "").toLowerCase() === server.toLowerCase())) })); return; }
+    if (n === null) { update((s) => ({ ...s, prices: s.prices.filter((x) => !(sameItem(x, item) && !x.suggested)) })); return; }
     if (!Number.isFinite(n) || n < 0) return;
     // the typed price becomes the current one; min / max widen when it lies outside
     const low = cur?.low ?? null, high = cur?.high ?? null;
@@ -600,7 +600,7 @@ function PriceSlider({ item, state, update, server, wide }: { item: ItemRef & { 
   const t = useT();
   const kinah = useKinah();
   const [editing, setEditing] = useState(false);
-  const cur = findPrice({ prices: state.prices.filter((x) => (x.server ?? "").toLowerCase() === server.toLowerCase()), server }, item);
+  const cur = findPrice({ prices: state.prices, server }, item);
   const low = cur?.low ?? null, high = cur?.high ?? null;
   const value = cur ? cur.ref ?? low ?? high : null;
   const [drag, setDrag] = useState<number>();
@@ -999,7 +999,7 @@ function PriceCell({ item, ctxProject, server, stepKey, state, onEdit, hide, com
   const t = useT();
   const range = useRange();
   if (hide) return null;
-  const ctx = ctxProject ? ctxOf(state, ctxProject, stepKey) : { prices: state.prices.filter((x) => !server || (x.server ?? "").toLowerCase() === server.toLowerCase()), server };
+  const ctx = ctxProject ? ctxOf(state, ctxProject, stepKey) : { prices: state.prices, server };
   const p = findPrice(ctx, item);
   const scope = p?.scope === "step" ? t("nur dieser Schritt", "this step only") : p?.scope === "project" ? t("nur dieses Projekt", "this project only") : null;
   return (
@@ -1070,15 +1070,19 @@ const GEAR_NAMES = (t: T): Record<GearGroup, string> => ({
 function PricesTab({ state, update, char, onPrice }: { state: CraftState; update: Update; char: Character; onPrice: (x: PriceTarget) => void }) {
   const t = useT();
   const server = char.server;
-  const all = useMemo(() => entriesFor(buildCatalog(state), charFaction(char)), [state, char]);
+  // Elyos-only materials (e.g. Yggdrasil wood) are left out: everyone here plays Asmodian (Tyron, 2026-11-23)
+  const all = useMemo(() => {
+    const faction = new Map(state.recipes.map((r) => [r.recipeKey, (r.faction ?? "").toLowerCase()] as const));
+    const elyosOnly = (e: CatalogEntry) => /yggdrasil|\(elyos\)/i.test(e.name) || (e.recipeKeys.length > 0 && e.recipeKeys.every((k) => faction.get(k)?.startsWith("ely")));
+    return entriesFor(buildCatalog(state), charFaction(char)).filter((e) => !elyosOnly(e));
+  }, [state, char]);
   const [area, setArea] = useState<PriceArea>("materials");
   const [group, setGroup] = useState<PriceGroup | "">("");
   const [q, setQ] = useState("");
   const [onlyPriced, setOnlyPriced] = useState(false);
   const names: Record<string, string> = { ...MATERIAL_NAMES(t), ...GEAR_NAMES(t) };
   const groups: readonly PriceGroup[] = area === "materials" ? MATERIAL_GROUPS : GEAR_GROUPS;
-  const onServer = useMemo(() => state.prices.filter((x) => (x.server ?? "").toLowerCase() === server.toLowerCase()), [state.prices, server]);
-  const priceOfEntry = (e: ItemRef) => findPrice({ prices: onServer, server }, e);
+  const priceOfEntry = (e: ItemRef) => findPrice({ prices: state.prices }, e);
   const inArea = all.filter((e) => e.area === area);
   const s = normName(q);
   const list = inArea.filter((e) => (!group || e.group === group) && (!onlyPriced || priceOfEntry(e)) && (!s || normName(e.name).includes(s) || (e.itemId ?? "").includes(q.trim())))
@@ -1104,7 +1108,7 @@ function PricesTab({ state, update, char, onPrice }: { state: CraftState; update
           ))}
         </div>
         <input className={`${INPUT} min-w-[12rem] flex-1`} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Suche: Name oder Item-ID …", "Search: name or item ID …")} aria-label={t("Suche", "Search")} />
-        <span className="text-xs text-zinc-500">{t("Preise für", "Prices for")} {server}: {onServer.length}</span>
+        <span className="text-xs text-zinc-500">{t("Preise gelten für alle Asmodier", "Prices apply to all Asmodians")}</span>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {chip("", t("Alle", "All"), inArea.length)}
@@ -1116,7 +1120,7 @@ function PricesTab({ state, update, char, onPrice }: { state: CraftState; update
         {list.map((e, i) => {
           const head = !group && (i === 0 || list[i - 1].group !== e.group) ? e.group : undefined;
           return [
-            head && <li key={`h-${head}`} className={`${LABEL} pt-2`}>{names[head]}</li>,
+            head && <li key={`h-${head}`} className="pt-3 text-sm font-semibold text-[#f4eed7]">{names[head]}</li>,
             <CatalogRow key={e.key} e={e} state={state} server={server} update={update} onPrice={onPrice} />,
           ];
         })}
@@ -1137,15 +1141,15 @@ function PricesTab({ state, update, char, onPrice }: { state: CraftState; update
           setArea(gear ? "gear" : "materials"); setGroup(""); setNewName(""); setNewId(""); setQ(e.name);
         }}>{t("Zum Katalog hinzufügen", "Add to catalogue")}</button>
       </div>
-      <p className="text-xs text-zinc-500">{t("Der Katalog wird aus allen Rezepten, Zutaten und Transfer-Gegenständen gebaut und wächst mit jedem Import. Ein Preis entsteht nur, wenn du „Preis hinzufügen“ klickst. Preise gelten für deinen Server. Bestand ist getrennt von den Preisen.",
-        "The catalogue is built from all recipes, ingredients and transfer items and grows with every import. A price is only created when you click “Add price”. Prices apply to your server. Stock is kept apart from prices.")}</p>
+      <p className="text-xs text-zinc-500">{t("Der Katalog wird aus allen Rezepten, Zutaten und Transfer-Gegenständen gebaut und wächst mit jedem Import. Preise gelten für alle Asmodier. Fehlt bei Holz, Erz oder Edelstein ein Preis, gilt der Preis des Od derselben Stufe (daraus lässt es sich kostenlos umwandeln). Bestand ist getrennt von den Preisen.",
+        "The catalogue is built from all recipes, ingredients and transfer items and grows with every import. Prices apply to all Asmodians. Wood, ore or gems without a price cost what the Od of the same grade costs (it converts for free). Stock is kept apart from prices.")}</p>
     </div>
   );
 }
 
 function CatalogRow({ e, state, server, update }: { e: CatalogEntry & { area: PriceArea; group: PriceGroup }; state: CraftState; server: string; update: Update; onPrice: (x: PriceTarget) => void }) {
   const t = useT();
-  const mine = state.prices.find((x) => (x.server ?? "").toLowerCase() === server.toLowerCase() && findPrice({ prices: [x] }, e));
+  const mine = state.prices.find((x) => !x.suggested && findPrice({ prices: [x] }, e));
   const stock = state.inventory[itemKey(e)];
   const icon = SHOW_ITEM_ICONS ? craftIcon(e) : undefined;
   const isTarget = e.key.startsWith("recipe:") || e.key.startsWith("combo:");
@@ -1205,7 +1209,7 @@ function PriceDialog({ target, state, onClose, onSave }: { target: PriceTarget; 
   const t = useT();
   const range = useRange();
   const { item, server, project, stepKey } = target;
-  const current = project ? findPrice(ctxOf(state, project, stepKey), item) : findPrice({ prices: state.prices.filter((x) => (x.server ?? "").toLowerCase() === server.toLowerCase()), server }, item);
+  const current = project ? findPrice(ctxOf(state, project, stepKey), item) : findPrice({ prices: state.prices, server }, item);
   const [low, setLow] = useState(current?.low?.toString() ?? "");
   const [high, setHigh] = useState(current?.high?.toString() ?? "");
   const [ref, setRef] = useState(current?.ref?.toString() ?? "");
@@ -1219,7 +1223,7 @@ function PriceDialog({ target, state, onClose, onSave }: { target: PriceTarget; 
     if (bad) return [];
     const after = apply(state);
     // every open project on this server whose open path uses the item
-    return state.projects.filter((p) => p.status !== "done" && p.server.toLowerCase() === server.toLowerCase() && craftPlan(p, state).materials.some((m) => m.missing > 0 && findPrice({ prices: [{ ...item, low: 0, high: 0, ref: 0, tradeable: null }] }, m.item)))
+    return state.projects.filter((p) => p.status !== "done" && craftPlan(p, state).materials.some((m) => m.missing > 0 && findPrice({ prices: [{ ...item, low: 0, high: 0, ref: 0, tradeable: null }] }, m.item)))
       .map((p) => {
         const pa = after.projects.find((x) => x.id === p.id)!;
         const cost = (x: Project, st: CraftState, sc: Scenario) => { const r = planCost(craftPlan(x, st), ctxOf(st, x), sc); return { cost: r.cost, partial: r.known }; };

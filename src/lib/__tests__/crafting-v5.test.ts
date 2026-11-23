@@ -195,9 +195,9 @@ describe("prices (manual only)", () => {
     expect(priceOf(ctxOf(s, step, bow), wood, "low")).toBe(15000);
     expect(priceOf(ctxOf(s, step, "recipe:other"), wood, "low")).toBe(10000);
   });
-  it("a price saved for one server is not used on another", () => {
+  it("prices are shared by every server (all Asmodians, Tyron 2026-11-23)", () => {
     const s: CraftState = { ...data, prices: [{ ...wood, server: "odar", low: 10000, high: 12000, ref: null, tradeable: true }] };
-    expect(priceOf(ctxOf(s, proj(bow, { server: "other" })), wood, "low")).toBeNull();
+    expect(priceOf(ctxOf(s, proj(bow, { server: "other" })), wood, "low")).toBe(10000);
   });
   it("logged attempts keep their cost after a price change", () => {
     const p = proj(bow);
@@ -341,10 +341,13 @@ describe("craft plan (top-down calculator) and routes", () => {
     const priced = savePrice(data, craftPlan(withRoute(p, data, "final"), data).materials[0].item, { low: 5, high: 5, ref: null, tradeable: true }, { kind: "global", server: "odar" });
     const opts = routeOptions(p, priced);
     expect(opts.find((o) => o.recommended)?.key).toBe("final");
-    expect(opts.find((o) => o.key === "all")!.conf.cost).toBeNull();
     // Tyron 2026-11-23: final item at 1 bn while the craft routes still miss data → no suggestion, never "buy at 1 bn"
-    const dear = savePrice(data, craftPlan(withRoute(p, data, "final"), data).materials[0].item, { low: 1e9, high: 1e9, ref: 1e9, tradeable: true }, { kind: "global", server: "odar" });
-    expect(routeOptions(p, dear).some((o) => o.recommended)).toBe(false);
+    const finalItem = craftPlan(withRoute(p, data, "final"), data).materials[0].item;
+    const gap = { ...data, prices: data.prices.filter((x) => x.name !== "Wrathful Mind") };
+    const dear = savePrice(gap, finalItem, { low: 1e9, high: 1e9, ref: 1e9, tradeable: true }, { kind: "global", server: "odar" });
+    const dearOpts = routeOptions(p, dear);
+    expect(dearOpts.find((o) => o.key === "all")!.conf.cost).toBeNull();
+    expect(dearOpts.find((o) => o.recommended)?.key).not.toBe("final");
   });
 });
 
@@ -359,8 +362,9 @@ describe("start from the lowest stage", () => {
     expect(cur.line!.item.name).toBe("Splendent Truth Orb (Asmodian)");
     const opts = routeOptions(p, data);
     expect(opts.find((o) => o.key === "all")!.start!.name).toBe("Splendent Truth Orb (Asmodian)");
-    // the Fine Sapphire Gemstone has no price in the Odar list: it is asked for, never made up
-    expect(missingRoutePrices(opts).some((i) => i.name === "Fine Sapphire Gemstone")).toBe(true);
+    // the Fine Sapphire Gemstone has no price in the Odar list: it costs what Fine Odyle costs (Od rule), marked as such
+    expect(missingRoutePrices(opts).some((i) => i.name === "Fine Sapphire Gemstone")).toBe(false);
+    expect(findPrice({ prices: data.prices }, { name: "Fine Sapphire Gemstone", itemId: "610660028" })?.viaOd).toBe("Fine Odyle");
     // with enough Artisan's orbs in stock, the lower stages drop out and the start moves up
     const art = cur.plan.lines.find((l) => /^Artisan/.test(l.item.name))!;
     const withStock = withOwnedCount(p, art.item, art.need);
@@ -455,8 +459,8 @@ describe("mixed buy / craft plan (Tyron, 2026-11-23)", () => {
   });
   it("a missing price is asked for, never counted as 0", async () => {
     const { m, p } = await setup();
-    const r = m.mixPlan(p, data);
-    expect(r.compareMissing.some((i) => i.name === "Fine Sapphire Gemstone")).toBe(true);
+    const r = m.mixPlan(p, { ...data, prices: data.prices.filter((x) => x.name !== "Pure Odyle") });
+    expect(r.compareMissing.some((i) => i.name === "Pure Odyle")).toBe(true);
     expect(r.cost).toBeNull(); // no total while the craft side cannot be priced
     const noFinal = m.mixPlan(p, { ...data, prices: [] });
     expect(noFinal.cost).toBeNull();

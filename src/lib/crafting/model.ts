@@ -679,7 +679,8 @@ export type Scenario = "low" | "high" | "ref";
 export interface PriceCtx { prices: Price[]; server?: string; project?: Project; stepKey?: string }
 export const ctxOf = (state: Pick<CraftState, "prices">, project?: Project, stepKey?: string): PriceCtx => ({ prices: state.prices, server: project?.server, project, stepKey });
 
-const serverOk = (p: Price, server?: string) => !p.server || !server || p.server.toLowerCase() === server.toLowerCase();
+/** Prices are shared by all Asmodian players whatever their server (Tyron, 2026-11-23); the server field is kept for old entries only. */
+const serverOk = (..._args: [Price, string?]) => true; // eslint-disable-line @typescript-eslint/no-unused-vars
 export function findPrice(ctx: PriceCtx, item: ItemRef): (Price & { scope: "step" | "project" | "global" }) | undefined {
   const o = ctx.project?.priceOverrides ?? [];
   const step = ctx.stepKey ? o.find((x) => x.stepKey === ctx.stepKey && sameItem(x, item)) : undefined;
@@ -689,7 +690,11 @@ export function findPrice(ctx: PriceCtx, item: ItemRef): (Price & { scope: "step
   // a price a player entered (or the weekly list) wins over a built-in reference price
   const ok = (x: Price) => serverOk(x, ctx.server) && sameItem(x, item);
   const g = ctx.prices.find((x) => !x.suggested && ok(x)) ?? ctx.prices.find(ok);
-  return g ? odCapped({ ...g, scope: "global" as const }, ctx) : undefined;
+  if (g) return odCapped({ ...g, scope: "global" as const }, ctx);
+  // no price at all: a raw resource costs what the Od of its grade costs (it is made from it for free)
+  const odItem = odSourceOf(item);
+  const od = odItem ? findPrice(ctx, odItem) : undefined;
+  return od ? { ...od, name: item.name, itemId: item.itemId, id: undefined, suggested: undefined, note: undefined, viaOd: odItem!.name, scope: "global" as const } : undefined;
 }
 
 /**
@@ -1080,9 +1085,10 @@ export function savePrice(state: CraftState, item: ItemRef & { catalogKey?: stri
   const now = new Date().toISOString();
   const rec: Price = { name: item.name, itemId: item.itemId, faction: item.faction, catalogKey: item.catalogKey, ...v, updated: now };
   if (scope.kind === "global") {
-    const same = (x: Price) => sameItem(x, item) && (x.server ?? "").toLowerCase() === scope.server.toLowerCase();
+    // one own price per item for everyone (no server); built-in reference prices stay as they are
+    const same = (x: Price) => sameItem(x, item) && !x.suggested;
     const old = state.prices.find(same);
-    const next = { ...rec, id: old?.id ?? uid(), server: scope.server };
+    const next = { ...rec, id: old?.id ?? uid(), server: undefined };
     return { ...state, prices: old ? state.prices.map((x) => (x === old ? next : x)) : [...state.prices, next] };
   }
   const stepKey = scope.kind === "step" ? scope.stepKey : undefined;
