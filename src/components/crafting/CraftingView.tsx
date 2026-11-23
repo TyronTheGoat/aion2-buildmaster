@@ -250,6 +250,8 @@ function Progress({ percent, done, total }: { percent: number | null; done: numb
 
 /** Icon of an item, the faction of the project filled in for the lookup. */
 const iconOf = (item: ItemRef | undefined, faction?: string) => (SHOW_ITEM_ICONS && item ? craftIcon({ ...item, faction: item.faction ?? factionOfName(item.name) ?? faction }) : undefined);
+/** Faction for crafting: the character's, else Asmodian (all players of this site are Asmodians on Odar, Tyron 2026-11-23). */
+const charFaction = (c: { race?: string }) => c.race || "Asmodian";
 const factionOfName = (n: string) => n.match(/\((elyos|asmodian)\)\s*$/i)?.[1];
 
 function ProjectCard({ p, state, onOpen }: { p: Project; state: CraftState; onOpen: () => void }) {
@@ -303,7 +305,7 @@ function gearSlotFor(choice: string, char: Character): string | null {
 /** New project: only what to craft. The target is always the highest stage of that line; the stock is entered in the project. */
 function NewProject({ state, char, charKey: key, onDone }: { state: CraftState; char: Character; charKey: string; onDone: (p?: Project) => void }) {
   const t = useT();
-  const faction = char.race ?? "";
+  const faction = charFaction(char);
   const [weaponPick, setWeaponPick] = useState("");
   const options = GEAR_SLOTS.map((choice) => {
     const gearSlot = (choice === "weapon" && weaponPick) || gearSlotFor(choice, char);
@@ -1068,7 +1070,7 @@ const GEAR_NAMES = (t: T): Record<GearGroup, string> => ({
 function PricesTab({ state, update, char, onPrice }: { state: CraftState; update: Update; char: Character; onPrice: (x: PriceTarget) => void }) {
   const t = useT();
   const server = char.server;
-  const all = useMemo(() => entriesFor(buildCatalog(state), char.race), [state, char.race]);
+  const all = useMemo(() => entriesFor(buildCatalog(state), charFaction(char)), [state, char]);
   const [area, setArea] = useState<PriceArea>("materials");
   const [group, setGroup] = useState<PriceGroup | "">("");
   const [q, setQ] = useState("");
