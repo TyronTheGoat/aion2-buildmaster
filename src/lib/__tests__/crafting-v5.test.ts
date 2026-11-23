@@ -427,7 +427,11 @@ describe("mixed buy / craft plan (Tyron, 2026-11-23)", () => {
     const m = await import("../crafting/model");
     const top = m.topOf(data, "Asmodian", "orb")!;
     const p = { ...proj(top.recipeKey, { faction: "Asmodian" }), starSafe: true, comboSuccess: 0.8 };
-    const priced = m.savePrice(data, { name: "Fine Sapphire Gemstone", itemId: "610660028" }, { low: 300000, high: 300000, ref: 300000, tradeable: true }, { kind: "global", server: "odar" });
+    // Fine Odyle as dear as the sapphire, so the Od rule does not make the sapphire cheap
+    // the Lv44 orb is cheap to buy, its materials are dear (Od as dear, so the Od rule does not make them cheap)
+    const dear = { low: 300000, high: 300000, ref: 300000, tradeable: true };
+    const priced = [{ name: "Fine Sapphire Gemstone", itemId: "610660028" }, { name: "Fine Odyle", itemId: "610610014" }, { name: "Pure Sapphire Gemstone", itemId: "610660031" }, { name: "Pure Odyle", itemId: "610610015" }]
+      .reduce((st, it) => m.savePrice(st, it, dear, { kind: "global", server: "odar" }), data);
     const low = ["recipe:321096001", "recipe:321095001", "recipe:321094001"].flatMap((k) => data.recipes.find((r) => r.recipeKey === k)!.ingredients);
     const inventory = { ...priced.inventory };
     for (const i of low) if (!/Orb/.test(i.name)) inventory[m.itemKey(i)] = 60;
@@ -483,5 +487,22 @@ describe("staff and spellbook from Tyron's screenshots (2026-11-23)", () => {
     const mats = (slot: string) => m.craftPlan({ ...proj(m.topOf(s, "Asmodian", slot)!.recipeKey, { faction: "Asmodian", gearSlot: slot }), starSafe: true }, s).materials.map((x) => x.item.name);
     expect(mats("staff")).toEqual(expect.arrayContaining(["Asvata Wood", "Feines Asvata-Holz", "Reines Asvata-Holz", "Radiant Asvata Log"]));
     expect(mats("spellbook")).toEqual(expect.arrayContaining(["Magic Crystal", "Feiner Rubin-Edelstein", "Reiner Rubin-Edelstein", "Radiant Ruby Gemstone"]));
+  });
+});
+
+describe("Od rule (Tyron, 2026-11-23)", () => {
+  it("a raw resource never costs more than the Od of its grade, and then says so", async () => {
+    const m = await import("../crafting/model");
+    const save = (s: typeof data, item: { name: string; itemId?: string }, v: number) => m.savePrice(s, item, { low: v * 0.8, high: v * 1.25, ref: v, tradeable: true }, { kind: "global", server: "" });
+    let s = save(data, { name: "Pure Odyle", itemId: "610610015" }, 75000);
+    s = save(s, { name: "Reines Asvata-Holz" }, 104999);
+    s = save(s, { name: "Fine Odyle", itemId: "610610014" }, 8479);
+    s = save(s, { name: "Fine Sapphire Gemstone", itemId: "610660028" }, 3899);
+    const ctx = { prices: s.prices, server: "odar" };
+    const wood = m.findPrice(ctx, { name: "Reines Asvata-Holz" })!;
+    expect([wood.ref, wood.viaOd]).toEqual([75000, "Pure Odyle"]);
+    const sapphire = m.findPrice(ctx, { name: "Fine Sapphire Gemstone", itemId: "610660028" })!;
+    expect([sapphire.ref, sapphire.viaOd]).toEqual([3899, undefined]); // cheaper than Od: own price
+    expect(m.odSourceOf({ name: "Wrathful Mind", itemId: "610511013" })).toBeUndefined();
   });
 });

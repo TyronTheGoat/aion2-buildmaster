@@ -732,7 +732,7 @@ function MixCard({ p, mix, bestMean }: { p: Project; mix: ReturnType<typeof mixP
             return (
               <li key={itemKey(l.item)} className="flex items-center gap-2 text-zinc-300">
                 <ItemIcon src={iconOf(l.item, p.faction)} rarity={rarityOf(l.item.name)} />
-                <span className="min-w-0 flex-1 truncate">{shown(l.item.name)}</span>
+                <span className="min-w-0 flex-1 truncate">{shown(l.item.name)}{l.viaOd && c.buy > 0 && <span className="text-[#5fbf8a]"> · {t("als", "as")} {shown(l.viaOd)} {t("kaufen", "buy")}</span>}</span>
                 <span className="text-right">{c.stock > 0 && <span className="text-zinc-400">{c.stock} {t("Lager", "stock")}</span>}{c.stock > 0 && c.buy > 0 && " · "}{c.buy > 0 && <span className="text-[#e6b450]">{c.buy} {t("kaufen", "buy")}</span>}</span>
               </li>
             );
@@ -1007,6 +1007,7 @@ function PriceCell({ item, ctxProject, server, stepKey, state, onEdit, hide, com
     <span className="inline-flex items-center gap-2">
       {p ? <span className="text-[#efe6cc]/90">{range(p.low, p.high) ?? range(p.ref, p.ref)}{scope && <span className="text-zinc-500"> · {scope}</span>}<SuggestedTag p={p} /></span>
         : <span className={MISSING}>{compact ? t("kein Preis", "no price") : t("Kein Preis hinterlegt", "No price saved")}</span>}
+      {p?.viaOd && <span className="text-[#5fbf8a]">· {t("Tipp: Kauf", "Tip: buy")} {shown(p.viaOd)} {t("und wandle um, das ist billiger", "and convert, it is cheaper")}</span>}
       {item.bound === true && <span className="text-zinc-500">· {t("gebunden", "bound")}</span>}
       {compact
         ? <button className="text-[11px] text-zinc-400 underline hover:text-zinc-200" onClick={onEdit}>{p ? t("ändern", "edit") : t("eingeben", "enter")}</button>

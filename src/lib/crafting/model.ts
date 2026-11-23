@@ -109,6 +109,8 @@ export interface Price extends ItemRef {
   suggested?: "observed" | "rough";
   /** where the reference price comes from */
   sourceUrl?: string;
+  /** set on lookup: the Od of the same grade is cheaper, this price is Od's (buy Od and convert) */
+  viaOd?: string;
 }
 
 /** Something a price can be entered for: built from recipes, ingredients, transfers and the start catalogue. */
@@ -684,8 +686,34 @@ export function findPrice(ctx: PriceCtx, item: ItemRef): (Price & { scope: "step
   if (step) return { ...step, scope: "step" };
   const proj = o.find((x) => !x.stepKey && sameItem(x, item));
   if (proj) return { ...proj, scope: "project" };
-  const g = ctx.prices.find((x) => serverOk(x, ctx.server) && sameItem(x, item));
-  return g ? { ...g, scope: "global" } : undefined;
+  // a price a player entered (or the weekly list) wins over a built-in reference price
+  const ok = (x: Price) => serverOk(x, ctx.server) && sameItem(x, item);
+  const g = ctx.prices.find((x) => !x.suggested && ok(x)) ?? ctx.prices.find(ok);
+  return g ? odCapped({ ...g, scope: "global" as const }, ctx) : undefined;
+}
+
+/**
+ * Od of a grade turns into ore, Asvata wood, sapphire, diamond and ruby of the same grade for free (Tyron, 2026-11-23:
+ * grey, green, blue, gold), so none of them is ever priced above the Od of its grade; the price then says "buy Od".
+ * Items without an English name / ID in our sources are listed by their in-game German name.
+ */
+const OD_TIERS: { od: ItemRef; items: ItemRef[] }[] = [
+  { od: { name: "Odyle", itemId: "610610013" }, items: ["Oreichalkos-Erz", "Asvata-Holz", "Saphir-Edelstein", "Diamant-Edelstein", "Rubin-Edelstein"].map((name) => ({ name })) },
+  { od: { name: "Fine Odyle", itemId: "610610014" }, items: [{ name: "Fine Orichalcum Ore", itemId: "610620014" }, { name: "Feines Asvata-Holz" }, { name: "Fine Sapphire Gemstone", itemId: "610660028" }, { name: "Feiner Diamant-Edelstein" }, { name: "Feiner Rubin-Edelstein" }] },
+  { od: { name: "Pure Odyle", itemId: "610610015" }, items: [{ name: "Pure Orichalcum Ore", itemId: "610620015" }, { name: "Reines Asvata-Holz" }, { name: "Pure Sapphire Gemstone", itemId: "610660031" }, { name: "Reiner Diamant-Edelstein" }, { name: "Reiner Rubin-Edelstein" }] },
+  { od: { name: "Radiant Odyle", itemId: "610610016" }, items: [{ name: "Radiant Orichalcum Ore", itemId: "610620016" }, { name: "Radiant Asvata Log", itemId: "610650018" }, { name: "Radiant Sapphire Gemstone", itemId: "610660034" }, { name: "Strahlender Diamant-Edelstein" }, { name: "Radiant Ruby Gemstone", itemId: "610660036" }] },
+];
+/** The Od of the same grade an item can be made from (undefined: not convertible). */
+export const odSourceOf = (item: ItemRef) => OD_TIERS.find((t) => t.items.some((i) => (i.itemId && item.itemId ? i.itemId === item.itemId : normName(i.name) === normName(item.name))))?.od;
+function odCapped<T extends Price>(p: T, ctx: PriceCtx): T {
+  const odItem = odSourceOf(p);
+  if (!odItem) return p;
+  const od = findPrice(ctx, odItem);
+  if (!od) return p;
+  const cap = (v: number | null, o: number | null) => (v === null || o === null ? v : Math.min(v, o));
+  const ref = cap(p.ref, od.ref ?? od.low);
+  const cheaper = (od.ref ?? od.low) !== null && (p.ref === null || (od.ref ?? od.low)! < p.ref);
+  return { ...p, low: cap(p.low, od.low ?? od.ref), ref, high: cap(p.high, od.high ?? od.ref), ...(cheaper ? { viaOd: odItem.name } : {}) };
 }
 /** Price for a scenario; null when nothing is saved. Bound items have no market price. */
 export const priceOf = (ctx: PriceCtx | Price[], item: ItemRef & { bound?: boolean | null }, s: Scenario): number | null => {
@@ -1403,7 +1431,7 @@ export function missingRoutePrices(opts: ReturnType<typeof routeOptions>): ItemR
 }
 
 /** One item of the mixed plan: how much comes from stock, how much is crafted (with Ø attempts) and how much is bought. */
-export interface MixLine { item: ItemRef; crafted: boolean; stock: number; craft: number; attempts: number; buy: number; price: number | null; cost: number }
+export interface MixLine { item: ItemRef; crafted: boolean; stock: number; craft: number; attempts: number; buy: number; price: number | null; cost: number; viaOd?: string }
 
 /**
  * Mixed buy / craft plan (Tyron, 2026-11-23): for every stage, unit by unit, craft when that is cheaper than buying,
@@ -1437,6 +1465,7 @@ export function mixPlan(p: Project, state0: CraftState, s: Scenario = "ref") {
     for (const ing of recipe.ingredients) if (craftsItself(free, ing, state.recipes)) visit(ing);
     order.push(k);
   };
+  const viaOd = (item: ItemRef) => findPrice(ctx, item)?.viaOd;
   const priceFor = (item: ItemRef) => {
     const pr = findPrice(ctx, item);
     const v = pr ? pr[s] ?? pr.low ?? pr.ref : null;
@@ -1480,7 +1509,7 @@ export function mixPlan(p: Project, state0: CraftState, s: Scenario = "ref") {
   const lines = new Map<string, MixLine>();
   const line = (item: ItemRef) => {
     const k = itemKey(item);
-    if (!lines.has(k)) lines.set(k, { item, crafted: nodes.has(k), stock: 0, craft: 0, attempts: 0, buy: 0, price: priceFor(item), cost: 0 });
+    if (!lines.has(k)) lines.set(k, { item, crafted: nodes.has(k), stock: 0, craft: 0, attempts: 0, buy: 0, price: priceFor(item), cost: 0, viaOd: viaOd(item) });
     return lines.get(k)!;
   };
   const stock: Stock = new Map();
