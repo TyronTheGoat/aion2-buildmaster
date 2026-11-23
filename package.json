@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "offline": "next build && node offline/build.mjs",
-    "build:pages": "npm run offline && mkdir -p out && cp dist/aion2-buildmaster-offline.html out/index.html"
+    "build:pages": "BM_CRAFTING=0 npm run offline && mkdir -p out && cp dist/aion2-buildmaster-offline.html out/index.html"
   },
   "dependencies": {
     "next": "16.4.6",

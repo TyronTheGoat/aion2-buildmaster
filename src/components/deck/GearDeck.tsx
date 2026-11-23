@@ -42,9 +42,9 @@ export function deckOf(char: Character, lang: Lang = "en"): DeckEntry[] {
  * Tapping a card opens the Ist / Soll comparison as two cards side by side.
  */
 type View = "gear" | "arcana" | "crafting";
-declare const __BM_OFFLINE__: boolean | undefined;
-/** Crafting is only in the offline build until it is reworked (Tyron 2026-11-23); projects and prices stay stored. */
-const SHOW_CRAFTING = typeof __BM_OFFLINE__ !== "undefined" && !!__BM_OFFLINE__;
+declare const __BM_CRAFTING__: boolean | undefined;
+/** The live site is built with BM_CRAFTING=0: no Crafting tab until it is reworked (Tyron 2026-11-23); projects and prices stay stored. */
+const SHOW_CRAFTING = typeof __BM_CRAFTING__ === "undefined" || !!__BM_CRAFTING__;
 const VIEWS: View[] = SHOW_CRAFTING ? ["gear", "arcana", "crafting"] : ["gear", "arcana"];
 
 export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
