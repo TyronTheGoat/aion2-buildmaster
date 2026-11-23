@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "offline": "next build && node offline/build.mjs"
+    "offline": "next build && node offline/build.mjs",
+    "build:pages": "npm run offline && mkdir -p out && cp dist/aion2-buildmaster-offline.html out/index.html"
   },
   "dependencies": {
     "@types/three": "^0.181.0",

@@ -1,0 +1,6 @@
+// Cloudflare (Workers with static assets): the single-file app built by `npm run build:pages` into ./out
+{
+  "name": "aion2-buildmaster",
+  "compatibility_date": "2026-11-01",
+  "assets": { "directory": "./out" }
+}
