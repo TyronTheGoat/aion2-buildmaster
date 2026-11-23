@@ -140,6 +140,8 @@ export function ClassSkillSetup({ slug }: { slug?: string }) {
 }
 
 /* ------------------------------------------------------------------ Ist / Soll ------------------------------------------------------------------ */
+// Not shown for now (Tyron 2026-11-23): skill levels come from several sources (10 levelling / story, 4 Daevanion
+// boards, 6 rings or Arcana cards); he will send a more exact input first. Kept here to build on.
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 const plus = (v: string) => { const n = Number(String(v).replace(/[^\d-]/g, "")); return Number.isFinite(n) ? n : 0; };
