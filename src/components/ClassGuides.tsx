@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useT } from "@/lib/i18n";
 import { CLASS_GUIDES, CLASS_GUIDE_SOURCE, type ClassGuide } from "@/lib/class-guides";
 import { ClassIcon, classSlug } from "./ClassIcon";
+import { ClassSkillSetup } from "./ClassSkillSetup";
 import "@/lib/knowledge/item-catalog";
 
 /** Character picture of a class (from wakayashi.gg): embedded in the offline file, else from the icon pack on the server. */
@@ -65,15 +66,28 @@ function GuideCard({ g, onClose }: { g: ClassGuide; onClose: () => void }) {
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, [onClose]);
-  const H = "mb-2 text-[11px] uppercase tracking-[0.2em] text-zinc-500";
   return (
     <div role="dialog" aria-modal aria-label={g.name} onClick={onClose}
-      className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-sm sm:items-center sm:p-6">
+      className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-sm sm:p-6">
       <div onClick={(e) => e.stopPropagation()}
-        className="card-face relative my-4 w-full max-w-3xl rounded-[24px] p-5 shadow-[0_0_0_1px_#d9c58f50,0_0_40px_-8px_#d9c58f40,0_30px_60px_-20px_#000] sm:p-7">
+        className="card-face relative my-4 w-full max-w-4xl rounded-[24px] p-5 shadow-[0_0_0_1px_#d9c58f50,0_0_40px_-8px_#d9c58f40,0_30px_60px_-20px_#000] sm:p-7">
         <span aria-hidden className="pointer-events-none absolute inset-[6px] rounded-[18px] border border-[#d9c58f]/20" />
         <button onClick={onClose} aria-label={t("Schließen", "Close")} className="absolute right-4 top-4 z-10 h-9 w-9 rounded-full border border-[#d9c58f]/25 text-lg text-[#efe6cc] hover:border-[#d9c58f]/60">×</button>
-        <div className="relative space-y-6">
+        <div className="relative"><ClassGuideBody g={g} /></div>
+      </div>
+    </div>
+  );
+}
+
+/** Guide for a class name as kisk gives it (English or German). */
+export const guideForClass = (cls?: string) => CLASS_GUIDES.find((g) => classSlug(g.cls) === classSlug(cls));
+
+/** Picture, description, main skills, strengths and weaknesses, then the full skill setup. */
+export function ClassGuideBody({ g }: { g: ClassGuide }) {
+  const t = useT();
+  const H = "mb-2 text-[11px] uppercase tracking-[0.2em] text-zinc-500";
+  return (
+    <div className="space-y-6">
           <div className="flex flex-wrap items-center gap-5 pr-10">
             <div className="flex aspect-[630/490] w-full max-w-[18rem] items-end justify-center overflow-hidden rounded-2xl bg-[radial-gradient(circle_at_50%_40%,#1f3a66_0%,#111a2b_75%)] ring-1 ring-[#d9c58f]/30">
               <ClassArt g={g} className="h-full w-full object-contain object-bottom" />
@@ -112,9 +126,8 @@ function GuideCard({ g, onClose }: { g: ClassGuide; onClose: () => void }) {
               <ul className="space-y-1.5 text-sm text-[#efe6cc]/90">{g.weaknesses.map((x) => <li key={x} className="flex gap-2"><span className="text-[#ff8b8b]">−</span>{x}</li>)}</ul>
             </section>
           </div>
-          <p className="text-xs text-zinc-500">{t("Quelle", "Source")}: <a href={CLASS_GUIDE_SOURCE} target="_blank" rel="noreferrer" className="underline hover:text-zinc-300">wakayashi.gg</a>{t(", Text in eigenen Worten zusammengefasst, Bild von dort.", ", text summarised in our own words, picture from there.")}</p>
-        </div>
-      </div>
+      <div className="border-t border-white/10 pt-6"><ClassSkillSetup slug={classSlug(g.cls)} /></div>
+      <p className="text-xs text-zinc-500">{t("Quelle", "Source")}: <a href={CLASS_GUIDE_SOURCE} target="_blank" rel="noreferrer" className="underline hover:text-zinc-300">wakayashi.gg</a>{t(" (Texte, Skill-Setup und Bilder).", " (texts, skill setup and pictures).")}</p>
     </div>
   );
 }
