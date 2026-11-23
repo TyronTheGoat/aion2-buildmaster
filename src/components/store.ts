@@ -12,7 +12,12 @@ export interface SavedChar {
   snapshot?: Character;
   /** Base body of the 3D hologram, asked on first open */
   gender?: "f" | "m";
+  /** test character every account has (Tyron, 2026-11-23); cannot be removed */
+  builtin?: boolean;
 }
+
+/** The test characters from the start (Florentina, ASNA, WRVITH, Creapure, Healga, TestoSpritze): in every box, view only. */
+export const BUILTIN_CHARS: SavedChar[] = [FLORENTINA, ...ODAR_CHARS].map((c) => ({ region: c.region, server: c.server, name: c.name, snapshot: c, builtin: true }));
 
 const KEY = "bm:chars";
 const SEEDED = "bm:seeded";
@@ -57,7 +62,11 @@ function read(): SavedChar[] {
   if (raw !== cacheRaw) {
     cacheRaw = raw;
     const genders: Record<string, "f" | "m"> = JSON.parse(localStorage.getItem(GENDER) ?? "{}");
-    cache = (JSON.parse(localStorage.getItem(KEY) ?? "[]") as SavedChar[]).map((c) => ({ ...c, gender: c.gender ?? genders[charKey(c)] }));
+    const own = JSON.parse(localStorage.getItem(KEY) ?? "[]") as SavedChar[];
+    // the test characters are always there; a refreshed copy in the box (newer snapshot) wins
+    const all = [...own.map((c) => (BUILTIN_CHARS.some((b) => charKey(b) === charKey(c)) ? { ...c, builtin: true } : c)),
+      ...BUILTIN_CHARS.filter((b) => !own.some((c) => charKey(c) === charKey(b)))];
+    cache = all.map((c) => ({ ...c, gender: c.gender ?? genders[charKey(c)] }));
   }
   return cache;
 }
@@ -66,7 +75,10 @@ function write(list: SavedChar[]) {
   const genders: Record<string, "f" | "m"> = JSON.parse(localStorage.getItem(GENDER) ?? "{}");
   for (const c of list) if (c.gender) genders[charKey(c)] = c.gender;
   localStorage.setItem(GENDER, JSON.stringify(genders));
-  localStorage.setItem(KEY, JSON.stringify(list));
+  // test characters stay built in: only a refreshed copy (newer data than the built-in one) is stored
+  const keep = list.filter((c) => !c.builtin || c.snapshot !== BUILTIN_CHARS.find((b) => charKey(b) === charKey(c))?.snapshot)
+    .map((c) => { const x = { ...c }; delete x.builtin; return x; });
+  localStorage.setItem(KEY, JSON.stringify(keep));
   listeners.forEach((l) => l());
 }
 

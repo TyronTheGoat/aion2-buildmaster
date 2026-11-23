@@ -55,7 +55,10 @@ export function BuildMasterApp() {
 
   if (route && selected) {
     return <CharacterScreen key={route} saved={selected} onBack={() => go()} upsert={upsert}
-      onRemove={() => { if (confirm(t(`${selected.name} entfernen?`, `Remove ${selected.name}?`))) { remove(route); go(); } }} />;
+      onRemove={() => {
+        if (selected.builtin) { alert(t(`${selected.name} ist ein Testcharakter und gehört bei allen zur Grundausstattung.`, `${selected.name} is a test character every account has.`)); return; }
+        if (confirm(t(`${selected.name} entfernen?`, `Remove ${selected.name}?`))) { remove(route); go(); }
+      }} />;
   }
 
   return (
