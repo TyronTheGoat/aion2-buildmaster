@@ -42,7 +42,10 @@ export function deckOf(char: Character, lang: Lang = "en"): DeckEntry[] {
  * Tapping a card opens the Ist / Soll comparison as two cards side by side.
  */
 type View = "gear" | "arcana" | "crafting";
-const VIEWS: View[] = ["gear", "arcana", "crafting"];
+declare const __BM_OFFLINE__: boolean | undefined;
+/** Crafting is only in the offline build until it is reworked (Tyron 2026-11-23); projects and prices stay stored. */
+const SHOW_CRAFTING = typeof __BM_OFFLINE__ !== "undefined" && !!__BM_OFFLINE__;
+const VIEWS: View[] = SHOW_CRAFTING ? ["gear", "arcana", "crafting"] : ["gear", "arcana"];
 
 export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
   char: Character; onBack: () => void; onRefresh: () => void; onRemove: () => void; note?: React.ReactNode;
@@ -149,10 +152,10 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
         if (e.key === "ArrowRight") switchTo(VIEWS[(i + 1) % VIEWS.length]);
         if (e.key === "ArrowLeft") switchTo(VIEWS[(i + VIEWS.length - 1) % VIEWS.length]);
       }}
-        className="relative grid grid-cols-3 rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_3px_0_-0.5px_#06070a] hover:border-[#d9c58f]/45">
-        <span aria-hidden className="absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/3)] rounded-lg bg-white/[0.09] ring-1 ring-[#d9c58f]/40 transition-transform duration-500 ease-out motion-reduce:transition-none"
+        className={`relative grid ${VIEWS.length === 3 ? "grid-cols-3" : "grid-cols-2"} rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_3px_0_-0.5px_#06070a] hover:border-[#d9c58f]/45`}>
+        <span aria-hidden className={`absolute inset-y-1 left-1 ${VIEWS.length === 3 ? "w-[calc((100%-0.5rem)/3)]" : "w-[calc((100%-0.5rem)/2)]"} rounded-lg bg-white/[0.09] ring-1 ring-[#d9c58f]/40 transition-transform duration-500 ease-out motion-reduce:transition-none`}
           style={{ transform: `translateX(${VIEWS.indexOf(tab) * 100}%)` }} />
-        {([["gear", t("Ausrüstung", "Equipment"), all.length - arcanaCount], ["arcana", "Arcana", arcanaCount], ["crafting", "Crafting", craftCount]] as const).map(([k, l, n]) => (
+        {([["gear", t("Ausrüstung", "Equipment"), all.length - arcanaCount], ["arcana", "Arcana", arcanaCount], ["crafting", "Crafting", craftCount]] as const).filter(([k]) => VIEWS.includes(k)).map(([k, l, n]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} tabIndex={tab === k ? 0 : -1} onClick={() => switchTo(k)}
             className={`relative px-2 py-1.5 text-center transition-colors sm:px-4 ${tab === k ? "text-[#f4eed7]" : "text-zinc-500 hover:text-zinc-300"}`}>
             {l} {n !== null && <span className="text-xs text-zinc-500">{n}</span>}
