@@ -44,6 +44,7 @@ next-env.d.ts
 # Original AION 2 icons (NCSOFT): keep out of the public repo
 /public/item-icons/
 /public/class-icons/
+/public/class-art/
 
 # Hologram character models, hero backgrounds and references (rights not cleared): keep out of the public repo
 /public/models/

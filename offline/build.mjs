@@ -27,6 +27,10 @@ for (const [name, local] of Object.entries(iconFiles)) {
   const data = await shrink(local);
   if (data) { icons[name] = data; icons[local.split("/").pop()] = data; }
 }
+// class pictures for the class guides (git-ignored like the icons; online they come from the icon pack)
+try {
+  for (const f of readdirSync(path.join(root, "public/class-art"))) if (f.endsWith(".webp")) icons[f] = `data:image/webp;base64,${readFileSync(path.join(root, "public/class-art", f)).toString("base64")}`;
+} catch { /* not installed */ }
 console.log(`Original-Icons eingebettet: ${shrunk.size} Dateien, ${Object.keys(iconFiles).length} Namen`);
 const js = await build({
   entryPoints: [path.join(root, "offline/main.tsx")],
