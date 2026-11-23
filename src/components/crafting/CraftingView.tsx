@@ -1046,7 +1046,7 @@ function IconPackButton() {
   const [state, setState] = useState<string>();
   return <>
     <button className={BTN} disabled={!!state && state !== "error"} onClick={() => ref.current?.click()}>{state && state !== "error" ? state : t("Icon-Paket hochladen", "Upload icon pack")}</button>
-    <input ref={ref} type="file" accept=".json,application/json" hidden onChange={async (e) => {
+    <input ref={ref} data-icon-pack type="file" accept=".json,application/json" hidden onChange={async (e) => {
       const f = e.target.files?.[0]; e.target.value = "";
       if (!f) return;
       try {
