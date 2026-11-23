@@ -72,9 +72,10 @@ function SkillDetail({ s, cls, onClose }: { s: Skill; cls: ClassSkills; onClose:
           <div className="flex flex-wrap gap-2">
             {s.specialties.map((x) => (
               <button key={x.slot} onClick={() => setSpec(spec === x.slot ? undefined : x.slot)} aria-expanded={spec === x.slot}
-                className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs ring-1 ${spec === x.slot ? "bg-[#d9c58f]/15 text-[#f4eed7] ring-[#d9c58f]/60" : "bg-white/[0.03] text-zinc-300 ring-white/10 hover:ring-[#d9c58f]/40"}`}>
-                <Pic file={cls.specialtyIcons[String(x.slot)]} alt="" className="h-6 w-6" />
-                <span>{t("Skill-Stufe", "Skill level")} {x.level}</span>
+                className={`flex items-center gap-1.5 ring-1 ${s.kind === "stigma" ? "rounded-full p-1" : "rounded-lg px-2 py-1 text-xs"} ${spec === x.slot ? "bg-[#d9c58f]/15 text-[#f4eed7] ring-[#d9c58f]/60" : "bg-white/[0.03] text-zinc-300 ring-white/10 hover:ring-[#d9c58f]/40"}`}>
+                {s.kind === "stigma"
+                  ? <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-gradient-to-b from-[#f4e3a8] to-[#b8964f] px-1.5 text-sm font-bold text-[#14110a] shadow-[0_0_10px_-2px_#d9c58f]">{x.level}</span>
+                  : <><Pic file={cls.specialtyIcons[String(x.slot)]} alt="" className="h-6 w-6" /><span>{t("Skill-Stufe", "Skill level")} {x.level}</span></>}
               </button>
             ))}
           </div>
