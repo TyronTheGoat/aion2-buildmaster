@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useT } from "@/lib/i18n";
 import { CLASS_GUIDES, CLASS_GUIDE_SOURCE, type ClassGuide } from "@/lib/class-guides";
 import { ClassIcon, classSlug } from "./ClassIcon";
@@ -83,7 +83,7 @@ function GuideCard({ g, onClose }: { g: ClassGuide; onClose: () => void }) {
 export const guideForClass = (cls?: string) => CLASS_GUIDES.find((g) => classSlug(g.cls) === classSlug(cls));
 
 /** Picture, description, main skills, strengths and weaknesses, then the full skill setup. */
-export function ClassGuideBody({ g }: { g: ClassGuide }) {
+export function ClassGuideBody({ g, compare }: { g: ClassGuide; compare?: ReactNode }) {
   const t = useT();
   const H = "mb-2 text-[11px] uppercase tracking-[0.2em] text-zinc-500";
   return (
@@ -126,6 +126,7 @@ export function ClassGuideBody({ g }: { g: ClassGuide }) {
               <ul className="space-y-1.5 text-sm text-[#efe6cc]/90">{g.weaknesses.map((x) => <li key={x} className="flex gap-2"><span className="text-[#ff8b8b]">−</span>{x}</li>)}</ul>
             </section>
           </div>
+      {compare && <div className="border-t border-white/10 pt-6">{compare}</div>}
       <div className="border-t border-white/10 pt-6"><ClassSkillSetup slug={classSlug(g.cls)} /></div>
       <p className="text-xs text-zinc-500">{t("Quelle", "Source")}: <a href={CLASS_GUIDE_SOURCE} target="_blank" rel="noreferrer" className="underline hover:text-zinc-300">wakayashi.gg</a>{t(" (Texte, Skill-Setup und Bilder).", " (texts, skill setup and pictures).")}</p>
     </div>

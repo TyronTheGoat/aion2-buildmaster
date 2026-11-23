@@ -2,18 +2,19 @@
 /**
  * Online storage on the live site (Cloudflare Worker behind Cloudflare Access, see worker/index.js).
  * The app keeps working on localStorage as before; this module mirrors it:
- * - private per account: character box, gender, planned items, crafting projects / stock / history
+ * - private per account: character box, gender, planned items, skill levels, crafting projects / stock / history
  * - shared by all accounts: market prices the players entered (built-in reference prices stay local suggestions)
  * Without the API (offline file, dev server) nothing changes.
  */
 import { useSyncExternalStore } from "react";
 import { itemKey, type CraftState, type Price } from "@/lib/crafting/model";
 import { CHARS_KEY, GENDER_KEY, SEEDED_KEY, SEED_VERSION } from "./store";
+import { SKILLS_KEY } from "./skill-store";
 
 const CRAFT_KEY = "bm:craft:v1";
 const PLANNED_KEY = "bm:planned";
 /** localStorage key → document name on the server */
-const DOCS: Record<string, string> = { [CHARS_KEY]: "chars", [GENDER_KEY]: "gender", [PLANNED_KEY]: "planned", [CRAFT_KEY]: "craft" };
+const DOCS: Record<string, string> = { [CHARS_KEY]: "chars", [GENDER_KEY]: "gender", [PLANNED_KEY]: "planned", [CRAFT_KEY]: "craft", [SKILLS_KEY]: "skills" };
 /** Parts of the crafting data that belong to the player; recipes, chains etc. come from the built-in package. */
 const CRAFT_USER = ["inventory", "projects", "events", "overrides", "catalogExtra"] as const;
 
@@ -136,6 +137,7 @@ export async function initCloud(): Promise<CloudStatus> {
     localStorage.setItem(CHARS_KEY, JSON.stringify(docs.chars ?? []));
     localStorage.setItem(GENDER_KEY, JSON.stringify(docs.gender ?? {}));
     localStorage.setItem(PLANNED_KEY, JSON.stringify(docs.planned ?? {}));
+    localStorage.setItem(SKILLS_KEY, JSON.stringify(docs.skills ?? {}));
     localStorage.setItem(CRAFT_KEY, mergeCraft(localCraft, mine, shared));
     localStorage.setItem("bm:cloud:owner", email);
     setStatus({ mode: "online", email });

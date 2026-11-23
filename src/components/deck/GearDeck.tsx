@@ -10,6 +10,9 @@ import { charKey, portraitOf } from "../store";
 import { GearCompare } from "../GearCompare";
 import { CraftingView, type CraftUi } from "../crafting/CraftingView";
 import { ClassGuideBody, guideForClass } from "../ClassGuides";
+import { SkillCompare } from "../ClassSkillSetup";
+import { classSlug } from "../ClassIcon";
+import { useSkillLevels } from "../skill-store";
 import { useCraft } from "../craft-store";
 
 /** Order of the cards: weapon first, then armour, jewellery, the rest and Arcana last. */
@@ -63,6 +66,8 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
   const [lockH, setLockH] = useState<number>();
   // crafting keeps its own sub-view and open project while the wheel shows another page
   const [craftUi, setCraftUi] = useState<CraftUi>({ sub: "projects" });
+  // skill levels typed in for the class guide (Ist / Soll)
+  const skills = useSkillLevels(charKey(char));
   const switchTo = (v: View) => {
     if (leaving || v === tab) return; // no second switch while the wheel turns
     setLockH(wheelRef.current?.offsetHeight);
@@ -177,7 +182,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
     if (view === "guide") {
       const g = guideForClass(char.className);
       return <div key={key} className={className} inert={out} aria-hidden={out || undefined}>
-        {g ? <div className="card-face relative rounded-[24px] p-4 sm:p-7"><span aria-hidden className="pointer-events-none absolute inset-[6px] rounded-[18px] border border-[#d9c58f]/20" /><div className="relative"><ClassGuideBody g={g} /></div></div>
+        {g ? <div className="card-face relative rounded-[24px] p-4 sm:p-7"><span aria-hidden className="pointer-events-none absolute inset-[6px] rounded-[18px] border border-[#d9c58f]/20" /><div className="relative"><ClassGuideBody g={g} compare={<SkillCompare slug={classSlug(char.className)} arcana={char.arcana} {...skills} />} /></div></div>
           : <p className="text-sm text-zinc-400">{t("Für diese Klasse gibt es noch keinen Guide.", "No guide for this class yet.")}</p>}
       </div>;
     }

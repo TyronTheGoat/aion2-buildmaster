@@ -4,7 +4,7 @@
 // Storage: SQLite-backed Durable Objects, one per account and one for the shared prices; no setup needed in the dashboard.
 import { DurableObject } from "cloudflare:workers";
 
-const USER_KEYS = new Set(["chars", "gender", "planned", "craft"]);
+const USER_KEYS = new Set(["chars", "gender", "planned", "craft", "skills"]);
 const MAX_DOC = 1_500_000;
 const MAX_PRICE = 4_000;
 
