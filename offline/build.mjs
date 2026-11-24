@@ -37,7 +37,7 @@ const js = await build({
   entryPoints: [path.join(root, "offline/main.tsx")],
   bundle: true, minify: true, write: false, format: "iife", jsx: "automatic",
   alias: { "@": path.join(root, "src") },
-  // BM_PREVIEW=0 (the live site build) leaves preview tabs (skill planner) out
+  // BM_PREVIEW=0 (the live site build) leaves preview tabs out (none at the moment)
   define: { "process.env.NODE_ENV": '"production"', __BM_OFFLINE__: "true", __BM_PREVIEW__: process.env.BM_PREVIEW === "0" ? "false" : "true" },
 });
 // Reuse the Tailwind CSS from the Next build (run `next build` first).

@@ -54,3 +54,16 @@ test("current gear of Florentina is read per place and compared with the plan", 
   expect(d.find((x) => x.id === "ring1")!.want[0].state).toBe("ok");
   expect(d.every((x) => !x.change || x.now.some((n) => n.state === "drop"))).toBe(true);
 });
+
+test("Highest takes what the places left over allow, in priority order", () => {
+  const order = [{ id: "Chalice" as const, max: 4 }, { id: "ring1" as const, max: 2 }];
+  const r = planSkills("Spiritmaster", [
+    { skill: "Elemental Fusion", target: 20, story: 10, daevanion: 4 },
+    { skill: "Combustion", target: 0, story: 10, daevanion: 4 },
+  ], order);
+  // Fusion: Gral +4, ring +1, 1 missing; Combustion: what is left on the Gral (9 - 4 - 2 spare lines = +3) and the ring (+1)
+  expect(r.goals[0].missing).toBe(1);
+  expect(r.goals[1].got).toEqual([{ place: "Chalice", levels: 3 }, { place: "ring1", levels: 1 }]);
+  expect(r.goals[1].reached).toBe(18);
+  expect(r.goals[1].missing).toBe(0);
+});

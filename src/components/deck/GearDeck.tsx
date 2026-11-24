@@ -42,10 +42,8 @@ export function deckOf(char: Character, lang: Lang = "en"): DeckEntry[] {
  * Tapping a card opens the Ist / Soll comparison as two cards side by side.
  */
 type View = "gear" | "arcana" | "guide" | "planner";
-declare const __BM_PREVIEW__: boolean | undefined;
-/** Crafting is out for good (Tyron 2026-11-24). Previews (the skill planner) only in the offline file; the live site is built with BM_PREVIEW=0. */
-const SHOW_PREVIEW = typeof __BM_PREVIEW__ === "undefined" || !!__BM_PREVIEW__;
-const VIEWS: View[] = SHOW_PREVIEW ? ["gear", "arcana", "guide", "planner"] : ["gear", "arcana", "guide"];
+/** Crafting is out for good (Tyron 2026-11-24); the skill planner is live since 2026-11-24. */
+const VIEWS: View[] = ["gear", "arcana", "guide", "planner"];
 
 export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
   char: Character; onBack: () => void; onRefresh: () => void; onRemove: () => void; note?: React.ReactNode;

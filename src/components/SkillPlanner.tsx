@@ -4,10 +4,21 @@ import type { Character } from "@/lib/types";
 import { refClass, refSkills } from "@/lib/reference/rolls-v3";
 import {
   ARCANA_CARD_LEVELS, ARCANA_CARD_LINES, ARCANA_ENHANCE, ARCANA_SKILL_MAX, DAEVANION_MAX, DEFAULT_ORDER, PLACES, STORY_MAX, allowed, alignToCurrent,
-  currentLines, diffPlan, placeOf, planSkills, type Goal, type HaveMap, type Line, type NowState, type PieceDiff, type PlaceId, type PlaceRule, type WantState,
+  HIGHEST, currentItems, currentLines, diffPlan, placeOf, planSkills, type Goal, type HaveMap, type Line, type NowState, type PieceDiff, type PlaceId, type PlaceRule, type WantState,
 } from "@/lib/skill-plan";
 import { charKey } from "./store";
 import { Pic, skillIcon } from "./ClassSkillSetup";
+import { iconFor } from "@/lib/knowledge/item-catalog";
+import type { Item } from "@/lib/types";
+
+/** Small picture of the piece the character wears there now (kisk), right after the name. */
+function PieceIco({ item }: { item?: Item }) {
+  const [bad, setBad] = useState(false);
+  const src = item ? iconFor(item) : undefined;
+  if (!src || bad) return null;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" title={item!.name} loading="lazy" onError={() => setBad(true)} className="ml-1.5 inline-block h-5 w-5 shrink-0 rounded object-contain align-[-4px] ring-1 ring-white/10" />;
+}
 
 /** Saved per character on this device (offline preview): goals, order / limits of the places, what already stands on them. */
 const KEY = "bm:skillplan";
@@ -87,7 +98,7 @@ const WANT_MARK: Record<WantState, [string, string]> = { ok: ["✓", "text-[#5fb
  * One piece: the current card first stands in the middle, slides to the left, then the target card opens on the right
  * (same motion as the slot comparison).
  */
-function CompareRow({ d, cls, de, delay }: { d: PieceDiff; cls: string; de: (en: string) => string; delay: number }) {
+function CompareRow({ d, cls, de, delay, item }: { d: PieceDiff; cls: string; de: (en: string) => string; delay: number; item?: Item }) {
   const [stage, setStage] = useState(0);
   // side by side from 640 px on, with the slide; on a phone the two cards stand on top of each other
   const [wide] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 640px)").matches);
@@ -97,7 +108,7 @@ function CompareRow({ d, cls, de, delay }: { d: PieceDiff; cls: string; de: (en:
   const tag = "mb-1.5 text-[10px] uppercase tracking-widest";
   return (
     <li>
-      <div className="mb-1.5 flex items-baseline gap-2 px-1 text-sm font-semibold text-[#f4eed7]">{d.locked && "🔒 "}{p.de}
+      <div className="mb-1.5 flex items-baseline gap-2 px-1 text-sm font-semibold text-[#f4eed7]"><span>{d.locked && "🔒 "}{p.de}<PieceIco item={item} /></span>
         <span className={`text-[10px] font-normal uppercase tracking-widest ${d.change ? "text-[#ff9a2e]" : "text-[#5fbf8a]"}`}>{d.change ? "ändern" : "passt ✓"}</span></div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-6 sm:[--gap:1.5rem]">
         <div className="min-w-0 transition-transform duration-[800ms] ease-[cubic-bezier(.45,0,.2,1)] motion-reduce:transition-none"
@@ -156,6 +167,7 @@ export function SkillPlanner({ char }: { char: Character }) {
   const de = (en: string) => skills.find((s) => s.skill_en === en)?.skill_de ?? en;
   const Icon = ({ en, size }: { en: string; size?: string }) => <SkillIco cls={cls} en={en} size={size} />;
   const now = currentLines(cls, char);
+  const items = currentItems(char);
   const raw = planSkills(cls, goals, order, have);
   const plan = compareNow ? alignToCurrent(raw, now) : raw;
   const diffs = compareNow ? diffPlan(plan, now) : [];
@@ -174,14 +186,15 @@ export function SkillPlanner({ char }: { char: Character }) {
     <section className="space-y-6">
       <div className="flex flex-wrap items-baseline gap-2">
         <h3 className="text-2xl font-semibold text-[#f4eed7]">Skill-Planer</h3>
-        <span className="rounded-full bg-[#ffa31a]/15 px-2 py-0.5 text-xs text-[#ffa31a]">Vorschau</span>
+        <button className="ml-auto rounded-md px-2 py-0.5 text-[11px] uppercase tracking-widest text-zinc-500 ring-1 ring-white/10 hover:text-[#ff8b8b] hover:ring-[#ff8b8b]/40"
+          onClick={() => { if (window.confirm("Skill-Planer für diesen Charakter zurücksetzen? Alle Eingaben werden gelöscht.")) { setGoals([]); setOrder(DEFAULT_ORDER); setHave({}); setCompareNow(false); } }}>Reset</button>
       </div>
 
       {/* 1: goals */}
       <div className="space-y-2">
         <div className={H}>1 · Welche Abilities, auf welche Stufe?</div>
         {goals.length > 0 && (
-          <div className="hidden grid-cols-[3.25rem_2rem_minmax(0,1fr)_4.5rem_4.5rem_4.5rem_6rem_2rem] gap-2 px-2 text-[10px] uppercase tracking-widest text-zinc-500 md:grid">
+          <div className="hidden grid-cols-[3.25rem_2rem_minmax(0,1fr)_4.5rem_4.5rem_6.5rem_7.5rem_2rem] gap-2 px-2 text-[10px] uppercase tracking-widest text-zinc-500 md:grid">
             <span>Prio</span><span /><span>Ability</span><span>Story</span><span>Daevanion</span><span>Ziel</span><span>Ergebnis</span><span />
           </div>
         )}
@@ -191,7 +204,7 @@ export function SkillPlanner({ char }: { char: Character }) {
             const nowLevel = Math.min(g.story, STORY_MAX) + Math.min(g.daevanion, DAEVANION_MAX) + nowBonus(g.skill);
             return (
               <li key={g.skill} {...goalSort.row(i)}
-                className={`card-face grid select-none grid-cols-[auto_2rem_minmax(0,1fr)_2rem] items-center gap-2 rounded-xl p-2 ring-1 md:grid-cols-[3.25rem_2rem_minmax(0,1fr)_4.5rem_4.5rem_4.5rem_6rem_2rem] ${goalSort.drag === i ? "relative z-10 scale-[1.01] ring-2 ring-[#d9c58f]/70 shadow-2xl" : "ring-[#d9c58f]/20"}`}>
+                className={`card-face grid select-none grid-cols-[auto_2rem_minmax(0,1fr)_2rem] items-center gap-2 rounded-xl p-2 ring-1 md:grid-cols-[3.25rem_2rem_minmax(0,1fr)_4.5rem_4.5rem_6.5rem_7.5rem_2rem] ${goalSort.drag === i ? "relative z-10 scale-[1.01] ring-2 ring-[#d9c58f]/70 shadow-2xl" : "ring-[#d9c58f]/20"}`}>
                 <Grip n={i + 1} gold />
                 <Icon en={g.skill} />
                 <select className={`${SEL} min-w-0`} value={g.skill} onChange={(e) => setGoal(i, { skill: e.target.value })} aria-label="Ability">
@@ -204,10 +217,11 @@ export function SkillPlanner({ char }: { char: Character }) {
                   <label className="text-[10px] uppercase tracking-widest text-zinc-500 md:contents"><span className="md:hidden">Daevanion</span>
                     <select className={`${SEL} w-full`} value={g.daevanion} onChange={(e) => setGoal(i, { daevanion: Number(e.target.value) })}>{range(0, DAEVANION_MAX).map((n) => <option key={n}>{n}</option>)}</select></label>
                   <label className="text-[10px] uppercase tracking-widest text-zinc-500 md:contents"><span className="md:hidden">Ziel</span>
-                    <select className={`${SEL} w-full`} value={g.target} onChange={(e) => setGoal(i, { target: Number(e.target.value) })}>{range(10, 30).map((n) => <option key={n}>{n}</option>)}</select></label>
+                    <select className={`${SEL} w-full`} value={g.target} onChange={(e) => setGoal(i, { target: Number(e.target.value) })}><option value={HIGHEST}>Highest</option>{range(10, 30).map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
                 </div>
                 <span className="col-span-4 text-sm md:col-span-1">
-                  {r.missing === 0 ? <span className="font-semibold text-[#5fbf8a]">✓ erreichbar</span> : <span className="font-semibold text-[#ff8b8b]">fehlt {r.missing}</span>}
+                  {g.target === HIGHEST ? <span className="font-semibold text-[#d9c58f]">{r.reached} erreichbar</span>
+                    : r.missing === 0 ? <span className="font-semibold text-[#5fbf8a]">✓ erreichbar</span> : <span className="font-semibold text-[#ff8b8b]">fehlt {r.missing}</span>}
                   {compareNow && <span className="ml-2 text-[11px] text-zinc-500 md:ml-0 md:block" title="mit deinem aktuellen Gear laut kisk">jetzt {nowLevel}</span>}
                 </span>
                 <button className={`${ICON_BTN} hidden md:block`} onClick={() => setGoals((l) => l.filter((_, j) => j !== i))} aria-label="entfernen">×</button>
@@ -236,7 +250,7 @@ export function SkillPlanner({ char }: { char: Character }) {
                 className={`pl-row flex min-w-0 cursor-grab select-none items-center gap-2 rounded-xl px-2 py-1.5 ring-1 active:cursor-grabbing ${placeSort.drag === i ? "relative z-10 bg-[#d9c58f]/15 ring-2 ring-[#d9c58f]/70 shadow-2xl" : "bg-white/[0.03] ring-white/5"}`}
                 data-col={i < half ? 1 : 2}>
                 <Grip n={i + 1} />
-                <span className="min-w-0 flex-1 truncate text-sm text-[#f4eed7]">{locked && "🔒 "}{p.de}<span className="ml-1.5 text-xs text-zinc-500">{p.kind === "arcana" ? "Arcana" : ""}</span></span>
+                <span className="min-w-0 flex-1 truncate text-sm text-[#f4eed7]">{locked && "🔒 "}{p.de}<PieceIco item={items[r.id]} /><span className="ml-1.5 text-xs text-zinc-500">{p.kind === "arcana" ? "Arcana" : ""}</span></span>
                 <select className={`${SEL} shrink-0 !px-1.5`} value={r.max} aria-label={`${p.de}: max. Abilities`} disabled={locked}
                   onChange={(e) => setOrder((o) => o.map((x) => (x.id === r.id ? { ...x, max: Number(e.target.value) } : x)))}>
                   {maxes.map((n) => <option key={n} value={n}>{n === 0 ? "keine" : `max ${n}`}</option>)}
@@ -261,7 +275,7 @@ export function SkillPlanner({ char }: { char: Character }) {
           </div>
           {compareNow ? (<>
             <p className="text-xs text-zinc-500">{toChange ? `${toChange} von ${diffs.length} Teilen musst du ändern.` : "Dein aktuelles Gear passt schon zum Plan."} Je Teil: dein Gear laut kisk und wie es sein muss.</p>
-            <ul className="space-y-4">{diffs.map((d, i) => <CompareRow key={d.id} d={d} cls={cls} de={de} delay={i * 90} />)}</ul>
+            <ul className="space-y-4">{diffs.map((d, i) => <CompareRow key={d.id} d={d} cls={cls} de={de} delay={i * 90} item={items[d.id]} />)}</ul>
           </>) : (
           <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {shown.map((p) => {
@@ -269,7 +283,7 @@ export function SkillPlanner({ char }: { char: Character }) {
               const freeLines = placeOf(p.id).kind === "arcana" ? ARCANA_CARD_LINES - p.lines.length : 0;
               return (
                 <li key={p.id} className={`card-face rounded-xl p-3 ring-1 ${p.locked ? "ring-[#d9c58f]/50" : "ring-[#d9c58f]/25"}`}>
-                  <div className="mb-1.5 flex items-baseline justify-between text-sm font-semibold text-[#f4eed7]">{p.locked && "🔒 "}{placeOf(p.id).de}
+                  <div className="mb-1.5 flex items-baseline justify-between text-sm font-semibold text-[#f4eed7]"><span>{p.locked && "🔒 "}{placeOf(p.id).de}<PieceIco item={items[p.id]} /></span>
                     <span className="text-xs font-normal text-zinc-500">{p.locked ? "bleibt so" : freeLines > 0 ? `${freeLines} Zeile${freeLines > 1 ? "n" : ""} egal` : ""}</span></div>
                   <ul className="space-y-1 text-sm">{p.lines.map((l) => {
                     const inGoal = goals.some((g) => g.skill === l.skill);
@@ -308,7 +322,7 @@ export function SkillPlanner({ char }: { char: Character }) {
                         <button className={`${ICON_BTN} ${h.locked ? "border-[#d9c58f]/70 bg-[#d9c58f]/20" : ""}`} aria-pressed={h.locked} aria-label={`${p.de} sperren`}
                           title={h.locked ? "Gesperrt: bleibt so" : "Sperren: Teil so behalten"}
                           onClick={() => setHave((m) => ({ ...m, [id]: { ...h, locked: !h.locked } }))}>{h.locked ? "🔒" : "🔓"}</button>
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#f4eed7]">{p.de}</span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#f4eed7]">{p.de}<PieceIco item={items[id]} /></span>
                         {!full && options.length > 0 && (
                           <select className={`${SEL} w-36 min-w-0 sm:w-44`} value="" aria-label={`${p.de}: Ability hinzufügen`}
                             onChange={(e) => { const en = e.target.value; if (en) setLines(id, (l) => [...l, { skill: en, levels: 1 }]); }}>

@@ -56,6 +56,8 @@ export function allowed(className: string, skillEn: string, place: Place): boole
   return (skill.skill_type === "active") === ACTIVE_GEAR.includes(place.refSlot as GearSlot);
 }
 
+/** target HIGHEST: as high as the places left over allow (in priority order). */
+export const HIGHEST = 0;
 export interface Goal { skill: string; target: number; story: number; daevanion: number }
 /** A place in the player's order, with the most abilities they allow on it. */
 export interface PlaceRule { id: PlaceId; max: number }
@@ -66,7 +68,7 @@ export interface Have { locked: boolean; lines: Line[] }
 export type HaveMap = Partial<Record<PlaceId, Have>>;
 
 export interface PlanResult {
-  goals: { goal: Goal; base: number; need: number; got: { place: PlaceId; levels: number; fixed?: true }[]; missing: number }[];
+  goals: { goal: Goal; base: number; need: number; got: { place: PlaceId; levels: number; fixed?: true }[]; missing: number; reached: number }[];
   places: { id: PlaceId; lines: Line[]; levelsLeft: number | null; locked?: true }[];
 }
 
@@ -86,7 +88,8 @@ export function planSkills(className: string, goals: Goal[], order: PlaceRule[],
   const out: PlanResult["goals"] = [];
   for (const goal of goals) {
     const base = Math.min(goal.story, STORY_MAX) + Math.min(goal.daevanion, DAEVANION_MAX);
-    const need = Math.max(0, goal.target - base);
+    const highest = goal.target === HIGHEST;
+    const need = highest ? Infinity : Math.max(0, goal.target - base);
     let left = need;
     const got: PlanResult["goals"][number]["got"] = [];
     // locked pieces count first, whatever their place in the order
@@ -110,7 +113,8 @@ export function planSkills(className: string, goals: Goal[], order: PlaceRule[],
       got.push({ place: p.rule.id, levels: give });
       left -= give;
     }
-    out.push({ goal, base, need, got, missing: left });
+    const reached = base + got.reduce((a, g) => a + g.levels, 0);
+    out.push({ goal, base, need: highest ? reached - base : need, got, missing: highest ? 0 : left, reached });
   }
   return { goals: out, places: state.map((p) => ({ id: p.rule.id, lines: p.lines, levelsLeft: p.levelsLeft, ...(p.locked ? { locked: true as const } : {}) })) };
 }
@@ -127,18 +131,12 @@ const GEAR_BY_SLOT: Partial<Record<SlotKind, PlaceId[]>> = {
 };
 const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-/** The ability lines the character wears now, per place (from the kisk gear and Arcana; other stats are left out). */
-export function currentLines(className: string, char: { gear: Item[]; arcana: Item[] }): Partial<Record<PlaceId, Line[]>> {
-  const skills = refSkills(className);
-  const lines = (it: Item): Line[] => it.lines.flatMap((l) => {
-    const m = /^\+(\d+)$/.exec(l.value.trim());
-    const s = m && skills.find((x) => key(x.skill_en) === key(l.name));
-    return s ? [{ skill: s.skill_en, levels: Number(m![1]) }] : [];
-  });
-  const out: Partial<Record<PlaceId, Line[]>> = {};
+/** The pieces the character wears now, per place (kisk gear and Arcana). */
+export function currentItems(char: { gear: Item[]; arcana: Item[] }): Partial<Record<PlaceId, Item>> {
+  const out: Partial<Record<PlaceId, Item>> = {};
   for (const it of char.arcana) {
     const id = ARCANA_BY_WORD.find(([re]) => re.test(`${it.icon ?? ""} ${it.name}`))?.[1];
-    if (id && !out[id]) out[id] = lines(it);
+    if (id && !out[id]) out[id] = it;
   }
   const used: Partial<Record<SlotKind, number>> = {};
   for (const it of char.gear) {
@@ -146,9 +144,20 @@ export function currentLines(className: string, char: { gear: Item[]; arcana: It
     const n = used[it.slot] ?? 0;
     if (!ids || n >= ids.length) continue;
     used[it.slot] = n + 1;
-    out[ids[n]] = lines(it);
+    out[ids[n]] = it;
   }
   return out;
+}
+
+/** The ability lines the character wears now, per place (other stats are left out). */
+export function currentLines(className: string, char: { gear: Item[]; arcana: Item[] }): Partial<Record<PlaceId, Line[]>> {
+  const skills = refSkills(className);
+  const items = currentItems(char);
+  return Object.fromEntries((Object.entries(items) as [PlaceId, Item][]).map(([id, it]) => [id, it.lines.flatMap((l) => {
+    const m = /^\+(\d+)$/.exec(l.value.trim());
+    const s = m && skills.find((x) => key(x.skill_en) === key(l.name));
+    return s ? [{ skill: s.skill_en, levels: Number(m![1]) }] : [];
+  })]));
 }
 
 /** Rings and earrings are interchangeable: put the planned lines on the one that already carries more of them. */
