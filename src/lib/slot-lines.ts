@@ -45,7 +45,7 @@ export function statLinks(item: Item): StatLinks | undefined {
   const links: StatLinks["links"] = ist.flatMap((line, from): StatLinks["links"] => {
     const to = rows.findIndex((r) => r.have === line);
     if (to < 0) { const t = free.shift(); return t === undefined && arcana ? [] : [{ from, to: t ?? -1, color: "red" }]; }
-    if (arcana) return [{ from, to, color: toNum(line.value) === toNum(rows[to].target) ? "green" : "orange" }];
+    if (arcana) return [{ from, to, color: rows[to].name === "Any" || toNum(line.value) === toNum(rows[to].target) ? "green" : "orange" }];
     const wrong = to === lastBis ? from !== ist.length - 1 : from === lastIst;
     return [{ from, to, color: wrong ? "orange" : "green" }];
   });

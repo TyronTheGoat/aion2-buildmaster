@@ -204,3 +204,6 @@ export function diffPlan(plan: PlanResult, now: Partial<Record<PlaceId, Line[]>>
     return { id: p.id, now: nowLines, want, change: want.some((w) => w.state !== "ok") || nowLines.some((n) => n.state === "drop"), ...(p.locked ? { locked: true as const } : {}) };
   });
 }
+
+/** English names of all regular abilities of a class. */
+export const refSkillKey = (className: string) => refSkills(className).map((s) => s.skill_en);

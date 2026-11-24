@@ -6,10 +6,14 @@ import { iconFor } from "@/lib/knowledge/item-catalog";
 import { numberLocale, slotLabel, useLang, useT, type Lang } from "@/lib/i18n";
 import { GRADE_HEX_CSS } from "@/lib/grades";
 import { Card, CardArt, Filler, Portrait, SHOW_ITEM_ICONS } from "./Card";
-import { portraitOf } from "../store";
+import { charKey, portraitOf } from "../store";
 import { GearCompare } from "../GearCompare";
 import { ClassGuideBody, guideForClass } from "../ClassGuides";
 import { SkillPlanner } from "../SkillPlanner";
+import { OwnBisPicker } from "../OwnBisPicker";
+import { useBuilds } from "../build-store";
+import { applyBuild } from "@/lib/own-bis";
+import { currentItems, type PlaceId } from "@/lib/skill-plan";
 
 /** Order of the cards: weapon first, then armour, jewellery, the rest and Arcana last. */
 const ORDER: Item["slot"][] = [
@@ -44,12 +48,19 @@ export function deckOf(char: Character, lang: Lang = "en"): DeckEntry[] {
 type View = "gear" | "arcana" | "guide" | "planner";
 /** Crafting is out for good (Tyron 2026-11-24); the skill planner is live since 2026-11-24. */
 const VIEWS: View[] = ["gear", "arcana", "guide", "planner"];
+declare const __BM_PREVIEW__: boolean | undefined;
+/** Previews only in the offline file (the live site is built with BM_PREVIEW=0): saved builds and own BiS. */
+const SHOW_PREVIEW = typeof __BM_PREVIEW__ === "undefined" || !!__BM_PREVIEW__;
 
-export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
+export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note }: {
   char: Character; onBack: () => void; onRefresh: () => void; onRemove: () => void; note?: React.ReactNode;
 }) {
   const t = useT();
   const lang = useLang();
+  // own BiS (offline preview): the chosen build replaces kisk's BiS as the target of every piece
+  const builds = useBuilds(charKey(kiskChar));
+  const ownBis = SHOW_PREVIEW ? builds.active : undefined;
+  const char = useMemo(() => applyBuild(kiskChar, ownBis), [kiskChar, ownBis]);
   const all = useMemo(() => deckOf(char, lang), [char, lang]);
   // three pages on one wheel: equipment cards, Arcana cards, class guide, skill planner (offline)
   const [tab, setTab] = useState<View>("gear");
@@ -111,7 +122,14 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
               })}
             </ul>
           </nav>
-          <GearCompare key={entry.id} char={char} item={entry.item} slotId={entry.id} label={entry.label} />
+          <div className="min-w-0 space-y-4">
+            {ownBis && (() => {
+              const place = (Object.entries(currentItems(char)) as [PlaceId, typeof entry.item][]).find(([, it]) => it === entry.item)?.[0];
+              const kiskItem = place && currentItems(kiskChar)[place];
+              return place && kiskItem ? <OwnBisPicker key={`${ownBis.id}-${place}`} build={ownBis} place={place} kiskItem={kiskItem} onSave={builds.save} /> : null;
+            })()}
+            <GearCompare key={`${entry.id}-${ownBis?.id ?? "kisk"}`} char={char} item={entry.item} slotId={entry.id} label={entry.label} />
+          </div>
         </div>
       </div>
     );
@@ -157,6 +175,18 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
         ))}
       </div>
 
+      {SHOW_PREVIEW && (tab === "gear" || tab === "arcana") && (
+        <div className="flex flex-wrap items-center justify-end gap-2 text-sm">
+          <span className="text-[11px] uppercase tracking-widest text-zinc-500">{t("Ziel", "Target")}</span>
+          <select value={ownBis?.id ?? ""} onChange={(e) => builds.setActive(e.target.value)} aria-label={t("Ziel-BiS", "Target BiS")}
+            className="rounded-lg border border-[#d9c58f]/30 bg-[#0d1119] px-2 py-1.5 text-sm text-[#f4eed7] outline-none">
+            <option value="">kisk-BiS</option>
+            {builds.builds.filter((b) => b.bis).map((b) => <option key={b.id} value={b.id}>★ {b.name}</option>)}
+          </select>
+          {!builds.builds.some((b) => b.bis) && <span className="text-xs text-zinc-500">{t("Eigenen BiS im Skill-Planer speichern", "Save an own BiS in the skill planner")}</span>}
+        </div>
+      )}
+
       <div ref={wheelRef} className="wheel relative" style={{ minHeight: leaving ? lockH : undefined }}>
         {leaving && page(leaving, "pointer-events-none absolute inset-x-0 top-0 wheel-out-ccw", true)}
         {page(tab, leaving ? "wheel-in-ccw" : "")}
@@ -175,7 +205,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
       </div>;
     }
     if (view === "planner") return <div key={key} className={className} inert={out} aria-hidden={out || undefined}>
-      <div className="card-face relative rounded-[24px] p-4 sm:p-7"><span aria-hidden className="pointer-events-none absolute inset-[6px] rounded-[18px] border border-[#d9c58f]/20" /><div className="relative"><SkillPlanner char={char} /></div></div>
+      <div className="card-face relative rounded-[24px] p-4 sm:p-7"><span aria-hidden className="pointer-events-none absolute inset-[6px] rounded-[18px] border border-[#d9c58f]/20" /><div className="relative"><SkillPlanner char={kiskChar} preview={SHOW_PREVIEW} /></div></div>
     </div>;
     return <Tiles key={key} deck={deckFor(view)} onOpen={setOpen} className={className} />;
   }

@@ -7,6 +7,8 @@ import {
   HIGHEST, currentItems, currentLines, diffPlan, placeOf, planSkills, type Goal, type HaveMap, type Line, type NowState, type PieceDiff, type PlaceId, type PlaceRule, type WantState,
 } from "@/lib/skill-plan";
 import { charKey } from "./store";
+import { newBuildId, nowIso, useBuilds } from "./build-store";
+import { allPlaced, type OwnBuild } from "@/lib/own-bis";
 import { Pic, skillIcon } from "./ClassSkillSetup";
 import { iconFor } from "@/lib/knowledge/item-catalog";
 import type { Item } from "@/lib/types";
@@ -147,7 +149,7 @@ const GROUPS: { title: string; ids: PlaceId[] }[] = [
 ];
 
 /** Skill planner: which abilities to which level (priority), where the levels may fall (priority, limits), the result, what is already there. */
-export function SkillPlanner({ char }: { char: Character }) {
+export function SkillPlanner({ char, preview = false }: { char: Character; preview?: boolean }) {
   const cls = refClass(char.className);
   const key = charKey(char);
   const skills = useMemo(() => (cls ? refSkills(cls) : []), [cls]);
@@ -160,6 +162,9 @@ export function SkillPlanner({ char }: { char: Character }) {
   // off: the plan only shows how to reach the goals; on: compared with the gear the character wears now (kisk)
   const [compareNow, setCompareNow] = useState(() => !!load(key)?.compareNow);
   useEffect(() => save(key, { goals, order, have, compareNow }), [key, goals, order, have, compareNow]);
+  const builds = useBuilds(key);
+  // the saved build that is loaded right now ("" = none)
+  const [loaded, setLoaded] = useState("");
   const goalSort = useSortable<Goal>(setGoals, "goal");
   const placeSort = useSortable<PlaceRule>(setOrder, "place");
   if (!cls) return null;
@@ -178,6 +183,26 @@ export function SkillPlanner({ char }: { char: Character }) {
   const setGoal = (i: number, patch: Partial<Goal>) => setGoals((g) => g.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const shown = plan.places.filter((p) => p.lines.length || p.locked);
   const half = Math.ceil(order.length / 2);
+  const placed = goals.filter((g) => skills.some((s) => s.skill_en === g.skill)).length;
+  const complete = allPlaced(cls, goals);
+  const current = builds.builds.find((b) => b.id === loaded);
+  const saveBuild = (asBis: boolean) => {
+    const name = window.prompt(asBis ? "Name für deinen eigenen BiS (z. B. PvP, Main Build 2):" : "Name für den Build:", current?.name ?? "");
+    if (!name?.trim()) return;
+    // same name: that build is overwritten (its kisk line choices stay)
+    const same = builds.builds.find((b) => b.name.toLowerCase() === name.trim().toLowerCase());
+    const b: OwnBuild = {
+      id: same?.id ?? newBuildId(), name: name.trim(), bis: asBis || (!!same?.bis && complete), savedAt: nowIso(),
+      goals, order, have, places: raw.places.map((p) => ({ id: p.id, lines: p.lines })), picks: same?.picks ?? {},
+    };
+    builds.save(b);
+    setLoaded(b.id);
+  };
+  const loadBuild = (id: string) => {
+    setLoaded(id);
+    const b = builds.builds.find((x) => x.id === id);
+    if (b) { setGoals(b.goals); setOrder(b.order); setHave(b.have); }
+  };
 
   const haveOf = (id: PlaceId) => have[id] ?? { locked: false, lines: [] };
   const setLines = (id: PlaceId, f: (l: Line[]) => Line[]) => setHave((h) => ({ ...h, [id]: { ...haveOf(id), lines: f(haveOf(id).lines) } }));
@@ -187,8 +212,23 @@ export function SkillPlanner({ char }: { char: Character }) {
       <div className="flex flex-wrap items-baseline gap-2">
         <h3 className="text-2xl font-semibold text-[#f4eed7]">Skill-Planer</h3>
         <button className="ml-auto rounded-md px-2 py-0.5 text-[11px] uppercase tracking-widest text-zinc-500 ring-1 ring-white/10 hover:text-[#ff8b8b] hover:ring-[#ff8b8b]/40"
-          onClick={() => { if (window.confirm("Skill-Planer für diesen Charakter zurücksetzen? Alle Eingaben werden gelöscht.")) { setGoals([]); setOrder(DEFAULT_ORDER); setHave({}); setCompareNow(false); } }}>Reset</button>
+          onClick={() => { if (window.confirm("Skill-Planer für diesen Charakter zurücksetzen? Alle Eingaben werden gelöscht.")) { setGoals([]); setOrder(DEFAULT_ORDER); setHave({}); setCompareNow(false); setLoaded(""); } }}>Reset</button>
       </div>
+
+      {preview && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/10">
+          <span className="text-[11px] uppercase tracking-widest text-zinc-500">Builds</span>
+          <select className={`${SEL} min-w-0 max-w-[14rem]`} value={loaded} onChange={(e) => loadBuild(e.target.value)} aria-label="Build laden">
+            <option value="">{builds.builds.length ? "– Build laden –" : "noch keine gespeichert"}</option>
+            {builds.builds.map((b) => <option key={b.id} value={b.id}>{b.bis ? "★ " : ""}{b.name}</option>)}
+          </select>
+          <button className="rounded-lg border border-[#d9c58f]/30 px-3 py-1.5 text-sm text-[#f4eed7] hover:bg-[#d9c58f]/10" onClick={() => saveBuild(false)}>Speichern</button>
+          <button className="rounded-lg border border-[#d9c58f]/50 bg-[#d9c58f]/10 px-3 py-1.5 text-sm font-semibold text-[#f4eed7] hover:bg-[#d9c58f]/20 disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={!complete} title={complete ? "Als eigenen BiS speichern" : `Erst alle Abilities platzieren (${placed}/${skills.length})`} onClick={() => saveBuild(true)}>★ Als eigenen BiS</button>
+          {current && <button className="rounded-lg px-2 py-1.5 text-sm text-zinc-500 hover:text-[#ff8b8b]" onClick={() => { if (window.confirm(`Build „${current.name}“ löschen?`)) { builds.remove(current.id); setLoaded(""); } }}>Löschen</button>}
+          <span className={`ml-auto text-xs ${complete ? "text-[#5fbf8a]" : "text-zinc-500"}`}>{placed}/{skills.length} Abilities platziert</span>
+        </div>
+      )}
 
       {/* 1: goals */}
       <div className="space-y-2">
