@@ -7,7 +7,8 @@
  */
 import { parseKiskGear } from "@/lib/kisk/parse";
 import { extractPortrait, htmlToLines } from "@/lib/kisk/html-to-text";
-import { charKey, parseKiskLink, upsertChar } from "./store";
+import { charKey, hasChar, parseKiskLink, upsertChar } from "./store";
+import { addBlocked } from "./cloud";
 
 const PREFIX = "#kisk-import";
 
@@ -40,6 +41,8 @@ export async function importKiskPage(url: string, z: string): Promise<string> {
   const gearUrl = `https://kisk.app/c/${who.region}/${who.server}/${encodeURIComponent(who.name)}/gear`;
   const char = parseKiskGear(htmlToLines(html), { ...who, url: gearUrl, mode: "paste" });
   if (!char.gear.length && !char.arcana.length) throw new Error("Auf der Seite wurde keine Ausrüstung erkannt. Bitte die Gear-Seite des Charakters öffnen.");
+  const blocked = hasChar(charKey(who)) ? undefined : addBlocked(charKey(who));
+  if (blocked) throw new Error(blocked);
   const portrait = extractPortrait(html);
   upsertChar({ ...who, snapshot: { ...char, portrait: portrait ?? char.portrait } });
   return charKey(who);

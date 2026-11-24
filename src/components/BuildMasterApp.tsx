@@ -13,7 +13,7 @@ import { Filler, Portrait, SHOW_ITEM_ICONS } from "./deck/Card";
 import { iconFor } from "@/lib/knowledge/item-catalog";
 import { charKey, parseKiskLink, portraitOf, useCharacters, type SavedChar } from "./store";
 import { numberLocale, useLang, useT } from "@/lib/i18n";
-import { useCloud } from "./cloud";
+import { addBlocked, removeShared, useCloud } from "./cloud";
 import { bookmarklet } from "./kisk-import";
 
 function useHashRoute(): [string | undefined, (k?: string) => void] {
@@ -59,7 +59,8 @@ export function BuildMasterApp() {
     return <CharacterScreen key={route} saved={selected} onBack={() => go()} upsert={upsert}
       onRemove={() => {
         if (selected.builtin) { alert(t(`${selected.name} ist ein Testcharakter und gehört bei allen zur Grundausstattung.`, `${selected.name} is a test character every account has.`)); return; }
-        if (confirm(t(`${selected.name} entfernen?`, `Remove ${selected.name}?`))) { remove(route); go(); }
+        if (!confirm(t(`${selected.name} entfernen?`, `Remove ${selected.name}?`))) return;
+        void removeShared(route).then((err) => { if (err) { alert(err); return; } remove(route); go(); });
       }} />;
   }
 
@@ -136,7 +137,7 @@ export function BuildMasterApp() {
       </button>
 
       <AddCharacterSheet open={adding} onClose={() => setAdding(false)}
-        onAdd={(c) => { upsert(c); setAdding(false); go(charKey(c)); }} />
+        onAdd={(c) => { const err = chars.some((x) => charKey(x) === charKey(c)) ? undefined : addBlocked(charKey(c)); if (err) { alert(err); return; } upsert(c); setAdding(false); go(charKey(c)); }} />
     </div>
   );
 }

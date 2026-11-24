@@ -14,6 +14,8 @@ export interface SavedChar {
   gender?: "f" | "m";
   /** test character every account has (Tyron, 2026-11-23); cannot be removed */
   builtin?: boolean;
+  /** added by someone for everybody (live site), not stored in this box */
+  shared?: boolean;
 }
 
 /** The test characters from the start (Florentina, ASNA, WRVITH, Creapure, Healga, TestoSpritze): in every box, view only. */
@@ -69,9 +71,12 @@ function read(): SavedChar[] {
     // the test characters are always there; a refreshed copy in the box (newer snapshot) wins
     const all = [...own.map((c) => (BUILTIN_CHARS.some((b) => charKey(b) === charKey(c)) ? { ...c, builtin: true } : c)),
       ...BUILTIN_CHARS.filter((b) => !own.some((c) => charKey(c) === charKey(b)))];
-    // someone refreshed the character more recently: everyone gets the newer data
+    // characters someone added for everybody, and the newest data of each (whoever refreshed it last)
     let shared: Record<string, Character> = {};
-    try { shared = JSON.parse(localStorage.getItem(SHARED_CHARS_KEY) ?? "{}"); } catch { /* broken */ }
+    try { shared = JSON.parse(localStorage.getItem(SHARED_CHARS_KEY) ?? "{}").chars ?? {}; } catch { /* broken */ }
+    for (const [k, snap] of Object.entries(shared)) {
+      if (!all.some((c) => charKey(c) === k)) all.push({ region: snap.region, server: snap.server, name: snap.name, snapshot: snap, shared: true });
+    }
     cache = all.map((c) => {
       const s = shared[charKey(c)];
       return { ...c, snapshot: newer(s, c.snapshot) ? s : c.snapshot, gender: c.gender ?? genders[charKey(c)] };
@@ -85,13 +90,20 @@ function write(list: SavedChar[]) {
   for (const c of list) if (c.gender) genders[charKey(c)] = c.gender;
   localStorage.setItem(GENDER, JSON.stringify(genders));
   // test characters stay built in: only a refreshed copy (newer data than the built-in one) is stored
+  let shared: Record<string, Character> = {};
+  try { shared = JSON.parse(localStorage.getItem(SHARED_CHARS_KEY) ?? "{}").chars ?? {}; } catch { /* broken */ }
   const keep = list.filter((c) => !c.builtin || c.snapshot !== BUILTIN_CHARS.find((b) => charKey(b) === charKey(c))?.snapshot)
-    .map((c) => { const x = { ...c }; delete x.builtin; return x; });
+    // a character of everybody is only stored here once this box has newer data of it
+    .filter((c) => !c.shared || c.snapshot !== shared[charKey(c)])
+    .map((c) => { const x = { ...c }; delete x.builtin; delete x.shared; return x; });
   localStorage.setItem(KEY, JSON.stringify(keep));
   listeners.forEach((l) => l());
 }
 
 const NO_CHARS: SavedChar[] = [];
+
+/** Is the character already in the box (own, built in or shared)? */
+export const hasChar = (key: string) => read().some((x) => charKey(x) === key);
 
 /** Adds or updates a character in the box (outside React, e.g. the kisk import). */
 export function upsertChar(c: SavedChar) {

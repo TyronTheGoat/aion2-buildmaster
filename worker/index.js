@@ -9,6 +9,14 @@ const USER_KEYS = new Set(["chars", "gender", "planned", "craft", "skills", "ski
 const MAX_DOC = 1_500_000;
 const MAX_PRICE = 4_000;
 const MAX_CHAR = 400_000;
+/** characters one account may add for everybody (Tyron 2026-11-24); the admin has no limit */
+const CHAR_LIMIT = 10;
+/** SHA-256 of the admin's login e-mail (kept as a hash so the address is not in the code) */
+const ADMIN_HASHES = new Set(["999ec7ee59739028e501fd431d597363d079cde035ab621074a776e949c07d3c"]);
+async function isAdmin(email) {
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(email.toLowerCase()));
+  return ADMIN_HASHES.has([...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, "0")).join(""));
+}
 
 export class Store extends DurableObject {
   constructor(ctx, env) {
@@ -18,6 +26,9 @@ export class Store extends DurableObject {
   }
   list() {
     return this.sql.exec("SELECT k, v, at FROM kv").toArray();
+  }
+  rows() {
+    return this.sql.exec("SELECT k, v, by, at FROM kv").toArray();
   }
   put(k, v, by) {
     const at = Date.now();
@@ -152,9 +163,15 @@ async function api(req, env, url) {
 
   // shared character data (the newest kisk snapshot per character)
   const chars = () => env.STORE.get(env.STORE.idFromName("chars"));
+  // who added a character first: row "o:<key>"; older rows without one count for the account that wrote them
+  const ownerOf = (rows, k) => rows.find((r) => r.k === `o:${k}`)?.v ?? rows.find((r) => r.k === k)?.by;
   if (path === "/api/chars" && req.method === "GET") {
-    const rows = await chars().list();
-    return json({ chars: rows.map((r) => ({ k: r.k, c: JSON.parse(r.v), at: r.at })) });
+    const rows = await chars().rows();
+    const admin = !who.service && await isAdmin(email);
+    return json({
+      chars: rows.filter((r) => !r.k.startsWith("o:")).map((r) => ({ k: r.k, c: JSON.parse(r.v), at: r.at, mine: ownerOf(rows, r.k) === email || undefined })),
+      limit: admin ? null : CHAR_LIMIT,
+    });
   }
   if (path === "/api/chars" && req.method === "PUT") {
     const text = await req.text();
@@ -165,11 +182,33 @@ async function api(req, env, url) {
     const ok = c && typeof c === "object" && typeof c.region === "string" && typeof c.server === "string" && typeof c.name === "string"
       && Array.isArray(c.gear) && Array.isArray(c.arcana) && typeof c.source?.fetchedAt === "string" && c.source.mode !== "demo";
     const k = ok ? `${c.region}/${c.server}/${c.name}`.toLowerCase() : "";
-    if (!ok || body.k !== k || k.length > 120) return json({ error: "ungültiger Charakter" }, 400);
-    // only newer data replaces what is there
-    const old = await chars().get(k);
-    if (old && JSON.parse(old).source?.fetchedAt >= c.source.fetchedAt) return json({ at: null, kept: true });
-    return json({ at: await chars().put(k, JSON.stringify(c), email) });
+    if (!ok || body.k !== k || k.length > 120 || k.startsWith("o:")) return json({ error: "ungültiger Charakter" }, 400);
+    const store = chars();
+    const old = await store.get(k);
+    if (!old) {
+      // a new character for everybody: at most CHAR_LIMIT per account, except the admin
+      if (!(await isAdmin(email))) {
+        const rows = await store.rows();
+        const mine = rows.filter((r) => !r.k.startsWith("o:") && ownerOf(rows, r.k) === email).length;
+        if (mine >= CHAR_LIMIT) return json({ error: `Du kannst höchstens ${CHAR_LIMIT} Charaktere hinzufügen.`, limit: CHAR_LIMIT }, 403);
+      }
+      await store.put(`o:${k}`, email, email);
+    } else if (JSON.parse(old).source?.fetchedAt >= c.source.fetchedAt) {
+      // only newer data replaces what is there
+      return json({ at: null, kept: true });
+    }
+    return json({ at: await store.put(k, JSON.stringify(c), email) });
+  }
+  if (path === "/api/chars" && req.method === "DELETE") {
+    // only the account that added a character can take it out for everybody
+    const k = (url.searchParams.get("k") ?? "").toLowerCase();
+    const store = chars();
+    const rows = await store.rows();
+    if (!rows.some((r) => r.k === k)) return json({ ok: true });
+    if (ownerOf(rows, k) !== email && !(await isAdmin(email))) return json({ error: "Diesen Charakter hat jemand anderes hinzugefügt." }, 403);
+    await store.del(k);
+    await store.del(`o:${k}`);
+    return json({ ok: true });
   }
 
   if (path === "/api/prices" && req.method === "GET") {

@@ -108,7 +108,11 @@ async function pullPrices() {
 /* ---------------------------------------------------------------- shared character data ---------------------------------------------------------------- */
 
 let sharedChars: Record<string, Character> = {};
+/** characters this account added for everybody, and how many it may add (null: no limit) */
+const sharedMine = new Set<string>();
+let sharedLimit: number | null = 10;
 const isNewer = (a?: Character, b?: Character) => !!a && (!b || a.source.fetchedAt > b.source.fetchedAt);
+const writeShared = () => origSet(SHARED_CHARS_KEY, JSON.stringify({ chars: sharedChars, mine: [...sharedMine], limit: sharedLimit }));
 
 /** Sends every character of the list whose data is newer than the shared one (real kisk data only, never the demo data). */
 function shareChars(list: SavedChar[]) {
@@ -117,17 +121,38 @@ function shareChars(list: SavedChar[]) {
     if (!snap || snap.source.mode === "demo" || !snap.gear) continue;
     const k = charKey(snap);
     if (!isNewer(snap, sharedChars[k])) continue;
+    const isNew = !sharedChars[k];
+    if (isNew && sharedLimit !== null && sharedMine.size >= sharedLimit) continue;
     sharedChars = { ...sharedChars, [k]: snap };
+    if (isNew) sharedMine.add(k);
     call("PUT", "/api/chars", { k, c: snap }).catch(() => { /* next time */ });
   }
-  origSet(SHARED_CHARS_KEY, JSON.stringify(sharedChars));
+  writeShared();
 }
 
 async function pullChars() {
   try {
-    const { chars } = await call("GET", "/api/chars") as { chars: { k: string; c: Character }[] };
-    for (const { k, c } of chars) if (isNewer(c, sharedChars[k])) sharedChars[k] = c;
+    const r = await call("GET", "/api/chars") as { chars: { k: string; c: Character; mine?: boolean }[]; limit: number | null };
+    for (const { k, c, mine } of r.chars) { if (isNewer(c, sharedChars[k])) sharedChars[k] = c; if (mine) sharedMine.add(k); }
+    sharedLimit = r.limit;
   } catch { /* stays as it is */ }
+}
+
+/** Online: why this character cannot be added (limit of characters per account reached), else undefined. */
+export function addBlocked(key: string): string | undefined {
+  if (status.mode !== "online" || sharedChars[key] || sharedLimit === null || sharedMine.size < sharedLimit) return undefined;
+  return `Du kannst höchstens ${sharedLimit} Charaktere für alle hinzufügen. Entferne erst einen, den du hinzugefügt hast.`;
+}
+
+/** Takes a character out for everybody (only the account that added it). Returns an error text when not allowed. */
+export async function removeShared(key: string): Promise<string | undefined> {
+  if (status.mode !== "online" || !sharedChars[key]) return undefined;
+  if (!sharedMine.has(key) && sharedLimit !== null) return "Diesen Charakter hat jemand anderes für alle hinzugefügt, du kannst ihn nicht entfernen.";
+  try { await call("DELETE", `/api/chars?k=${encodeURIComponent(key)}`); } catch (e) { return `Entfernen fehlgeschlagen (${(e as Error).message}).`; }
+  const rest = { ...sharedChars }; delete rest[key];
+  sharedChars = rest; sharedMine.delete(key);
+  writeShared(); notify(SHARED_CHARS_KEY);
+  return undefined;
 }
 
 /**
@@ -196,7 +221,7 @@ export async function initCloud(): Promise<CloudStatus> {
     if (this === localStorage && DOCS[k]) schedule(k);
     if (this === localStorage && k === CHARS_KEY) { try { shareChars(JSON.parse(v)); } catch { /* not a list */ } }
   };
-  const refreshChars = async () => { const before = JSON.stringify(sharedChars); await pullChars(); if (JSON.stringify(sharedChars) !== before) { origSet(SHARED_CHARS_KEY, JSON.stringify(sharedChars)); notify(SHARED_CHARS_KEY); } };
+  const refreshChars = async () => { const before = JSON.stringify(sharedChars); await pullChars(); if (JSON.stringify(sharedChars) !== before) { writeShared(); notify(SHARED_CHARS_KEY); } };
   setInterval(() => { void pullPrices(); void refreshChars(); }, 60_000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { void pullPrices(); void refreshChars(); } });
   return status;
