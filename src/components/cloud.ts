@@ -16,7 +16,7 @@ import { SKILLS_KEY } from "./skill-store";
 const CRAFT_KEY = "bm:craft:v1";
 const PLANNED_KEY = "bm:planned";
 /** localStorage key → document name on the server */
-const DOCS: Record<string, string> = { [CHARS_KEY]: "chars", [GENDER_KEY]: "gender", [PLANNED_KEY]: "planned", [CRAFT_KEY]: "craft", [SKILLS_KEY]: "skills", "bm:skillplan": "skillplan" };
+const DOCS: Record<string, string> = { [CHARS_KEY]: "chars", [GENDER_KEY]: "gender", [PLANNED_KEY]: "planned", [CRAFT_KEY]: "craft", [SKILLS_KEY]: "skills", "bm:skillplan": "skillplan", "bm:builds": "builds", "bm:build-active": "buildactive" };
 /** Parts of the crafting data that belong to the player; recipes, chains etc. come from the built-in package. */
 const CRAFT_USER = ["inventory", "projects", "events", "overrides", "catalogExtra"] as const;
 
@@ -199,6 +199,9 @@ export async function initCloud(): Promise<CloudStatus> {
     localStorage.setItem(PLANNED_KEY, JSON.stringify(docs.planned ?? {}));
     localStorage.setItem(SKILLS_KEY, JSON.stringify(docs.skills ?? {}));
     localStorage.setItem("bm:skillplan", JSON.stringify(docs.skillplan ?? {}));
+    // saved skill planner builds and the chosen target (live since 2026-11-24)
+    localStorage.setItem("bm:builds", JSON.stringify(docs.builds ?? {}));
+    localStorage.setItem("bm:build-active", JSON.stringify(docs.buildactive ?? {}));
     localStorage.setItem(CRAFT_KEY, mergeCraft(localCraft, mine, shared));
     localStorage.setItem("bm:cloud:owner", email);
     setStatus({ mode: "online", email });

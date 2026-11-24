@@ -6,7 +6,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { kiskGearUrl, mergeKiskGear } from "../src/lib/kisk/api.ts";
 
-const USER_KEYS = new Set(["chars", "gender", "planned", "craft", "skills", "skillplan"]);
+const USER_KEYS = new Set(["chars", "gender", "planned", "craft", "skills", "skillplan", "builds", "buildactive"]);
 const MAX_DOC = 1_500_000;
 const MAX_PRICE = 4_000;
 const MAX_CHAR = 400_000;

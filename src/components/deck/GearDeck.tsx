@@ -51,9 +51,9 @@ export function deckOf(char: Character, lang: Lang = "en"): DeckEntry[] {
 type View = "gear" | "arcana" | "guide" | "planner";
 /** Crafting is out for good (Tyron 2026-11-24); the skill planner is live since 2026-11-24. */
 const VIEWS: View[] = ["gear", "arcana", "guide", "planner"];
-declare const __BM_PREVIEW__: boolean | undefined;
-/** Previews only in the offline file (the live site is built with BM_PREVIEW=0): saved builds and own BiS. */
-const SHOW_PREVIEW = typeof __BM_PREVIEW__ === "undefined" || !!__BM_PREVIEW__;
+
+/** Saved builds as target (own BiS), gear wizard, ability levels and Any. */
+const SHOW_PREVIEW = true; // saved builds as target, gear wizard, ability levels, Any: live since 2026-11-24 (Tyron)
 
 export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note }: {
   char: Character; onBack: () => void; onRefresh: () => void; onRemove: () => void; note?: React.ReactNode;
