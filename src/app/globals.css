@@ -83,8 +83,8 @@ body { overflow-x: clip; }
 .wheel { --ring-r: 700px; perspective: 1400px; perspective-origin: 50% 25%; transform-style: preserve-3d; }
 .wheel > * { transform-origin: 50% 25%; }
 .wheel-out-ccw, .wheel-in-ccw { will-change: transform, opacity, filter; backface-visibility: hidden; }
-.wheel-out-ccw { animation: ring-out 1600ms linear both; }
-.wheel-in-ccw { animation: ring-in 1600ms linear both; }
+.wheel-out-ccw { animation: ring-out 1000ms linear both; }
+.wheel-in-ccw { animation: ring-in 1000ms linear both; }
 @keyframes ring-out {
   0.00% { transform: translate3d(calc(var(--ring-r) * -0.0000), 0, calc(var(--ring-r) * -0.0000)); opacity: 1.000; filter: blur(0.00px) brightness(1.000); }
   1.67% { transform: translate3d(calc(var(--ring-r) * -0.0022), 0, calc(var(--ring-r) * -0.0000)); opacity: 1.000; filter: blur(0.00px) brightness(1.000); }

@@ -83,7 +83,7 @@ export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note, re
   };
   useEffect(() => {
     if (!leaving) return;
-    const t = setTimeout(() => { setLeaving(undefined); setLockH(undefined); }, 1650);
+    const t = setTimeout(() => { setLeaving(undefined); setLockH(undefined); }, 1050);
     return () => clearTimeout(t);
   }, [leaving, tab]);
   const deckFor = (v: View) => all.filter((d) => (v === "arcana") === (d.item.slot === "arcana"));

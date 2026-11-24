@@ -16,10 +16,18 @@ import { numberLocale, useLang, useT } from "@/lib/i18n";
 import { addBlocked, isAdminAccount, removeShared, useCloud } from "./cloud";
 import { bookmarklet } from "./kisk-import";
 
+/** The page the class guides were opened from (their back button returns there, Tyron 2026-11-24). */
+let guidesFrom: string | undefined;
+let lastRoute: string | undefined;
 function useHashRoute(): [string | undefined, (k?: string) => void] {
   const [route, setRoute] = useState<string>();
   useEffect(() => {
-    const read = () => setRoute(decodeURIComponent(location.hash.replace(/^#\/?c\//, "")) || undefined);
+    const read = () => {
+      const r = decodeURIComponent(location.hash.replace(/^#\/?c\//, "")) || undefined;
+      if (r === "klassen" && lastRoute !== "klassen") guidesFrom = lastRoute;
+      lastRoute = r;
+      setRoute(r);
+    };
     read();
     window.addEventListener("hashchange", read);
     return () => window.removeEventListener("hashchange", read);
@@ -67,7 +75,7 @@ export function BuildMasterApp() {
   const lang = useLang();
 
   if (route === "katalog") return <ItemCatalog onBack={() => go()} />;
-  if (route === "klassen") return <ClassGuides onBack={() => go()} />;
+  if (route === "klassen") return <ClassGuides onBack={() => go(guidesFrom && guidesFrom !== "katalog" ? guidesFrom : undefined)} />;
 
   if (route && selected) {
     return <CharacterScreen key={route} saved={selected} onBack={() => go()} upsert={upsert}
