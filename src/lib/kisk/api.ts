@@ -9,6 +9,7 @@ import type { Character, Item, StatLine } from "../types";
 import { slotFromName } from "../knowledge/slots";
 import { ownScore } from "../score";
 import { gradeFromScore } from "../grades";
+import { toNum } from "../compare";
 
 export interface KiskGearItem {
   slot?: string;
@@ -37,7 +38,12 @@ export const kiskGearUrl = (region: string, server: string, name: string) =>
 
 const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 const sameLines = (a: StatLine[], b: StatLine[]) =>
-  a.length === b.length && a.every((l, i) => key(l.name) === key(b[i].name) && String(l.value).trim() === String(b[i].value).trim());
+  a.length === b.length && a.every((l, i) => key(l.name) === key(b[i].name) && sameValue(l.value, b[i].value));
+// "13%" (API) and "13.0%" (gear page) are the same roll
+const sameValue = (a: string, b: string) => {
+  const x = toNum(a), y = toNum(b);
+  return Number.isNaN(x) || Number.isNaN(y) ? a.trim() === b.trim() : x === y && a.trim().endsWith("%") === b.trim().endsWith("%");
+};
 
 /** The armory's slot names where the item name does not tell the slot. */
 const SLOT_BY_API: Record<string, Item["slot"]> = {
@@ -89,14 +95,16 @@ export function mergeKiskGear(old: Character, api: KiskGear): Character | undefi
   if (fetchedAt <= old.source.fetchedAt) return undefined;
   const pool = [...old.gear, ...old.arcana];
   const used = new Set<Item>();
-  // the same piece of the last import: same slot, the same name first, then in order
-  const match = (slot: Item["slot"], name: string) => {
-    const same = pool.filter((o) => !used.has(o) && o.slot === slot);
-    const hit = same.find((o) => key(o.name) === key(name)) ?? same[0];
+  // the same piece of the last import: same slot, then the same name and the most lines alike (two equal earrings), then in order
+  const match = (it: KiskGearItem) => {
+    const names = [...(it.subStats ?? []), ...(it.subSkills ?? [])].map((l) => key(l.name ?? ""));
+    const rank = (o: Item) => (key(o.name) === key(it.name ?? "") ? 100 : 0) + o.lines.filter((l) => names.includes(key(l.name))).length;
+    const same = pool.filter((o) => !used.has(o) && o.slot === slotOf(it)).sort((a, b) => rank(b) - rank(a));
+    const hit = same[0];
     if (hit) used.add(hit);
     return hit;
   };
-  const fresh = api.items.map((it) => toItem(it, match(slotOf(it), it.name ?? "")));
+  const fresh = api.items.map((it) => toItem(it, match(it)));
   const known = fresh.filter((i) => i.slot !== "unknown");
   const kept = pool.filter((o) => !used.has(o) && !known.some((n) => n.slot === o.slot && (o.slot !== "ring" && o.slot !== "earring" && o.slot !== "arcana")));
   const all = [...known, ...kept];
