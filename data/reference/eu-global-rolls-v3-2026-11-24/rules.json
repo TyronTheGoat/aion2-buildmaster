@@ -1,0 +1,73 @@
+{
+  "title": "BuildMaster - AION 2 EU/Global Arcana und Soul Binding Datenbasis",
+  "as_of": "2026-11-24",
+  "scope": {
+    "region": "EU/Global",
+    "classes": [
+      "Assassin",
+      "Chanter",
+      "Cleric",
+      "Gladiator",
+      "Ranger",
+      "Sorcerer",
+      "Spiritmaster",
+      "Templar"
+    ],
+    "include_asia_only": false,
+    "armband_type": "Pantheon special slot",
+    "item_id_specific_verification": "not_performed"
+  },
+  "regular_skill_rules": {
+    "trained_max_level": 10,
+    "daevanion_extra_max_levels": 4,
+    "fully_developed_before_gear_arcana": 14,
+    "planning_goal_level": 20,
+    "target_is_not_a_hard_game_cap": true,
+    "effective_level_expression": "trained_level + daevanion_bonus + sum(equipped_arcana_skill_bonus) + sum(equipped_gear_skill_bonus)",
+    "arcana_skill_max_on_one_card": 4,
+    "gear_skill_bonus_per_line": 1,
+    "arcana_skill_boost_slots_max": 2,
+    "arcana_card_pool_rule": "active: Chalice + exactly one of Parchment/Compass; passive: Chalice + exactly one of Bell/Mirror"
+  },
+  "stigma_rules": {
+    "separate": true,
+    "uses": "Stigma Shards",
+    "eligible_on_arcana": false,
+    "eligible_on_gear": false,
+    "eligible_on_devanion_nodes": false,
+    "not_part_of_ordinary_skills": true
+  },
+  "probability_semantics": {
+    "gear_probability": "baseline unconditional per random option line prior to duplicate exclusion",
+    "gear_normal_stat_total_pct": 80,
+    "gear_skill_total_pct": 20,
+    "single_active_skill_pct": "20/12 = 1.6666667% per line (modeled)",
+    "single_passive_skill_pct": "20/10 = 2% per line (modeled)",
+    "arcana_one_skill_line": "1/pool_size; percentages in Arcana CSV",
+    "unique_card_four_distinct_skills": "4/pool_size; assumes no duplicate skill options within card",
+    "after_current_options_exclusion": "not calculated; use ingame actual odds",
+    "aion2gg_chance_to_appear": "chance to appear somewhere among all gear lines, NOT equal to one line chance",
+    "item_tier_matters": "CSV numeric ranges are reference tiers only"
+  },
+  "data_files": {
+    "01": "176 class mastery skills",
+    "02": "352 class/arcana/skill allowed rows",
+    "03": "255 per-slot general stats with numeric ranges and reference item levels",
+    "04": "1008 per-class/gear-slot skill allowed rows",
+    "05": "13 slot rules",
+    "06": "40 arcana card item types (5 slots x 2 variants x 4 rarities)"
+  },
+  "sources": {
+    "arcana": "https://metabot.gg/en/aion-2/arcana",
+    "arcana_explainer": "https://aion2.gg/guides/arcana-system-explained",
+    "gear_probabilities": "https://aion2maps.com/guides/stat-lines/",
+    "stat_ranges": "https://aion2.gg/tools/soul-imprint/",
+    "leveling": "https://aion2skills.com/skill-costs/"
+  },
+  "limitations": [
+    "German localizations from earlier BuildMaster, verify in the actual game client; leave missing names missing.",
+    "EU/Global client reference sources, no per item ID verification.",
+    "Not a damage, DPS or combat power formula database.",
+    "No guaranteed total chance of full item roll; rerolls differ based on exclusions."
+  ]
+}
