@@ -11,6 +11,7 @@ import { useLang, useT } from "@/lib/i18n";
 import { newBuildId, nowIso, useBuilds } from "./build-store";
 import { allPlaced, type OwnBuild } from "@/lib/own-bis";
 import { Pic, skillIcon } from "./ClassSkillSetup";
+import { Help } from "./extras";
 import { iconFor } from "@/lib/knowledge/item-catalog";
 import type { Item } from "@/lib/types";
 
@@ -216,6 +217,7 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
     <section className="space-y-6">
       <div className="flex flex-wrap items-baseline gap-2">
         <h3 className="text-2xl font-semibold text-[#f4eed7]">{t("Skill-Planer", "Skill planner")}</h3>
+        {preview && <Help text={t("Wähle die Abilities und ihre Ziel-Stufe. Der Planer verteilt sie nach deiner Reihenfolge auf Arcana-Karten (bis +4) und Ausrüstung (+1). „Highest“ holt das Maximum, „Any“ kommt rein, wo am Ende noch Platz ist.", "Pick the abilities and their target level. The planner spreads them in your order over Arcana cards (up to +4) and gear (+1). “Highest” takes the most, “Any” goes where room is left at the end.")} />}
         <button className="ml-auto rounded-md px-2 py-0.5 text-[11px] uppercase tracking-widest text-zinc-500 ring-1 ring-white/10 hover:text-[#ff8b8b] hover:ring-[#ff8b8b]/40"
           onClick={() => { if (window.confirm(t("Skill-Planer für diesen Charakter zurücksetzen? Alle Eingaben werden gelöscht.", "Reset the skill planner for this character? Everything you entered is deleted."))) { setGoals([]); setOrder(DEFAULT_ORDER); setHave({}); setCompareNow(false); setLoaded(""); } }}>Reset</button>
       </div>
@@ -223,6 +225,7 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
       {preview && (
         <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/10">
           <span className="text-[11px] uppercase tracking-widest text-zinc-500">Builds</span>
+          <Help text={t("Speichere den Plan unter einem Namen. Ein Build, in dem alle Abilities platziert sind, ist bei Ausrüstung und Arcana als eigener BiS (Ziel) wählbar.", "Save the plan under a name. A build with every ability placed can be chosen as own BiS (target) in equipment and Arcana.")} />
           <select className={`${SEL} min-w-0 max-w-[14rem]`} value={loaded} onChange={(e) => loadBuild(e.target.value)} aria-label={t("Build laden", "Load build")}>
             <option value="">{builds.builds.length ? t("– Build laden –", "– load build –") : t("noch keine gespeichert", "none saved yet")}</option>
             {builds.builds.map((b) => <option key={b.id} value={b.id}>{allPlaced(cls, b.goals) ? "★ " : ""}{b.name}</option>)}

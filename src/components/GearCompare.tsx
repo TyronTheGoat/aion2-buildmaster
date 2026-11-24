@@ -19,7 +19,7 @@ import { GRADE_HEX_CSS } from "@/lib/grades";
 import { RollChances } from "./RollChances";
 
 const LINK: Record<LinkColor, { hex: string; dot: string; mark: string; markCls: string }> = {
-  green: { hex: "#34d399", dot: "bg-emerald-400", mark: "✓", markCls: "text-emerald-300" },
+  green: { hex: "#34d399", dot: "bg-emerald-400", mark: "✓", markCls: "text-[#5fbf8a]" },
   orange: { hex: "#ff9a2e", dot: "bg-orange-400", mark: "Platz", markCls: "text-orange-300" },
   red: { hex: "#ff3b3b", dot: "bg-rose-400", mark: "✕", markCls: "text-rose-300" },
 };

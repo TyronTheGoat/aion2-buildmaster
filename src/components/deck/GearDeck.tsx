@@ -16,6 +16,10 @@ import { useBuilds } from "../build-store";
 import { allPlaced, applyBuild } from "@/lib/own-bis";
 import { refClass } from "@/lib/reference/rolls-v3";
 import { AbilityLevels } from "../AbilityLevels";
+import { PREVIEW } from "@/lib/preview";
+import { useFavorites } from "../fav-store";
+import { useCloud } from "../cloud";
+import { FavStar, Help, ProgressView } from "../extras";
 import { currentItems, type PlaceId } from "@/lib/skill-plan";
 
 /** Order of the cards: weapon first, then armour, jewellery, the rest and Arcana last. */
@@ -62,6 +66,9 @@ export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note, re
   const lang = useLang();
   // own BiS (offline preview): the chosen build replaces kisk's BiS as the target of every piece
   const builds = useBuilds(charKey(kiskChar));
+  const fav = useFavorites();
+  const online = useCloud().mode === "online";
+  const [progress, setProgress] = useState(false);
   const cls = refClass(kiskChar.className);
   // every saved build with all abilities placed can be the target (Arcana and gear switch together)
   const targets = useMemo(() => (cls ? builds.builds.filter((b) => allPlaced(cls, b.goals)) : []), [cls, builds.builds]);
@@ -151,18 +158,25 @@ export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note, re
   return (
     <div className="space-y-4">
       {wizard}
+      {progress && <ProgressView char={kiskChar} charKey={charKey(kiskChar)} portrait={portraitOf(kiskChar)} online={online} onClose={() => setProgress(false)} />}
       <div className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-2 overflow-hidden rounded-2xl px-3 py-2.5">
         <button onClick={onBack} aria-label={t("Zurück zur Charakterauswahl", "Back to character selection")}
           className="relative shrink-0 rounded-full border border-[#d9c58f]/20 bg-white/[0.03] px-3 py-1 text-sm text-[#efe6cc]/85 hover:border-[#d9c58f]/40">‹ {t("Zurück", "Back")}</button>
         <Portrait src={portraitOf(char)} name={char.name} className="relative h-10 w-10 rounded-lg" />
         <div className="relative min-w-0 flex-1">
-          <div className="truncate text-base font-semibold leading-tight text-[#f4eed7]">{char.name}</div>
+          <div className="flex items-center gap-1">
+            <span className="truncate text-base font-semibold leading-tight text-[#f4eed7]">{char.name}</span>
+            {PREVIEW && <FavStar on={fav.isFav(charKey(kiskChar))} onToggle={() => fav.toggle(charKey(kiskChar))} className="-my-2 h-7 w-7 text-lg" />}
+          </div>
           <div className="truncate text-[11px] text-[#beac80]/80">
             {[char.className, char.race, `${char.server} · ${char.region.toUpperCase()}`,
               char.combatPower && `CP ${char.combatPower.toLocaleString(numberLocale(lang))}`, char.gearGrade && `${t("Gear-Rang", "Gear rank")} ${char.gearGrade}`].filter(Boolean).join(" · ")}
           </div>
         </div>
         <div className="relative flex shrink-0 gap-1.5 text-xs">
+          {PREVIEW && <button onClick={() => setProgress(true)} className="inline-flex items-center gap-1 rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-[#efe6cc] hover:border-[#d9c58f]/45">
+            <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5"><path d="M1 13 L5 8 L8 10 L14 3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            {t("Verlauf", "Progress")}</button>}
           <button onClick={onRefresh} disabled={refreshing} aria-busy={refreshing}
             className="inline-flex items-center gap-1.5 rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-[#efe6cc] hover:border-[#d9c58f]/45 disabled:cursor-wait">
             {refreshing && <span aria-hidden className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#d9c58f]/30 border-t-[#d9c58f]" />}
@@ -195,6 +209,7 @@ export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note, re
         <div className="flex flex-wrap items-center justify-end gap-2 text-sm">
           {cls && <AbilityLevels cls={cls} char={kiskChar} build={ownBis} />}
           <span className="text-[11px] uppercase tracking-widest text-zinc-500">{t("Ziel", "Target")}</span>
+          {PREVIEW && <Help text={t("Womit deine Teile verglichen werden: kisk-BiS oder ein eigener Build aus dem Skill-Planer, in dem alle Abilities platziert sind. Wechselt bei Ausrüstung und Arcana gemeinsam.", "What your pieces are compared with: kisk's BiS or an own build from the skill planner with every ability placed. Switches for equipment and Arcana together.")} />}
           <select value={ownBis?.id ?? ""} onChange={(e) => builds.setActive(e.target.value)} aria-label={t("Ziel-BiS", "Target BiS")}
             className="rounded-lg border border-[#d9c58f]/30 bg-[#0d1119] px-2 py-1.5 text-sm text-[#f4eed7] outline-none">
             <option value="">kisk-BiS</option>

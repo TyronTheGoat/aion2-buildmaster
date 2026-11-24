@@ -365,3 +365,27 @@ body { overflow-x: clip; }
   .bm-3d .card-face:hover > span[class*="overflow-hidden"]::after { transition: none; transform: translateX(-120%); }
   .bm-3d :is(a, button):hover { transition-duration: 0s !important; }
 }
+
+/* favourite star: gold with a soft shine */
+.fav-star { transition: transform 150ms ease-out, color 150ms; }
+.fav-star:active { transform: scale(0.88); }
+.fav-star-on { color: #f5cf63; text-shadow: 0 0 6px rgba(245, 207, 99, 0.65), 0 0 14px rgba(245, 207, 99, 0.35); }
+.fav-star-on span { display: inline-block; animation: fav-pop 380ms ease-out; background: linear-gradient(115deg, #f5cf63 35%, #fff6d6 50%, #f5cf63 65%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: fav-pop 380ms ease-out, fav-shine 3.2s ease-in-out 0.4s infinite; }
+@keyframes fav-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
+@keyframes fav-shine { 0%, 70% { background-position: 120% 0; } 100% { background-position: -120% 0; } }
+
+/* progress view: the curve draws itself, the area fades in, the points pop out along it */
+.cp-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: cp-draw 1.4s cubic-bezier(.4, 0, .2, 1) 0.2s forwards; }
+.cp-area { opacity: 0; animation: cp-fade 0.8s ease-out 0.9s forwards; }
+.cp-dot { transform-box: fill-box; transform-origin: center; transform: scale(0); animation: cp-pop 0.35s cubic-bezier(.3, 1.6, .5, 1) forwards; }
+.progress-portrait { animation: pop-in 0.5s ease-out both; }
+@keyframes cp-draw { to { stroke-dashoffset: 0; } }
+@keyframes cp-fade { to { opacity: 1; } }
+@keyframes cp-pop { to { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .cp-line, .cp-area, .cp-dot, .fav-star-on span { animation: none; stroke-dashoffset: 0; opacity: 1; transform: none; }
+}
+
+/* phones: the turning ring must not push the page sideways (Tyron 2026-11-24) */
+html, body { overflow-x: clip; }
+@media (max-width: 768px) { .wheel { --ring-r: 85vw; } }

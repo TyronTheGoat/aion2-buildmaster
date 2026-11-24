@@ -18,7 +18,7 @@ function lineState(char: Character, item: Item, l: StatLine): "good" | "bad" | "
   return sh === undefined ? "neutral" : sh >= GOOD_SHARE ? "good" : "bad";
 }
 
-const STATE_CLS = { good: "text-emerald-300", bad: "text-red-300/90", neutral: "text-zinc-300" };
+const STATE_CLS = { good: "text-[#5fbf8a]", bad: "text-[#ff8b8b]/90", neutral: "text-zinc-300" };
 const STATE_MARK = { good: "✓", bad: "✗", neutral: "·" };
 
 function LineRow({ l, state }: { l: StatLine; state: "good" | "bad" | "neutral" }) {
@@ -97,9 +97,9 @@ export function ItemCards({ char, items, arcana = false }: { char: Character; it
 }
 
 const ROW_STYLE: Record<IdealRow["state"], { mark: string; cls: string; label: string }> = {
-  ok: { mark: "✓", cls: "text-emerald-300", label: "erreicht" },
+  ok: { mark: "✓", cls: "text-[#5fbf8a]", label: "erreicht" },
   low: { mark: "◐", cls: "text-amber-300", label: "zu niedrig" },
-  missing: { mark: "✗", cls: "text-red-300", label: "fehlt" },
+  missing: { mark: "✗", cls: "text-[#ff8b8b]", label: "fehlt" },
 };
 
 function BisDetail({ char, item }: { char: Character; item: Item }) {
@@ -145,7 +145,7 @@ function BisDetail({ char, item }: { char: Character; item: Item }) {
 
       {cmp && cmp.extra.length > 0 && (
         <section>
-          <h3 className="mb-2 font-semibold text-red-300">{item.fixedLines ? "Feste Linien (nicht rerollbar)" : isArcana ? "Nicht im BiS" : "Nicht im BiS, neu rollen"}</h3>
+          <h3 className="mb-2 font-semibold text-[#ff8b8b]">{item.fixedLines ? "Feste Linien (nicht rerollbar)" : isArcana ? "Nicht im BiS" : "Nicht im BiS, neu rollen"}</h3>
           <ul className="space-y-1 rounded-xl border border-red-400/20 bg-red-500/5 px-3 py-2">
             {cmp.extra.map((l, i) => <LineRow key={i} l={l} state="bad" />)}
           </ul>

@@ -30,7 +30,7 @@ export function CharacterView({ char, onBack, onRefresh, onRemove }: {
           <button onClick={onBack} className="text-zinc-400 hover:text-white">‹ Charaktere</button>
           <div className="flex gap-3 text-zinc-400">
             {onRefresh && <button onClick={onRefresh} className="hover:text-white">↻ Aktualisieren</button>}
-            {onRemove && <button onClick={onRemove} className="hover:text-red-300">Entfernen</button>}
+            {onRemove && <button onClick={onRemove} className="hover:text-[#ff8b8b]">Entfernen</button>}
           </div>
         </div>
       )}

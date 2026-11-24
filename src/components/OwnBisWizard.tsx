@@ -1,4 +1,6 @@
 "use client";
+import { PREVIEW } from "@/lib/preview";
+import { Help } from "./extras";
 import { useState } from "react";
 import type { Character, IdealLine } from "@/lib/types";
 import { needsPick, pickOptions, type OwnBuild } from "@/lib/own-bis";
@@ -60,7 +62,8 @@ export function OwnBisWizard({ build, kiskChar, onSave, onCancel }: { build: Own
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-[11px] uppercase tracking-widest text-[#d9c58f]">{t(`Eigener BiS „${build.name}“ einrichten`, `Set up own BiS "${build.name}"`)} · {t("Schritt", "Step")} {i + 1}/{steps.length}</div>
-            <h2 className="mt-1 text-2xl font-semibold text-[#f4eed7]">{placeName(place, lang)}</h2>
+            <h2 className="mt-1 flex items-center gap-2 text-2xl font-semibold text-[#f4eed7]">{placeName(place, lang)}
+              {PREVIEW && <Help text={t("Dein Build bringt auf dieses Teil neue Abilities. Dafür fallen Zeilen aus dem kisk-BiS weg: Tippe so viele an, wie angezeigt. Zeilen aus deinem Plan bleiben fest.", "Your build puts new abilities on this piece, so lines of kisk's BiS have to go: tap as many as shown. Lines from your plan stay fixed.")} />}</h2>
             <p className="mt-1 text-sm text-zinc-400">
               {need > 0
                 ? t(`Dein Build bringt hier ${planned.filter((p) => !inKisk(p.skill)).length} neue Abilities. Nimm ${need} Zeile${need === 1 ? "" : "n"} aus dem kisk-BiS heraus, der Rest bleibt.`,
