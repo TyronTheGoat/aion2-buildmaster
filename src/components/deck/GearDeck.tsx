@@ -10,6 +10,7 @@ import { charKey, portraitOf } from "../store";
 import { GearCompare } from "../GearCompare";
 import { CraftingView, type CraftUi } from "../crafting/CraftingView";
 import { ClassGuideBody, guideForClass } from "../ClassGuides";
+import { SkillPlanner } from "../SkillPlanner";
 import { useCraft } from "../craft-store";
 
 /** Order of the cards: weapon first, then armour, jewellery, the rest and Arcana last. */
@@ -177,7 +178,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
     if (view === "guide") {
       const g = guideForClass(char.className);
       return <div key={key} className={className} inert={out} aria-hidden={out || undefined}>
-        {g ? <div className="card-face relative rounded-[24px] p-4 sm:p-7"><span aria-hidden className="pointer-events-none absolute inset-[6px] rounded-[18px] border border-[#d9c58f]/20" /><div className="relative"><ClassGuideBody g={g} /></div></div>
+        {g ? <div className="card-face relative rounded-[24px] p-4 sm:p-7"><span aria-hidden className="pointer-events-none absolute inset-[6px] rounded-[18px] border border-[#d9c58f]/20" /><div className="relative"><ClassGuideBody g={g} compare={SHOW_CRAFTING ? <SkillPlanner char={char} /> : undefined} /></div></div>
           : <p className="text-sm text-zinc-400">{t("Für diese Klasse gibt es noch keinen Guide.", "No guide for this class yet.")}</p>}
       </div>;
     }
