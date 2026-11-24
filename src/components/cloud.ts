@@ -138,6 +138,9 @@ async function pullChars() {
   } catch { /* stays as it is */ }
 }
 
+/** The admin (no character limit): only they see the BiS bookmark tool. */
+export const isAdminAccount = () => status.mode === "online" && sharedLimit === null;
+
 /** Online: why this character cannot be added (limit of characters per account reached), else undefined. */
 export function addBlocked(key: string): string | undefined {
   if (status.mode !== "online" || sharedChars[key] || sharedLimit === null || sharedMine.size < sharedLimit) return undefined;

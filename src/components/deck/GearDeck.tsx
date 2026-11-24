@@ -55,8 +55,8 @@ const VIEWS: View[] = ["gear", "arcana", "guide", "planner"];
 /** Saved builds as target (own BiS), gear wizard, ability levels and Any. */
 const SHOW_PREVIEW = true; // saved builds as target, gear wizard, ability levels, Any: live since 2026-11-24 (Tyron)
 
-export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note }: {
-  char: Character; onBack: () => void; onRefresh: () => void; onRemove: () => void; note?: React.ReactNode;
+export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note, refreshing }: {
+  char: Character; onBack: () => void; onRefresh: () => void; onRemove: () => void; note?: React.ReactNode; refreshing?: boolean;
 }) {
   const t = useT();
   const lang = useLang();
@@ -163,7 +163,11 @@ export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note }: 
           </div>
         </div>
         <div className="relative flex shrink-0 gap-1.5 text-xs">
-          <button onClick={onRefresh} className="rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-[#efe6cc] hover:border-[#d9c58f]/45">{t("Aktualisieren", "Refresh")}</button>
+          <button onClick={onRefresh} disabled={refreshing} aria-busy={refreshing}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-[#efe6cc] hover:border-[#d9c58f]/45 disabled:cursor-wait">
+            {refreshing && <span aria-hidden className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#d9c58f]/30 border-t-[#d9c58f]" />}
+            {refreshing ? t("Lädt…", "Loading…") : t("Aktualisieren", "Refresh")}
+          </button>
           <button onClick={onBack} className="rounded-lg border border-[#d9c58f]/20 bg-white/[0.04] px-2.5 py-1.5 text-[#efe6cc] hover:border-[#d9c58f]/45">{t("Charakter wechseln", "Switch character")}</button>
           <button onClick={onRemove} className="rounded-lg px-2 py-1.5 text-zinc-500 hover:text-zinc-300">{t("Entfernen", "Remove")}</button>
         </div>

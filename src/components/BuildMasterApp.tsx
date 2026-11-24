@@ -13,7 +13,7 @@ import { Filler, Portrait, SHOW_ITEM_ICONS } from "./deck/Card";
 import { iconFor } from "@/lib/knowledge/item-catalog";
 import { charKey, parseKiskLink, portraitOf, useCharacters, type SavedChar } from "./store";
 import { numberLocale, useLang, useT } from "@/lib/i18n";
-import { addBlocked, removeShared, useCloud } from "./cloud";
+import { addBlocked, isAdminAccount, removeShared, useCloud } from "./cloud";
 import { bookmarklet } from "./kisk-import";
 
 function useHashRoute(): [string | undefined, (k?: string) => void] {
@@ -184,18 +184,23 @@ function AddCharacterSheet({ open, onClose, onAdd }: { open: boolean; onClose: (
   return (
     <Sheet open={open} onClose={onClose} title={<h2 className="text-lg font-semibold">{t("Charakter hinzufügen", "Add character")}</h2>}>
       <div className="space-y-3">
-        {online && <KiskBookmarklet />}
         <label className="block text-sm text-zinc-400">{online ? t("kisk.app-Link oder Name", "kisk.app link or name") : t("kisk.app-Link", "kisk.app link")}
           <input value={link} onChange={(e) => { setLink(e.target.value); setErr(undefined); }} placeholder={online ? t("Name (EU Odar) oder https://kisk.app/c/eu/odar/Name", "Name (EU Odar) or https://kisk.app/c/eu/odar/Name") : "https://kisk.app/c/eu/odar/Name"} className={`${input} mt-1`} autoCapitalize="none" inputMode="url" />
         </label>
         {link && !parsed && <p className="text-xs text-red-300">{t("Das sieht nicht wie ein kisk.app-Charakterlink aus.", "That does not look like a kisk.app character link.")}</p>}
         {err && <p className="text-xs text-red-300">{err}</p>}
+        {online && isAdminAccount() && (
+          <details className="rounded-lg border border-white/10 p-3 text-xs text-zinc-400">
+            <summary className="cursor-pointer">{t("Admin: Lesezeichen für das BiS-Update", "Admin: bookmark for the BiS update")}</summary>
+            <div className="mt-2"><KiskBookmarklet /></div>
+          </details>
+        )}
         {parsed && <p className="text-xs text-emerald-300">{parsed.name} · {parsed.server} · {parsed.region.toUpperCase()}</p>}
-        <details className="rounded-lg border border-white/10 p-3 text-sm" open={isOffline() && !online}>
+        {!online && <details className="rounded-lg border border-white/10 p-3 text-sm" open={isOffline()}>
           <summary className="cursor-pointer text-zinc-300">{t("Seiteninhalt einfügen", "Paste page content")} {isOffline() ? t("(nötig in der Offline-Version)", "(required in the offline version)") : "(optional)"}</summary>
           <p className="mt-2 text-xs text-zinc-500">{t("Öffne die Gear-Seite auf kisk.app, markiere alles, kopiere es und füge es hier ein.", "Open the gear page on kisk.app, select everything, copy it and paste it here.")}</p>
           <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} className={`${input} mt-2`} placeholder={t("Seiteninhalt…", "Page content…")} />
-        </details>
+        </details>}
         <button onClick={() => void submit()} disabled={!parsed || busy} className="w-full rounded-lg bg-amber-400 py-3 font-semibold text-black disabled:opacity-40">{busy ? t("Lade von kisk.app…", "Loading from kisk.app…") : t("Hinzufügen", "Add")}</button>
       </div>
     </Sheet>
@@ -287,7 +292,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
   const lang = useLang();
 
   const refresh = useCallback(async (manual: unknown = true) => {
-    if (isOffline()) { setPasting(true); return; }
+    if (!online) { setPasting(true); return; }
     setStatus("loading"); setInfo(undefined);
     try {
       const r = await fetchLive(saved);
@@ -302,12 +307,12 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
       setError(e instanceof TypeError ? t("Server gerade nicht erreichbar", "Server not reachable right now") : e instanceof Error ? e.message : String(e));
       setStatus("error");
     }
-  }, [saved, upsert, t]);
+  }, [saved, upsert, t, online]);
 
   // Load live data once when opened (online only) if we have nothing or only an old snapshot.
   useEffect(() => {
     const age = saved.snapshot ? Date.now() - new Date(saved.snapshot.source.fetchedAt).getTime() : Infinity;
-    if (isOffline() || age <= 30 * 60 * 1000) return;
+    if (!online || age <= 30 * 60 * 1000) return;
     const t = setTimeout(() => void refresh(false), 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -343,7 +348,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
           {status === "loading" && <p className="mt-2 animate-pulse text-sm text-zinc-400">{t("Lade Build von kisk.app…", "Loading build from kisk.app…")}</p>}
           {status !== "loading" && (
             <>
-              <p className="mt-2 text-sm text-zinc-400">{error ?? (isOffline() ? t("In der Offline-Version kann ich kisk.app nicht direkt abrufen.", "The offline version cannot load kisk.app directly.") : t("Noch keine Daten.", "No data yet."))}</p>
+              <p className="mt-2 text-sm text-zinc-400">{error ?? (!online ? t("In der Offline-Version kann ich kisk.app nicht direkt abrufen.", "The offline version cannot load kisk.app directly.") : t("Noch keine Daten.", "No data yet."))}</p>
               <button onClick={() => setPasting(true)} className="mt-4 w-full rounded-lg bg-amber-400 py-3 font-semibold text-black">{t("Seiteninhalt einfügen", "Paste page content")}</button>
               <button onClick={onRemove} className="mt-2 w-full rounded-lg bg-white/5 py-3 text-sm text-zinc-300">{t("Entfernen", "Remove")}</button>
             </>
@@ -354,14 +359,12 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
     );
   }
 
-  const offlineNote = isOffline() && saved.snapshot ? (
+  const offlineNote = !online && saved.snapshot ? (
     <p className="rounded-lg bg-white/[0.03] px-3 py-2 text-xs text-zinc-400">
       {online ? t("Stand vom", "Data from") : t("Offline-Version: Stand vom", "Offline version: data from")} {new Date(saved.snapshot.source.fetchedAt).toLocaleString(numberLocale(lang))}. {online ? t("Neuen Stand: auf der kisk-Seite das Lesezeichen „Zu BuildMaster senden“ klicken.", "New snapshot: click the “Send to BuildMaster” bookmark on the kisk page.") : t("Neuen Stand über „Aktualisieren“ einfügen.", "Paste a new snapshot via “Refresh”.")}
     </p>
   ) : null;
-  const statusNote = status === "loading"
-    ? <p className="animate-pulse text-center text-xs text-zinc-400">{t("Aktualisiere von kisk.app…", "Refreshing from kisk.app…")}</p>
-    : status === "error"
+  const statusNote = status === "error"
       ? <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">{t("Aktualisieren hat nicht geklappt", "Refresh failed")} ({error}). {t("Du siehst den letzten Stand.", "You are seeing the last snapshot.")}</p>
       : info ? <p className="rounded-lg bg-white/[0.03] px-3 py-2 text-center text-xs text-zinc-400">{info}</p> : null;
 
@@ -369,7 +372,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
     return (
       <>
         <div className="bm-backdrop pointer-events-none fixed inset-0 -z-10" aria-hidden />
-        <GearDeck char={saved.snapshot} onBack={onBack} onRefresh={refresh} onRemove={onRemove}
+        <GearDeck char={saved.snapshot} onBack={onBack} onRefresh={refresh} onRemove={onRemove} refreshing={status === "loading"}
           note={<>{statusNote}{offlineNote}</>} />
         {pasteSheet}
       </>
@@ -383,7 +386,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
       </button>
       {status === "loading" && <p className="mb-2 animate-pulse text-center text-xs text-zinc-400">Aktualisiere von kisk.app…</p>}
       {status === "error" && <p className="mb-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">Aktualisieren hat nicht geklappt ({error}). Du siehst den letzten Stand.</p>}
-      {isOffline() && saved.snapshot && (
+      {!online && saved.snapshot && (
         <p className="mb-2 rounded-lg bg-white/5 px-3 py-2 text-xs text-zinc-400">
           Offline-Version: Stand vom {new Date(saved.snapshot.source.fetchedAt).toLocaleString("de-DE")}. Neuen Stand über „Aktualisieren“ einfügen.
         </p>
