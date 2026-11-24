@@ -215,12 +215,16 @@ async function api(req, env, url) {
   // kisk.app API: status of the 30-minute refresh, one character as a test (nothing saved), or a run now (admin / service token)
   if (path === "/api/kisk" || path === "/api/kisk/run") {
     if (!who.service && !(await isAdmin(email))) return json({ error: "nur für den Admin" }, 403);
+    const kisk = env.STORE.get(env.STORE.idFromName("kisk"));
+    // ?enable=1 / ?enable=0 switches the 30-minute run on or off (off until a test with the real key looked right)
+    const en = url.searchParams.get("enable");
+    if (path === "/api/kisk/run" && req.method === "POST" && en !== null) { await kisk.put("enabled", en === "1" ? "1" : "0", email); return json({ enabled: en === "1" }); }
     if (path === "/api/kisk/run" && req.method === "POST") return json(await kiskRefresh(env, { only: url.searchParams.get("k") ?? undefined }));
     if (req.method !== "GET") return json({ error: "not found" }, 404);
     const k = url.searchParams.get("k");
     if (k) return json(await kiskRefresh(env, { only: k, dry: true }));
-    const st = await env.STORE.get(env.STORE.idFromName("kisk")).get("status");
-    return json({ key: !!env.KISK_API_KEY, status: st ? JSON.parse(st) : null });
+    const [st, on] = await Promise.all([kisk.get("status"), kisk.get("enabled")]);
+    return json({ key: !!env.KISK_API_KEY, enabled: on === "1", status: st ? JSON.parse(st) : null });
   }
 
   if (path === "/api/prices" && req.method === "GET") {
@@ -283,7 +287,9 @@ async function kiskRefresh(env, { only, dry } = {}) {
 
 const worker = {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(kiskRefresh(env));
+    ctx.waitUntil((async () => {
+      if (await env.STORE.get(env.STORE.idFromName("kisk")).get("enabled") === "1") await kiskRefresh(env);
+    })());
   },
   async fetch(req, env) {
     const url = new URL(req.url);
