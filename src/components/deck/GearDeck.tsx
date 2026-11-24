@@ -11,6 +11,7 @@ import { GearCompare } from "../GearCompare";
 import { ClassGuideBody, guideForClass } from "../ClassGuides";
 import { SkillPlanner } from "../SkillPlanner";
 import { OwnBisPicker } from "../OwnBisPicker";
+import { OwnBisWizard, pendingPieces } from "../OwnBisWizard";
 import { useBuilds } from "../build-store";
 import { applyBuild } from "@/lib/own-bis";
 import { currentItems, type PlaceId } from "@/lib/skill-plan";
@@ -83,6 +84,10 @@ export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note }: 
   const deckFor = (v: View) => all.filter((d) => (v === "arcana") === (d.item.slot === "arcana"));
   const [open, setOpen] = useState<string>();
   const entry = all.find((d) => d.id === open);
+  // first time an own BiS is the target of the gear: set it up piece by piece
+  const wizard = ownBis && (tab === "gear" || (entry && entry.item.slot !== "arcana")) && pendingPieces(ownBis, kiskChar).length > 0
+    ? <OwnBisWizard key={ownBis.id} build={ownBis} kiskChar={kiskChar} onSave={builds.save} onCancel={() => builds.setActive("")} />
+    : null;
 
   useEffect(() => {
     if (!entry) return;
@@ -102,6 +107,7 @@ export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note }: 
   if (entry) {
     return (
       <div className="space-y-5">
+        {wizard}
         {header(`${t("Slot-Vergleich", "Slot comparison")}: ${entry.label}`, () => setOpen(undefined))}
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[200px_minmax(0,1fr)]">
           <nav aria-label={t("Slot-Auswahl", "Slot selection")} className="min-w-0 lg:sticky lg:top-20 lg:self-start">
@@ -139,6 +145,7 @@ export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note }: 
   const arcanaCount = all.filter((d) => d.item.slot === "arcana").length;
   return (
     <div className="space-y-4">
+      {wizard}
       <div className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-2 overflow-hidden rounded-2xl px-3 py-2.5">
         <button onClick={onBack} aria-label={t("Zurück zur Charakterauswahl", "Back to character selection")}
           className="relative shrink-0 rounded-full border border-[#d9c58f]/20 bg-white/[0.03] px-3 py-1 text-sm text-[#efe6cc]/85 hover:border-[#d9c58f]/40">‹ {t("Zurück", "Back")}</button>

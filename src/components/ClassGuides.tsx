@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
-import { useT } from "@/lib/i18n";
-import { CLASS_GUIDES, CLASS_GUIDE_SOURCE, type ClassGuide } from "@/lib/class-guides";
+import { useLang, useT } from "@/lib/i18n";
+import { CLASS_GUIDES, CLASS_GUIDE_SOURCE, localGuide, type ClassGuide } from "@/lib/class-guides";
 import { ClassIcon, classSlug } from "./ClassIcon";
 import { ClassSkillSetup } from "./ClassSkillSetup";
 import "@/lib/knowledge/item-catalog";
@@ -26,6 +26,7 @@ const DIFF_COLOR: Record<ClassGuide["difficulty"], string> = { leicht: "#5fbf8a"
 /** Class guides: one card per class in the style of the character cards; a tap opens the big card. */
 export function ClassGuides({ onBack }: { onBack: () => void }) {
   const t = useT();
+  const lang = useLang();
   const [open, setOpen] = useState<ClassGuide>();
   return (
     <div className="space-y-6">
@@ -36,7 +37,7 @@ export function ClassGuides({ onBack }: { onBack: () => void }) {
         <p className="mt-1 text-sm text-[#efe6cc]/50">{t("Klasse antippen: Beschreibung, Hauptskills, Stärken und Schwächen", "Tap a class: description, main skills, strengths and weaknesses")}</p>
       </div>
       <ul className="grid grid-cols-2 gap-3 sm:gap-5 md:gap-6 lg:grid-cols-4">
-        {CLASS_GUIDES.map((g) => (
+        {CLASS_GUIDES.map((g0) => localGuide(g0, lang)).map((g) => (
           <li key={g.cls}>
             <button onClick={() => setOpen(g)}
               className="card-face group relative flex h-full w-full flex-col items-center gap-3 overflow-hidden rounded-[20px] p-3 text-center sm:p-5 shadow-[0_0_0_1px_#d9c58f30,0_18px_40px_-18px_#000] transition hover:-translate-y-0.5 active:scale-[0.99]">
@@ -83,8 +84,9 @@ function GuideCard({ g, onClose }: { g: ClassGuide; onClose: () => void }) {
 export const guideForClass = (cls?: string) => CLASS_GUIDES.find((g) => classSlug(g.cls) === classSlug(cls));
 
 /** Picture, description, main skills, strengths and weaknesses, then the full skill setup. */
-export function ClassGuideBody({ g, compare }: { g: ClassGuide; compare?: ReactNode }) {
+export function ClassGuideBody({ g: g0, compare }: { g: ClassGuide; compare?: ReactNode }) {
   const t = useT();
+  const g = localGuide(g0, useLang());
   const H = "mb-2 text-[11px] uppercase tracking-[0.2em] text-zinc-500";
   return (
     <div className="space-y-6">
@@ -97,7 +99,7 @@ export function ClassGuideBody({ g, compare }: { g: ClassGuide; compare?: ReactN
               <div className="mt-1 flex flex-wrap gap-2 text-sm">
                 <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5 text-[#efe6cc]">{g.role}</span>
                 {g.weapon && <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5 text-[#efe6cc]">{g.weapon}</span>}
-                <span className="rounded-full px-2.5 py-0.5" style={{ background: `${DIFF_COLOR[g.difficulty]}22`, color: DIFF_COLOR[g.difficulty] }}>{t("Schwierigkeit", "Difficulty")}: {g.difficulty}</span>
+                <span className="rounded-full px-2.5 py-0.5" style={{ background: `${DIFF_COLOR[g.difficulty]}22`, color: DIFF_COLOR[g.difficulty] }}>{t("Schwierigkeit", "Difficulty")}: {g.difficultyLabel}</span>
               </div>
             </div>
           </div>

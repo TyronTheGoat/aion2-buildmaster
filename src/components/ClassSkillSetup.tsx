@@ -1,13 +1,13 @@
 "use client";
 import { useState } from "react";
-import { useT } from "@/lib/i18n";
+import { useLang, useT } from "@/lib/i18n";
 import data from "../../data/class-skills.json";
 
 /** Skills per class (and wakayashi's recommendations, not shown for now), taken from the class guide of wakayashi.gg (2026-11-23); pictures in the icon pack / offline file. */
-interface Specialty { slot: number; level: number; text: string }
+interface Specialty { slot: number; level: number; text: string; textEn?: string | null }
 interface Skill {
   name: string; nameEn: string; kind: "mastery" | "stigma" | "passive"; targetLevel: number | null; rank: number | null;
-  unlockLevel: number | null; cooldown: string | null; tags: string[] | null; description: string | null; note: string | null;
+  unlockLevel: number | null; cooldown: string | null; tags: string[] | null; description: string | null; descriptionEn?: string | null; note: string | null;
   specialtyOrder: number[] | null; specialties: Specialty[] | null; featured: boolean | null; icon: string;
 }
 interface ClassSkills { nameEn: string; name: string; specialtyIcons: Record<string, string>; skills: Skill[]; stigmaSwaps: { name: string; icon: string; note: string | null }[] }
@@ -41,12 +41,13 @@ const H = "mb-1 text-[11px] uppercase tracking-[0.2em] text-zinc-500";
 
 /** Small tile: icon and name; a tap shows the details. No recommendations (Tyron adds his own later). */
 function SkillTile({ s, active, onPick }: { s: Skill; active: boolean; onPick: () => void }) {
+  const lang = useLang();
   return (
     <li className="min-w-0">
       <button onClick={onPick} aria-expanded={active}
         className={`card-face relative flex h-full w-full flex-col items-center gap-1 rounded-xl px-1.5 pb-2 pt-2.5 text-center transition hover:-translate-y-0.5 ${active ? "ring-2 ring-[#d9c58f]/80" : "ring-1 ring-[#d9c58f]/20"}`}>
         <Pic file={s.icon} alt={s.name} className="h-12 w-12 rounded-lg ring-1 ring-[#d9c58f]/35" />
-        <span lang="de" className="mt-1 line-clamp-2 hyphens-auto break-words text-[11px] leading-tight text-[#efe6cc]/90">{s.name}</span>
+        <span lang={lang} className="mt-1 line-clamp-2 hyphens-auto break-words text-[11px] leading-tight text-[#efe6cc]/90">{lang === "en" ? s.nameEn : s.name}</span>
       </button>
     </li>
   );
@@ -55,6 +56,8 @@ function SkillTile({ s, active, onPick }: { s: Skill; active: boolean; onPick: (
 /** Details of the picked skill: what it does, and its specialties (a tap on one shows its text). */
 function SkillDetail({ s, cls, onClose }: { s: Skill; cls: ClassSkills; onClose: () => void }) {
   const t = useT();
+  const lang = useLang();
+  const en = lang === "en";
   const [spec, setSpec] = useState<number>();
   const open = s.specialties?.find((x) => x.slot === spec);
   return (
@@ -63,11 +66,11 @@ function SkillDetail({ s, cls, onClose }: { s: Skill; cls: ClassSkills; onClose:
       <div className="flex items-center gap-3 pr-8">
         <Pic file={s.icon} alt={s.name} className="h-12 w-12 shrink-0 rounded-lg ring-1 ring-[#d9c58f]/35" />
         <div className="min-w-0">
-          <div className="text-base font-semibold text-[#f4eed7]">{s.name} <span className="text-xs font-normal text-zinc-500">{s.nameEn}</span></div>
+          <div className="text-base font-semibold text-[#f4eed7]">{en ? s.nameEn : s.name} <span className="text-xs font-normal text-zinc-500">{en ? s.name : s.nameEn}</span></div>
           <div className="text-xs text-zinc-400">{[s.unlockLevel != null && `${t("ab Charakter-Lv", "from character Lv")} ${s.unlockLevel}`, s.cooldown && `${s.cooldown} ${t("Abklingzeit", "cooldown")}`, s.tags?.join(" · ")].filter(Boolean).join(" · ")}</div>
         </div>
       </div>
-      {s.description && <p className="leading-relaxed text-zinc-300"><Rich text={s.description} /></p>}
+      {(en ? s.descriptionEn ?? s.description : s.description) && <p className="leading-relaxed text-zinc-300"><Rich text={(en ? s.descriptionEn ?? s.description : s.description)!} /></p>}
       {!!s.specialties?.length && (
         <div className="space-y-2">
           <div className={H}>{t("Spezialitäten", "Specialties")} <span className="normal-case tracking-normal text-zinc-600">· {t("antippen für den Text", "tap for the text")}</span></div>
@@ -81,7 +84,7 @@ function SkillDetail({ s, cls, onClose }: { s: Skill; cls: ClassSkills; onClose:
               </button>
             ))}
           </div>
-          {open && <p className="rounded-lg bg-white/[0.04] px-3 py-2 text-[#efe6cc]/90 ring-1 ring-[#d9c58f]/25"><span className="text-[#d9c58f]">{t("Ab Skill-Stufe", "From skill level")} {open.level}: </span><Rich text={open.text} /></p>}
+          {open && <p className="rounded-lg bg-white/[0.04] px-3 py-2 text-[#efe6cc]/90 ring-1 ring-[#d9c58f]/25"><span className="text-[#d9c58f]">{t("Ab Skill-Stufe", "From skill level")} {open.level}: </span><Rich text={en ? open.textEn ?? open.text : open.text} /></p>}
         </div>
       )}
     </div>

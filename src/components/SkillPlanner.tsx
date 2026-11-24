@@ -4,9 +4,10 @@ import type { Character } from "@/lib/types";
 import { refClass, refSkills } from "@/lib/reference/rolls-v3";
 import {
   ARCANA_CARD_LEVELS, ARCANA_CARD_LINES, ARCANA_ENHANCE, ARCANA_SKILL_MAX, DAEVANION_MAX, DEFAULT_ORDER, PLACES, STORY_MAX, allowed, alignToCurrent,
-  HIGHEST, currentItems, currentLines, diffPlan, placeOf, planSkills, type Goal, type HaveMap, type Line, type NowState, type PieceDiff, type PlaceId, type PlaceRule, type WantState,
+  HIGHEST, currentItems, placeName, currentLines, diffPlan, placeOf, planSkills, type Goal, type HaveMap, type Line, type NowState, type PieceDiff, type PlaceId, type PlaceRule, type WantState,
 } from "@/lib/skill-plan";
 import { charKey } from "./store";
+import { useLang, useT } from "@/lib/i18n";
 import { newBuildId, nowIso, useBuilds } from "./build-store";
 import { allPlaced, type OwnBuild } from "@/lib/own-bis";
 import { Pic, skillIcon } from "./ClassSkillSetup";
@@ -82,7 +83,7 @@ function useSortable<T>(setItems: (f: (l: T[]) => T[]) => void, group: string) {
 
 /** Number badge that is also the grip. */
 const Grip = ({ n, gold }: { n: number; gold?: boolean }) => (
-  <span data-grip title="Ziehen zum Verschieben" className={`flex h-7 shrink-0 cursor-grab touch-none items-center gap-0.5 rounded-full px-1.5 text-sm font-bold active:cursor-grabbing ${gold ? "bg-[#d9c58f] text-[#14110a]" : "bg-white/[0.06] text-zinc-300"}`}>
+  <span data-grip title={useT()("Ziehen zum Verschieben", "Drag to move")} className={`flex h-7 shrink-0 cursor-grab touch-none items-center gap-0.5 rounded-full px-1.5 text-sm font-bold active:cursor-grabbing ${gold ? "bg-[#d9c58f] text-[#14110a]" : "bg-white/[0.06] text-zinc-300"}`}>
     <span aria-hidden className="text-[10px] opacity-60">⠿</span>{n}
   </span>
 );
@@ -93,7 +94,7 @@ function SkillIco({ cls, en, size = "h-8 w-8" }: { cls: string; en: string; size
   return f ? <Pic file={f} alt="" className={`${size} shrink-0 rounded-md ring-1 ring-[#d9c58f]/30`} /> : <span className={`${size} shrink-0 rounded-md bg-white/[0.06]`} />;
 }
 
-const NOW_MARK: Record<NowState, [string, string]> = { ok: ["✓", "text-[#5fbf8a]"], low: ["zu niedrig", "text-[#ff9a2e]"], drop: ["raus", "text-[#ff8b8b]"], free: ["egal", "text-zinc-500"] };
+const NOW_MARK: Record<NowState, [string, string]> = { ok: ["✓", "text-[#5fbf8a]"], low: ["", "text-[#ff9a2e]"], drop: ["", "text-[#ff8b8b]"], free: ["", "text-zinc-500"] };
 const WANT_MARK: Record<WantState, [string, string]> = { ok: ["✓", "text-[#5fbf8a]"], low: ["", "text-[#ff9a2e]"], missing: ["fehlt", "text-[#ff9a2e]"] };
 
 /**
@@ -101,6 +102,8 @@ const WANT_MARK: Record<WantState, [string, string]> = { ok: ["✓", "text-[#5fb
  * (same motion as the slot comparison).
  */
 function CompareRow({ d, cls, de, delay, item }: { d: PieceDiff; cls: string; de: (en: string) => string; delay: number; item?: Item }) {
+  const t = useT();
+  const lang = useLang();
   const [stage, setStage] = useState(0);
   // side by side from 640 px on, with the slide; on a phone the two cards stand on top of each other
   const [wide] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 640px)").matches);
@@ -110,29 +113,29 @@ function CompareRow({ d, cls, de, delay, item }: { d: PieceDiff; cls: string; de
   const tag = "mb-1.5 text-[10px] uppercase tracking-widest";
   return (
     <li>
-      <div className="mb-1.5 flex items-baseline gap-2 px-1 text-sm font-semibold text-[#f4eed7]"><span>{d.locked && "🔒 "}{p.de}<PieceIco item={item} /></span>
-        <span className={`text-[10px] font-normal uppercase tracking-widest ${d.change ? "text-[#ff9a2e]" : "text-[#5fbf8a]"}`}>{d.change ? "ändern" : "passt ✓"}</span></div>
+      <div className="mb-1.5 flex items-baseline gap-2 px-1 text-sm font-semibold text-[#f4eed7]"><span>{d.locked && "🔒 "}{lang === "en" ? p.en : p.de}<PieceIco item={item} /></span>
+        <span className={`text-[10px] font-normal uppercase tracking-widest ${d.change ? "text-[#ff9a2e]" : "text-[#5fbf8a]"}`}>{d.change ? t("ändern", "change") : t("passt ✓", "fits ✓")}</span></div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-6 sm:[--gap:1.5rem]">
         <div className="min-w-0 transition-transform duration-[800ms] ease-[cubic-bezier(.45,0,.2,1)] motion-reduce:transition-none"
           style={wide ? { transform: stage ? "translateX(0)" : "translateX(calc(50% + var(--gap) / 2))" } : undefined}>
           <div className={`${card} ring-white/15`}>
-            <div className={`${tag} text-zinc-500`}>Aktuell</div>
+            <div className={`${tag} text-zinc-500`}>{t("Aktuell", "Current")}</div>
             {d.now.length ? <ul className="space-y-1 text-sm">{d.now.map((l) => (
               <li key={l.skill} className={`flex items-center gap-1.5 ${l.state === "free" ? "text-zinc-500" : "text-[#efe6cc]/90"}`}>
                 <SkillIco cls={cls} en={l.skill} size="h-5 w-5" /><span className="min-w-0 flex-1 truncate">{de(l.skill)}</span>
-                <b className="text-[#d9c58f]">+{l.levels}</b><span className={`w-16 shrink-0 text-right text-[10px] ${NOW_MARK[l.state][1]}`}>{l.state === "ok" ? "✓" : l.state === "low" ? "↑ zu niedrig" : l.state === "drop" ? "✕ raus" : "· egal"}</span>
+                <b className="text-[#d9c58f]">+{l.levels}</b><span className={`w-16 shrink-0 text-right text-[10px] ${NOW_MARK[l.state][1]}`}>{l.state === "ok" ? "✓" : l.state === "low" ? `↑ ${t("zu niedrig", "too low")}` : l.state === "drop" ? `✕ ${t("raus", "out")}` : `· ${t("egal", "any")}`}</span>
               </li>))}</ul>
-              : <p className="text-xs text-zinc-500">keine Ability</p>}
+              : <p className="text-xs text-zinc-500">{t("keine Ability", "no ability")}</p>}
           </div>
         </div>
         <div className="min-w-0 transition-[opacity,transform] duration-[700ms] motion-reduce:transition-none"
           style={{ opacity: stage ? 1 : 0, transform: stage ? "none" : wide ? "translateX(1.5rem)" : "translateY(0.5rem)", transitionDelay: wide ? "250ms" : "0ms" }}>
           <div className={`${card} ${d.change ? "ring-[#ff9a2e]/45" : "ring-[#5fbf8a]/45"}`}>
-            <div className={`${tag} ${d.change ? "text-[#ff9a2e]" : "text-[#5fbf8a]"}`}>So muss es sein</div>
+            <div className={`${tag} ${d.change ? "text-[#ff9a2e]" : "text-[#5fbf8a]"}`}>{t("So muss es sein", "Should be")}</div>
             <ul className="space-y-1 text-sm">{d.want.map((l) => (
               <li key={l.skill} className="flex items-center gap-1.5 text-[#efe6cc]/90">
                 <SkillIco cls={cls} en={l.skill} size="h-5 w-5" /><span className="min-w-0 flex-1 truncate">{de(l.skill)}</span>
-                <b className="text-[#d9c58f]">+{l.levels}</b><span className={`w-16 shrink-0 text-right text-[10px] ${WANT_MARK[l.state][1]}`}>{l.state === "ok" ? "✓" : l.state === "low" ? `+${l.has} → +${l.levels}` : "! fehlt"}</span>
+                <b className="text-[#d9c58f]">+{l.levels}</b><span className={`w-16 shrink-0 text-right text-[10px] ${WANT_MARK[l.state][1]}`}>{l.state === "ok" ? "✓" : l.state === "low" ? `+${l.has} → +${l.levels}` : `! ${t("fehlt", "missing")}`}</span>
               </li>))}</ul>
           </div>
         </div>
@@ -141,11 +144,11 @@ function CompareRow({ d, cls, de, delay, item }: { d: PieceDiff; cls: string; de
   );
 }
 
-const GROUPS: { title: string; ids: PlaceId[] }[] = [
-  { title: "Arcana-Karten", ids: ["Chalice", "Parchment", "Compass", "Bell", "Mirror"] },
-  { title: "Waffe & Schützer", ids: ["weapon", "guard"] },
-  { title: "Rüstung", ids: ["helm", "pauldrons", "top", "legs", "gloves", "shoes", "cloak"] },
-  { title: "Schmuck", ids: ["necklace", "earring1", "earring2", "ring1", "ring2"] },
+const GROUPS: { title: [string, string]; ids: PlaceId[] }[] = [
+  { title: ["Arcana-Karten", "Arcana cards"], ids: ["Chalice", "Parchment", "Compass", "Bell", "Mirror"] },
+  { title: ["Waffe & Schützer", "Weapon & off-hand"], ids: ["weapon", "guard"] },
+  { title: ["Rüstung", "Armour"], ids: ["helm", "pauldrons", "top", "legs", "gloves", "shoes", "cloak"] },
+  { title: ["Schmuck", "Jewellery"], ids: ["necklace", "earring1", "earring2", "ring1", "ring2"] },
 ];
 
 /** Skill planner: which abilities to which level (priority), where the levels may fall (priority, limits), the result, what is already there. */
@@ -163,13 +166,15 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
   const [compareNow, setCompareNow] = useState(() => !!load(key)?.compareNow);
   useEffect(() => save(key, { goals, order, have, compareNow }), [key, goals, order, have, compareNow]);
   const builds = useBuilds(key);
+  const t = useT();
+  const lang = useLang();
   // the saved build that is loaded right now ("" = none)
   const [loaded, setLoaded] = useState("");
   const goalSort = useSortable<Goal>(setGoals, "goal");
   const placeSort = useSortable<PlaceRule>(setOrder, "place");
   if (!cls) return null;
 
-  const de = (en: string) => skills.find((s) => s.skill_en === en)?.skill_de ?? en;
+  const de = (en: string) => (lang === "en" ? en : skills.find((s) => s.skill_en === en)?.skill_de ?? en);
   const Icon = ({ en, size }: { en: string; size?: string }) => <SkillIco cls={cls} en={en} size={size} />;
   const now = currentLines(cls, char);
   const items = currentItems(char);
@@ -187,7 +192,7 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
   const complete = allPlaced(cls, goals);
   const current = builds.builds.find((b) => b.id === loaded);
   const saveBuild = (asBis: boolean) => {
-    const name = window.prompt(asBis ? "Name für deinen eigenen BiS (z. B. PvP, Main Build 2):" : "Name für den Build:", current?.name ?? "");
+    const name = window.prompt(asBis ? t("Name für deinen eigenen BiS (z. B. PvP, Main Build 2):", "Name of your own BiS (e.g. PvP, Main Build 2):") : t("Name für den Build:", "Name of the build:"), current?.name ?? "");
     if (!name?.trim()) return;
     // same name: that build is overwritten (its kisk line choices stay)
     const same = builds.builds.find((b) => b.name.toLowerCase() === name.trim().toLowerCase());
@@ -210,32 +215,32 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-baseline gap-2">
-        <h3 className="text-2xl font-semibold text-[#f4eed7]">Skill-Planer</h3>
+        <h3 className="text-2xl font-semibold text-[#f4eed7]">{t("Skill-Planer", "Skill planner")}</h3>
         <button className="ml-auto rounded-md px-2 py-0.5 text-[11px] uppercase tracking-widest text-zinc-500 ring-1 ring-white/10 hover:text-[#ff8b8b] hover:ring-[#ff8b8b]/40"
-          onClick={() => { if (window.confirm("Skill-Planer für diesen Charakter zurücksetzen? Alle Eingaben werden gelöscht.")) { setGoals([]); setOrder(DEFAULT_ORDER); setHave({}); setCompareNow(false); setLoaded(""); } }}>Reset</button>
+          onClick={() => { if (window.confirm(t("Skill-Planer für diesen Charakter zurücksetzen? Alle Eingaben werden gelöscht.", "Reset the skill planner for this character? Everything you entered is deleted."))) { setGoals([]); setOrder(DEFAULT_ORDER); setHave({}); setCompareNow(false); setLoaded(""); } }}>Reset</button>
       </div>
 
       {preview && (
         <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/10">
           <span className="text-[11px] uppercase tracking-widest text-zinc-500">Builds</span>
-          <select className={`${SEL} min-w-0 max-w-[14rem]`} value={loaded} onChange={(e) => loadBuild(e.target.value)} aria-label="Build laden">
-            <option value="">{builds.builds.length ? "– Build laden –" : "noch keine gespeichert"}</option>
+          <select className={`${SEL} min-w-0 max-w-[14rem]`} value={loaded} onChange={(e) => loadBuild(e.target.value)} aria-label={t("Build laden", "Load build")}>
+            <option value="">{builds.builds.length ? t("– Build laden –", "– load build –") : t("noch keine gespeichert", "none saved yet")}</option>
             {builds.builds.map((b) => <option key={b.id} value={b.id}>{b.bis ? "★ " : ""}{b.name}</option>)}
           </select>
-          <button className="rounded-lg border border-[#d9c58f]/30 px-3 py-1.5 text-sm text-[#f4eed7] hover:bg-[#d9c58f]/10" onClick={() => saveBuild(false)}>Speichern</button>
+          <button className="rounded-lg border border-[#d9c58f]/30 px-3 py-1.5 text-sm text-[#f4eed7] hover:bg-[#d9c58f]/10" onClick={() => saveBuild(false)}>{t("Speichern", "Save")}</button>
           <button className="rounded-lg border border-[#d9c58f]/50 bg-[#d9c58f]/10 px-3 py-1.5 text-sm font-semibold text-[#f4eed7] hover:bg-[#d9c58f]/20 disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={!complete} title={complete ? "Als eigenen BiS speichern" : `Erst alle Abilities platzieren (${placed}/${skills.length})`} onClick={() => saveBuild(true)}>★ Als eigenen BiS</button>
-          {current && <button className="rounded-lg px-2 py-1.5 text-sm text-zinc-500 hover:text-[#ff8b8b]" onClick={() => { if (window.confirm(`Build „${current.name}“ löschen?`)) { builds.remove(current.id); setLoaded(""); } }}>Löschen</button>}
-          <span className={`ml-auto text-xs ${complete ? "text-[#5fbf8a]" : "text-zinc-500"}`}>{placed}/{skills.length} Abilities platziert</span>
+            disabled={!complete} title={complete ? t("Als eigenen BiS speichern", "Save as own BiS") : t(`Erst alle Abilities platzieren (${placed}/${skills.length})`, `Place every ability first (${placed}/${skills.length})`)} onClick={() => saveBuild(true)}>★ {t("Als eigenen BiS", "As own BiS")}</button>
+          {current && <button className="rounded-lg px-2 py-1.5 text-sm text-zinc-500 hover:text-[#ff8b8b]" onClick={() => { if (window.confirm(t(`Build „${current.name}“ löschen?`, `Delete build "${current.name}"?`))) { builds.remove(current.id); setLoaded(""); } }}>{t("Löschen", "Delete")}</button>}
+          <span className={`ml-auto text-xs ${complete ? "text-[#5fbf8a]" : "text-zinc-500"}`}>{placed}/{skills.length} {t("Abilities platziert", "abilities placed")}</span>
         </div>
       )}
 
       {/* 1: goals */}
       <div className="space-y-2">
-        <div className={H}>1 · Welche Abilities, auf welche Stufe?</div>
+        <div className={H}>1 · {t("Welche Abilities, auf welche Stufe?", "Which abilities, to which level?")}</div>
         {goals.length > 0 && (
           <div className="hidden grid-cols-[3.25rem_2rem_minmax(0,1fr)_4.5rem_4.5rem_6.5rem_7.5rem_2rem] gap-2 px-2 text-[10px] uppercase tracking-widest text-zinc-500 md:grid">
-            <span>Prio</span><span /><span>Ability</span><span>Story</span><span>Daevanion</span><span>Ziel</span><span>Ergebnis</span><span />
+            <span>Prio</span><span /><span>Ability</span><span>Story</span><span>Daevanion</span><span>{t("Ziel", "Target")}</span><span>{t("Ergebnis", "Result")}</span><span />
           </div>
         )}
         <ul className="space-y-2">
@@ -248,7 +253,7 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
                 <Grip n={i + 1} gold />
                 <Icon en={g.skill} />
                 <select className={`${SEL} min-w-0`} value={g.skill} onChange={(e) => setGoal(i, { skill: e.target.value })} aria-label="Ability">
-                  {[skills.find((s) => s.skill_en === g.skill)!, ...free].filter(Boolean).map((s) => <option key={s.skill_en} value={s.skill_en}>{s.skill_de} ({s.skill_type === "active" ? "aktiv" : "passiv"})</option>)}
+                  {[skills.find((s) => s.skill_en === g.skill)!, ...free].filter(Boolean).map((s) => <option key={s.skill_en} value={s.skill_en}>{lang === "en" ? s.skill_en : s.skill_de} ({s.skill_type === "active" ? t("aktiv", "active") : t("passiv", "passive")})</option>)}
                 </select>
                 <button className={`${ICON_BTN} md:hidden`} onClick={() => setGoals((l) => l.filter((_, j) => j !== i))} aria-label="entfernen">×</button>
                 <div className="col-span-4 grid grid-cols-3 gap-2 md:col-span-1 md:contents">
@@ -256,17 +261,17 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
                     <select className={`${SEL} w-full`} value={g.story} onChange={(e) => setGoal(i, { story: Number(e.target.value) })}>{range(0, STORY_MAX).map((n) => <option key={n}>{n}</option>)}</select></label>
                   <label className="text-[10px] uppercase tracking-widest text-zinc-500 md:contents"><span className="md:hidden">Daevanion</span>
                     <select className={`${SEL} w-full`} value={g.daevanion} onChange={(e) => setGoal(i, { daevanion: Number(e.target.value) })}>{range(0, DAEVANION_MAX).map((n) => <option key={n}>{n}</option>)}</select></label>
-                  <label className="text-[10px] uppercase tracking-widest text-zinc-500 md:contents"><span className="md:hidden">Ziel</span>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-500 md:contents"><span className="md:hidden">{t("Ziel", "Target")}</span>
                     <select className={`${SEL} w-full`} value={g.target} onChange={(e) => setGoal(i, { target: Number(e.target.value) })}><option value={HIGHEST}>Highest</option>{range(10, 30).map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
                 </div>
                 <span className="col-span-4 text-sm md:col-span-1">
-                  {g.target === HIGHEST ? <span className="font-semibold text-[#d9c58f]">{r.reached} erreichbar</span>
-                    : r.missing === 0 ? <span className="font-semibold text-[#5fbf8a]">✓ erreichbar</span> : <span className="font-semibold text-[#ff8b8b]">fehlt {r.missing}</span>}
-                  {compareNow && <span className="ml-2 text-[11px] text-zinc-500 md:ml-0 md:block" title="mit deinem aktuellen Gear laut kisk">jetzt {nowLevel}</span>}
+                  {g.target === HIGHEST ? <span className="font-semibold text-[#d9c58f]">{r.reached} {t("erreichbar", "reachable")}</span>
+                    : r.missing === 0 ? <span className="font-semibold text-[#5fbf8a]">✓ {t("erreichbar", "reachable")}</span> : <span className="font-semibold text-[#ff8b8b]">{t("fehlt", "missing")} {r.missing}</span>}
+                  {compareNow && <span className="ml-2 text-[11px] text-zinc-500 md:ml-0 md:block" title={t("mit deinem aktuellen Gear laut kisk", "with your current gear on kisk")}>{t("jetzt", "now")} {nowLevel}</span>}
                 </span>
                 <button className={`${ICON_BTN} hidden md:block`} onClick={() => setGoals((l) => l.filter((_, j) => j !== i))} aria-label="entfernen">×</button>
                 {r.got.length > 0 && <div className="col-span-full flex flex-wrap gap-1.5 md:pl-[5.75rem]">
-                  {r.got.map((x) => <span key={x.place} className={`rounded-full px-2 py-0.5 text-xs ${x.fixed ? "bg-[#d9c58f]/15 text-[#f4eed7]" : "bg-white/[0.06] text-[#efe6cc]"}`}>{x.fixed && "🔒 "}{placeOf(x.place).de} +{x.levels}</span>)}
+                  {r.got.map((x) => <span key={x.place} className={`rounded-full px-2 py-0.5 text-xs ${x.fixed ? "bg-[#d9c58f]/15 text-[#f4eed7]" : "bg-white/[0.06] text-[#efe6cc]"}`}>{x.fixed && "🔒 "}{placeName(x.place, lang)} +{x.levels}</span>)}
                 </div>}
               </li>
             );
@@ -278,8 +283,8 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
 
       {/* 2: places, order and limits */}
       <details className="rounded-2xl bg-white/[0.02] px-2.5 py-3 ring-1 ring-white/10 sm:px-4">
-        <summary className="cursor-pointer select-none text-base font-semibold text-[#efe6cc]">2 · Wo zuerst, und wie viele Abilities pro Teil?</summary>
-        <p className="mt-1 text-xs text-zinc-500">Zum Umsortieren ein Teil greifen und an die neue Stelle ziehen.</p>
+        <summary className="cursor-pointer select-none text-base font-semibold text-[#efe6cc]">2 · {t("Wo zuerst, und wie viele Abilities pro Teil?", "Where first, and how many abilities per piece?")}</summary>
+        <p className="mt-1 text-xs text-zinc-500">{t("Zum Umsortieren ein Teil greifen und an die neue Stelle ziehen.", "To reorder, grab a piece and drag it to its new place.")}</p>
         <ul className="mt-3 grid gap-2 md:grid-flow-row-dense md:grid-cols-2">
           {order.map((r, i) => {
             const p = placeOf(r.id);
@@ -290,31 +295,31 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
                 className={`pl-row flex min-w-0 cursor-grab select-none items-center gap-2 rounded-xl px-2 py-1.5 ring-1 active:cursor-grabbing ${placeSort.drag === i ? "relative z-10 bg-[#d9c58f]/15 ring-2 ring-[#d9c58f]/70 shadow-2xl" : "bg-white/[0.03] ring-white/5"}`}
                 data-col={i < half ? 1 : 2}>
                 <Grip n={i + 1} />
-                <span className="min-w-0 flex-1 truncate text-sm text-[#f4eed7]">{locked && "🔒 "}{p.de}<PieceIco item={items[r.id]} /><span className="ml-1.5 text-xs text-zinc-500">{p.kind === "arcana" ? "Arcana" : ""}</span></span>
+                <span className="min-w-0 flex-1 truncate text-sm text-[#f4eed7]">{locked && "🔒 "}{placeName(r.id, lang)}<PieceIco item={items[r.id]} /><span className="ml-1.5 text-xs text-zinc-500">{p.kind === "arcana" ? "Arcana" : ""}</span></span>
                 <select className={`${SEL} shrink-0 !px-1.5`} value={r.max} aria-label={`${p.de}: max. Abilities`} disabled={locked}
                   onChange={(e) => setOrder((o) => o.map((x) => (x.id === r.id ? { ...x, max: Number(e.target.value) } : x)))}>
-                  {maxes.map((n) => <option key={n} value={n}>{n === 0 ? "keine" : `max ${n}`}</option>)}
+                  {maxes.map((n) => <option key={n} value={n}>{n === 0 ? t("keine", "none") : `max ${n}`}</option>)}
                 </select>
               </li>
             );
           })}
         </ul>
         <style>{`@media (min-width: 768px) { .pl-row[data-col="1"] { grid-column: 1 } .pl-row[data-col="2"] { grid-column: 2 } }`}</style>
-        <p className="mt-2 text-xs text-zinc-500">Arcana-Karte: {ARCANA_CARD_LINES} Zeilen ab +1, dazu {ARCANA_ENHANCE} Level durchs Verstärken ({ARCANA_CARD_LEVELS} insgesamt), höchstens +{ARCANA_SKILL_MAX} auf eine Ability. Ausrüstung: +1 pro Ability.</p>
+        <p className="mt-2 text-xs text-zinc-500">{t(`Arcana-Karte: ${ARCANA_CARD_LINES} Zeilen ab +1, dazu ${ARCANA_ENHANCE} Level durchs Verstärken (${ARCANA_CARD_LEVELS} insgesamt), höchstens +${ARCANA_SKILL_MAX} auf eine Ability. Ausrüstung: +1 pro Ability.`, `Arcana card: ${ARCANA_CARD_LINES} lines from +1, plus ${ARCANA_ENHANCE} levels from enhancing (${ARCANA_CARD_LEVELS} in all), at most +${ARCANA_SKILL_MAX} on one ability. Gear: +1 per ability.`)}</p>
       </details>
 
       {/* 3: result */}
       {shown.length > 0 && (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className={H}>3 · So muss es fallen</div>
+            <div className={H}>3 · {t("So muss es fallen", "How it has to roll")}</div>
             <label className="flex cursor-pointer select-none items-center gap-2 rounded-xl bg-white/[0.04] px-3 py-1.5 text-sm text-[#efe6cc] ring-1 ring-white/10 hover:ring-[#d9c58f]/40">
               <input type="checkbox" className="h-4 w-4 accent-[#d9c58f]" checked={compareNow} onChange={(e) => setCompareNow(e.target.checked)} />
-              Änderungen an meinem aktuellen Gear
+              {t("Änderungen an meinem aktuellen Gear", "Changes to my current gear")}
             </label>
           </div>
           {compareNow ? (<>
-            <p className="text-xs text-zinc-500">{toChange ? `${toChange} von ${diffs.length} Teilen musst du ändern.` : "Dein aktuelles Gear passt schon zum Plan."} Je Teil: dein Gear laut kisk und wie es sein muss.</p>
+            <p className="text-xs text-zinc-500">{toChange ? t(`${toChange} von ${diffs.length} Teilen musst du ändern.`, `You have to change ${toChange} of ${diffs.length} pieces.`) : t("Dein aktuelles Gear passt schon zum Plan.", "Your current gear already fits the plan.")} {t("Je Teil: dein Gear laut kisk und wie es sein muss.", "Per piece: your gear on kisk and how it should be.")}</p>
             <ul className="space-y-4">{diffs.map((d, i) => <CompareRow key={d.id} d={d} cls={cls} de={de} delay={i * 90} item={items[d.id]} />)}</ul>
           </>) : (
           <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -323,14 +328,14 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
               const freeLines = placeOf(p.id).kind === "arcana" ? ARCANA_CARD_LINES - p.lines.length : 0;
               return (
                 <li key={p.id} className={`card-face rounded-xl p-3 ring-1 ${p.locked ? "ring-[#d9c58f]/50" : "ring-[#d9c58f]/25"}`}>
-                  <div className="mb-1.5 flex items-baseline justify-between text-sm font-semibold text-[#f4eed7]"><span>{p.locked && "🔒 "}{placeOf(p.id).de}<PieceIco item={items[p.id]} /></span>
-                    <span className="text-xs font-normal text-zinc-500">{p.locked ? "bleibt so" : freeLines > 0 ? `${freeLines} Zeile${freeLines > 1 ? "n" : ""} egal` : ""}</span></div>
+                  <div className="mb-1.5 flex items-baseline justify-between text-sm font-semibold text-[#f4eed7]"><span>{p.locked && "🔒 "}{placeName(p.id, lang)}<PieceIco item={items[p.id]} /></span>
+                    <span className="text-xs font-normal text-zinc-500">{p.locked ? t("bleibt so", "stays") : freeLines > 0 ? t(`${freeLines} Zeile${freeLines > 1 ? "n" : ""} egal`, `${freeLines} line${freeLines > 1 ? "s" : ""} any`) : ""}</span></div>
                   <ul className="space-y-1 text-sm">{p.lines.map((l) => {
                     const inGoal = goals.some((g) => g.skill === l.skill);
                     const there = !p.locked && before.some((b) => b.skill === l.skill && b.levels >= l.levels);
                     return <li key={l.skill} className={`flex items-center gap-2 ${inGoal ? "text-[#efe6cc]/90" : "text-zinc-500"}`}>
                       <Icon en={l.skill} size="h-6 w-6" /><span className="min-w-0 flex-1 truncate">{de(l.skill)}</span>
-                      {there && <span className="text-[11px] text-[#5fbf8a]">✓ hast du</span>}
+                      {there && <span className="text-[11px] text-[#5fbf8a]">✓ {t("hast du", "you have it")}</span>}
                       <b className="text-[#d9c58f]">+{l.levels}</b></li>;
                   })}</ul>
                 </li>
@@ -342,12 +347,12 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
 
       {/* 4: what is already there, locks */}
       <details className="rounded-2xl bg-white/[0.02] px-2.5 py-3 ring-1 ring-white/10 sm:px-4">
-        <summary className="cursor-pointer select-none text-base font-semibold text-[#efe6cc]">4 · Schon vorhanden</summary>
-        <p className="mt-1 text-xs text-zinc-500">Trag ein, was schon auf deinen Teilen ist. 🔒 = das Teil behältst du so, der Plan rechnet damit und plant dort nichts Neues.</p>
+        <summary className="cursor-pointer select-none text-base font-semibold text-[#efe6cc]">4 · {t("Schon vorhanden", "Already there")}</summary>
+        <p className="mt-1 text-xs text-zinc-500">{t("Trag ein, was schon auf deinen Teilen ist. 🔒 = das Teil behältst du so, der Plan rechnet damit und plant dort nichts Neues.", "Enter what is already on your pieces. 🔒 = you keep the piece as it is; the plan counts it and plans nothing new there.")}</p>
         <div className="mt-3 space-y-4">
           {GROUPS.map((grp) => (
-            <div key={grp.title}>
-              <div className="mb-1.5 text-[11px] uppercase tracking-widest text-zinc-500">{grp.title}</div>
+            <div key={grp.title[0]}>
+              <div className="mb-1.5 text-[11px] uppercase tracking-widest text-zinc-500">{lang === "en" ? grp.title[1] : grp.title[0]}</div>
               <ul className="grid gap-2 lg:grid-cols-2">
                 {grp.ids.map((id) => {
                   const p = placeOf(id);
@@ -360,9 +365,9 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
                     <li key={id} className={`rounded-xl px-2 py-2 ring-1 ${h.locked ? "bg-[#d9c58f]/[0.08] ring-[#d9c58f]/45" : "bg-white/[0.03] ring-white/5"}`}>
                       <div className="flex items-center gap-2">
                         <button className={`${ICON_BTN} ${h.locked ? "border-[#d9c58f]/70 bg-[#d9c58f]/20" : ""}`} aria-pressed={h.locked} aria-label={`${p.de} sperren`}
-                          title={h.locked ? "Gesperrt: bleibt so" : "Sperren: Teil so behalten"}
+                          title={h.locked ? t("Gesperrt: bleibt so", "Locked: stays as it is") : t("Sperren: Teil so behalten", "Lock: keep the piece as it is")}
                           onClick={() => setHave((m) => ({ ...m, [id]: { ...h, locked: !h.locked } }))}>{h.locked ? "🔒" : "🔓"}</button>
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#f4eed7]">{p.de}<PieceIco item={items[id]} /></span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#f4eed7]">{placeName(id, lang)}<PieceIco item={items[id]} /></span>
                         {!full && options.length > 0 && (
                           <select className={`${SEL} w-36 min-w-0 sm:w-44`} value="" aria-label={`${p.de}: Ability hinzufügen`}
                             onChange={(e) => { const en = e.target.value; if (en) setLines(id, (l) => [...l, { skill: en, levels: 1 }]); }}>

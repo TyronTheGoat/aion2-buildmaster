@@ -21,30 +21,31 @@ export type PlaceId =
   | "Chalice" | "Parchment" | "Compass" | "Bell" | "Mirror"
   | "weapon" | "guard" | "ring1" | "ring2" | "helm" | "pauldrons" | "top" | "legs" | "gloves" | "shoes" | "cloak" | "necklace" | "earring1" | "earring2";
 
-export interface Place { id: PlaceId; de: string; kind: "arcana" | "gear"; refSlot: ArcanaSlot | GearSlot }
+export interface Place { id: PlaceId; de: string; en: string; kind: "arcana" | "gear"; refSlot: ArcanaSlot | GearSlot }
 
 export const PLACES: Place[] = [
-  { id: "Chalice", de: "Heiliger Gral", kind: "arcana", refSlot: "Chalice" },
-  { id: "Parchment", de: "Pergament", kind: "arcana", refSlot: "Parchment" },
-  { id: "Compass", de: "Kompass", kind: "arcana", refSlot: "Compass" },
-  { id: "Bell", de: "Glocke", kind: "arcana", refSlot: "Bell" },
-  { id: "Mirror", de: "Spiegel", kind: "arcana", refSlot: "Mirror" },
-  { id: "ring1", de: "Ring 1", kind: "gear", refSlot: "ring" },
-  { id: "ring2", de: "Ring 2", kind: "gear", refSlot: "ring" },
-  { id: "weapon", de: "Waffe", kind: "gear", refSlot: "weapon" },
-  { id: "guard", de: "Schützer", kind: "gear", refSlot: "guard" },
-  { id: "helm", de: "Helm", kind: "gear", refSlot: "helm" },
-  { id: "pauldrons", de: "Schultern", kind: "gear", refSlot: "pauldrons" },
-  { id: "top", de: "Brust", kind: "gear", refSlot: "top" },
-  { id: "legs", de: "Hose", kind: "gear", refSlot: "legs" },
-  { id: "gloves", de: "Handschuhe", kind: "gear", refSlot: "gloves" },
-  { id: "shoes", de: "Schuhe", kind: "gear", refSlot: "shoes" },
-  { id: "cloak", de: "Umhang", kind: "gear", refSlot: "cloak" },
-  { id: "necklace", de: "Halskette", kind: "gear", refSlot: "necklace" },
-  { id: "earring1", de: "Ohrring 1", kind: "gear", refSlot: "earring" },
-  { id: "earring2", de: "Ohrring 2", kind: "gear", refSlot: "earring" },
+  { id: "Chalice", de: "Heiliger Gral", en: "Chalice", kind: "arcana", refSlot: "Chalice" },
+  { id: "Parchment", de: "Pergament", en: "Parchment", kind: "arcana", refSlot: "Parchment" },
+  { id: "Compass", de: "Kompass", en: "Compass", kind: "arcana", refSlot: "Compass" },
+  { id: "Bell", de: "Glocke", en: "Bell", kind: "arcana", refSlot: "Bell" },
+  { id: "Mirror", de: "Spiegel", en: "Mirror", kind: "arcana", refSlot: "Mirror" },
+  { id: "ring1", de: "Ring 1", en: "Ring 1", kind: "gear", refSlot: "ring" },
+  { id: "ring2", de: "Ring 2", en: "Ring 2", kind: "gear", refSlot: "ring" },
+  { id: "weapon", de: "Waffe", en: "Weapon", kind: "gear", refSlot: "weapon" },
+  { id: "guard", de: "Schützer", en: "Off-hand", kind: "gear", refSlot: "guard" },
+  { id: "helm", de: "Helm", en: "Helmet", kind: "gear", refSlot: "helm" },
+  { id: "pauldrons", de: "Schultern", en: "Shoulders", kind: "gear", refSlot: "pauldrons" },
+  { id: "top", de: "Brust", en: "Chest", kind: "gear", refSlot: "top" },
+  { id: "legs", de: "Hose", en: "Legs", kind: "gear", refSlot: "legs" },
+  { id: "gloves", de: "Handschuhe", en: "Gloves", kind: "gear", refSlot: "gloves" },
+  { id: "shoes", de: "Schuhe", en: "Boots", kind: "gear", refSlot: "shoes" },
+  { id: "cloak", de: "Umhang", en: "Cloak", kind: "gear", refSlot: "cloak" },
+  { id: "necklace", de: "Halskette", en: "Necklace", kind: "gear", refSlot: "necklace" },
+  { id: "earring1", de: "Ohrring 1", en: "Earring 1", kind: "gear", refSlot: "earring" },
+  { id: "earring2", de: "Ohrring 2", en: "Earring 2", kind: "gear", refSlot: "earring" },
 ];
 export const placeOf = (id: PlaceId) => PLACES.find((p) => p.id === id)!;
+export const placeName = (id: PlaceId, lang: "de" | "en") => (lang === "en" ? placeOf(id).en : placeOf(id).de);
 
 const ACTIVE_GEAR: GearSlot[] = ["weapon", "guard", "ring"];
 

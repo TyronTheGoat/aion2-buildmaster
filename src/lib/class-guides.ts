@@ -120,3 +120,105 @@ export const CLASS_GUIDES: ClassGuide[] = [
     weaknesses: ["Am Anfang schwach, weil Finsterbruch selten verfügbar ist", "Keine starken Heilungen und keine Wiederbelebung, kein Ersatz für den Kleriker"],
   },
 ];
+
+/** English text of the guides (our own translation; skill names are the English client names from wakayashi.gg). */
+export const CLASS_GUIDES_EN: Record<string, Omit<ClassGuide, "cls" | "difficulty">> = {
+  Gladiator: {
+    name: "Gladiator", role: "Bruiser", weapon: "Greatsword", tagline: "Damage and tank in one",
+    description: "The Gladiator combines damage and tank in one class. He buffs the whole group's offence, makes it tougher and weakens the boss. He prefers to fight from the front, because his buffs add more damage on frontal attacks. With a lot of life steal he can take quite a beating on the side.",
+    skills: [
+      { name: "Overhead Slam", why: "Main damage and an important source of aggro." },
+      { name: "Rage Burst", why: "Makes Overhead Slam usable without a condition." },
+      { name: "Lunge Stance", why: "Gives cooldown back and raises combat speed." },
+      { name: "Keen Strike", why: "Area aggro as a tank, restores MP." },
+    ],
+    strengths: ["Damage and tank in one class", "Offensive buffs for the whole group", "Very strong 1-on-1 and in small PvP fights", "Lots of crowd control", "Lots of life steal, which makes him tough"],
+    weaknesses: ["Weak in large PvP battles", "Full power only with frontal attacks"],
+  },
+  Templar: {
+    name: "Templar", role: "Tank", weapon: "Sword and shield", tagline: "The classic tank",
+    description: "The Templar is the tank of the game and always stands in front of the boss, because his passives reward frontal attacks. Later his damage comes mostly from Judgment, which several shield skills keep unlocking. Early on the stats and cooldown reduction for that are missing, so you simply alternate between two basic attacks. The class is cheap, because no stigma has to reach level 20.",
+    skills: [
+      { name: "Judgment", why: "Main damage in the late game." },
+      { name: "Warding Strike", why: "Unlocks Judgment and is reset by Vicious Strike." },
+      { name: "Vicious Strike", why: "Basic attack on left click, aggro and MP." },
+      { name: "Shield Smite / Shield Rush", why: "More triggers for Judgment." },
+    ],
+    strengths: ["Best tank in the game", "Very strong group buffs, defensive and offensive", "Very good solo, e.g. levelling or in Nightmare", "Lots of stagger damage"],
+    weaknesses: ["No notable weaknesses"],
+  },
+  Assassin: {
+    name: "Assassin", role: "Melee DPS", weapon: "Daggers", tagline: "Burst from behind",
+    description: "The Assassin stacks insignias on the target, up to five, and then makes them explode in one hit. On top comes positioning: hits from behind count for more. He uses his three sprints to get back behind the boss after each of its attacks.",
+    skills: [
+      { name: "Insignia Explosion", why: "Detonates the stacked insignias, the big burst." },
+      { name: "Savage Roar", why: "Stacks insignias on the target." },
+      { name: "Savage Fang", why: "Stacks insignias as well." },
+    ],
+    strengths: ["Highest burst on a single target", "Very mobile with three sprints", "Invisibility as an option in PvP", "Farms quickly in the open world"],
+    weaknesses: ["Depends heavily on his own buffs", "Without buffs little damage and little fun"],
+  },
+  Ranger: {
+    name: "Ranger", role: "Ranged DPS", weapon: "Bow", tagline: "Range and farming",
+    description: "Everything about the Ranger turns around Deadshot, a charged skill that should always be fully charged. Before the fight he puts up his buffs, then Marking Shot and Gale Arrow add more buff stacks. After that you hold attack and macro and renew Marking Shot when it runs out.",
+    skills: [
+      { name: "Deadshot", why: "Most important skill, always charge it fully." },
+      { name: "Marking Shot", why: "Gives buff stacks, helps with kiting." },
+      { name: "Vaizel's Authority / Bow of Blessing", why: "Buffs before the fight." },
+    ],
+    strengths: ["Long range", "Mobile, Deadshot can even be charged while moving", "Best farmer in the open world, good for pet farming", "Good crowd control"],
+    weaknesses: ["Very weak early on and very gear dependent", "Needs a lot of mana", "Fragile, only one defensive cooldown"],
+  },
+  Sorcerer: {
+    name: "Sorcerer", role: "Magic DPS", weapon: "", tagline: "Lives on cooldown reduction",
+    description: "The Sorcerer draws his damage from shorter cooldowns. Several skills lower the cooldowns, and Hellfire, his most important skill that is charged by hand, profits most. The mechanic only really works from a certain value on, so early on he lacks some damage.",
+    skills: [
+      { name: "Hellfire", why: "Most important skill, charged." },
+      { name: "Flame Arrow", why: "Basic attack, drives the cooldown reduction." },
+      { name: "Element Enhancement", why: "His most important buff." },
+    ],
+    strengths: ["One of the strongest classes early on", "Good range", "Many useful extras such as Steel Barrier"],
+    weaknesses: ["Many ground skills that need good placement", "Hardly mobile"],
+  },
+  Spiritmaster: {
+    name: "Spiritmaster", role: "Pet DPS", weapon: "Book", tagline: "The spirits fight along",
+    description: "The Spiritmaster plays through his spirits: most of the damage comes from them. What matters is having the right spirits out for the first attack. Since the spirits keep attacking even while you dodge, he has the steadiest damage in the game.",
+    skills: [
+      { name: "Elemental Fusion", why: "Strong skill, needs four element stacks." },
+      { name: "Summon: Fire Spirit", why: "Spirit for extra damage." },
+      { name: "Summon: Ancient Spirit", why: "Spirit for extra damage, gets better with more combat speed." },
+    ],
+    strengths: ["Constant damage thanks to the spirits, even while dodging", "Easiest class, the spirits do almost everything", "Toughest pure damage class, only the Gladiator takes more"],
+    weaknesses: ["Immobile, no sprints", "Weak early on, because the combat speed for the Ancient Spirit is missing"],
+  },
+  Cleric: {
+    name: "Cleric", role: "Healer", weapon: "Mace", tagline: "Heals and deals damage",
+    description: "The Cleric does not only heal, with Condemnation he also deals solid damage. His healing grows with attack power, so his buff is a damage and a healing buff at the same time. He is the only one who can revive in combat.",
+    skills: [
+      { name: "Condemnation", why: "Main damage, runs all the time with Chain of Torment." },
+      { name: "Chain of Torment", why: "Has to be on the target so Condemnation keeps running." },
+      { name: "Earth Punishment", why: "Makes Condemnation crit all the time." },
+      { name: "Prayer of Amplification", why: "Buff for damage and healing at once." },
+    ],
+    strengths: ["Very high survivability through many strong heals", "Only class that can revive in combat", "Most important class in group PvP", "Solo content is easy thanks to self healing"],
+    weaknesses: ["Little damage", "Very weak 1-on-1, because he relies on the group"],
+  },
+  Chanter: {
+    name: "Chanter", role: "Support", weapon: "Staff", tagline: "The buff engine of the group",
+    description: "The Chanter is the group's buffer. His two invocations run all the time, and before every fight he fires Power of the Storm. His main damage is Dark Crush, which is only available for a short time after certain hits.",
+    skills: [
+      { name: "Dark Crush", why: "Main damage, free shortly after Spinning Strike, Impactful Crush or Marchutan's Wrath." },
+      { name: "Power of the Storm", why: "Big group buff before every fight." },
+      { name: "Invocations", why: "The most important buffs in the game, always active." },
+    ],
+    strengths: ["Works well with the group in PvE and PvP through heals and buffs", "The most important buffs in the game, always active", "Good survivability thanks to healing skills", "Easy pet farming in the open world thanks to Rushing Smash"],
+    weaknesses: ["Weak early on, because Dark Crush is rarely available", "No strong heals and no revive, no replacement for the Cleric"],
+  },
+};
+
+const DIFF_EN: Record<ClassGuide["difficulty"], string> = { leicht: "easy", mittel: "medium", schwer: "hard" };
+/** The guide in the chosen language (German as written, English from CLASS_GUIDES_EN); difficulty stays the key. */
+export function localGuide(g: ClassGuide, lang: "de" | "en"): ClassGuide & { difficultyLabel: string } {
+  if (lang !== "en" || !CLASS_GUIDES_EN[g.cls]) return { ...g, difficultyLabel: g.difficulty };
+  return { ...g, ...CLASS_GUIDES_EN[g.cls], difficultyLabel: DIFF_EN[g.difficulty] };
+}
