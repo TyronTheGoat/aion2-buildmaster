@@ -64,14 +64,10 @@ function parseCharInput(s: string): { region: string; server: string; name: stri
   return /^[a-z]{2,3}$/i.test(region) && name.length <= 40 ? { region: region.toLowerCase(), server: server.toLowerCase(), name } : undefined;
 }
 
-declare const __BM_PREVIEW__: boolean | undefined;
-
 export function BuildMasterApp() {
   const { chars, upsert, remove } = useCharacters();
-  // 3D look: offline preview only for now (styles in globals.css under html.bm-3d)
-  useEffect(() => {
-    if (typeof __BM_PREVIEW__ === "undefined" || __BM_PREVIEW__) document.documentElement.classList.add("bm-3d");
-  }, []);
+  // 3D look with gloss (styles in globals.css under html.bm-3d), live since 2026-11-24
+  useEffect(() => { document.documentElement.classList.add("bm-3d"); }, []);
   const [route, go] = useHashRoute();
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
