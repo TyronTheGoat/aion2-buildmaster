@@ -72,7 +72,8 @@ export function GearCompare({ char, item, slotId }: {
     ...(cmp?.rows.filter((r) => r.state === "low").map((r) => `${statLabel(r.name, lang)}: ${r.have?.value} → ${r.target}`) ?? []),
     // Arcana: a plus above the ideal is wasted too
     ...(arcana ? cmp?.rows.filter((r) => r.have && toNum(r.have.value) > toNum(r.target)).map((r) => `${statLabel(r.name, lang)}: ${r.have?.value} → ${r.target} (${t("zu hoch", "too high")})`) ?? [] : []),
-    ...(cmp?.extra.map((l) => `${statLabel(l.name, lang)} ${l.value} ${item.fixedLines ? t("ist fest (Teil ersetzen)", "is fixed (replace the item)") : t("neu rollen", "reroll")}`) ?? []),
+    // Arcana with fewer ideal abilities than lines: the other abilities do not matter as long as no ideal one is missing
+    ...((arcana && (item.ideal?.length ?? 4) < 4 && !cmp?.rows.some((r) => r.state === "missing") ? [] : cmp?.extra ?? []).map((l) => `${statLabel(l.name, lang)} ${l.value} ${item.fixedLines ? t("ist fest (Teil ersetzen)", "is fixed (replace the item)") : t("neu rollen", "reroll")}`)),
   ];
 
   // the target piece shown on the Soll card

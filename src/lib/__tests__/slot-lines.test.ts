@@ -37,3 +37,16 @@ describe("stat links (Ist order kept, only the last place matters)", () => {
     expect(r.links.map((l) => l.color)).toEqual(["green", "orange", "red", "orange"]);
   });
 });
+
+describe("Arcana with fewer ideal abilities than lines", () => {
+  it("the current card keeps all four abilities", async () => {
+    const { FLORENTINA } = await import("../fixtures/florentina");
+    const compass = FLORENTINA.arcana.find((a) => a.name === "Compass of Vigor")!;
+    expect(compass.ideal).toHaveLength(2);
+    const r = statLinks(compass)!;
+    expect(r.ist).toHaveLength(4);
+    expect(r.bis).toHaveLength(2);
+    // the two abilities that are not ideal have no arrow
+    expect(r.links.map((l) => l.from).sort()).toEqual([1, 2]);
+  });
+});

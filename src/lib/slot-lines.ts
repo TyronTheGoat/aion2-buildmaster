@@ -27,24 +27,27 @@ export interface StatLinks {
  * - green: the right ability with exactly the ideal plus
  * - orange: the right ability, but the plus is too low or too high
  * - red: the wrong ability (arrow to an ability that is still missing)
+ * The current card always shows all its abilities, even when kisk names fewer ideal ones (Tyron 2026-11-24);
+ * an ability beyond the ideal ones with nothing left to point at stays neutral (no arrow, no colour).
  */
 export function statLinks(item: Item): StatLinks | undefined {
   const cmp = compareIdeal(item);
   if (!cmp) return undefined;
   const rows = cmp.rows;
   const n = Math.max(rows.length, 1);
-  const ist = item.lines.length > n ? [...item.lines.slice(0, n - 1), item.lines[item.lines.length - 1]] : item.lines;
+  const arcana = item.slot === "arcana";
+  const ist = !arcana && item.lines.length > n ? [...item.lines.slice(0, n - 1), item.lines[item.lines.length - 1]] : item.lines;
   const bis = rows.map((r) => ({ name: r.name, value: r.target, missing: !r.have || !ist.includes(r.have), skill: isSkillValue(r.target) }));
   const lastBis = rows.length - 1;
   // the last place only counts once the item has all its lines
   const lastIst = ist.length === rows.length ? ist.length - 1 : -1;
   const free = bis.map((b, i) => (b.missing ? i : -1)).filter((i) => i >= 0);
-  const links: StatLinks["links"] = ist.map((line, from) => {
+  const links: StatLinks["links"] = ist.flatMap((line, from): StatLinks["links"] => {
     const to = rows.findIndex((r) => r.have === line);
-    if (to < 0) return { from, to: free.shift() ?? -1, color: "red" };
-    if (item.slot === "arcana") return { from, to, color: toNum(line.value) === toNum(rows[to].target) ? "green" : "orange" };
+    if (to < 0) { const t = free.shift(); return t === undefined && arcana ? [] : [{ from, to: t ?? -1, color: "red" }]; }
+    if (arcana) return [{ from, to, color: toNum(line.value) === toNum(rows[to].target) ? "green" : "orange" }];
     const wrong = to === lastBis ? from !== ist.length - 1 : from === lastIst;
-    return { from, to, color: wrong ? "orange" : "green" };
+    return [{ from, to, color: wrong ? "orange" : "green" }];
   });
   return { ist, bis, links };
 }
