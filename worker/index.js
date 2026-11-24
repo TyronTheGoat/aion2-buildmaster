@@ -198,6 +198,7 @@ async function api(req, env, url) {
       // only newer data replaces what is there
       return json({ at: null, kept: true });
     }
+    await keepClassBis(env, c);
     return json({ at: await store.put(k, JSON.stringify(c), email) });
   }
   if (path === "/api/chars" && req.method === "DELETE") {
@@ -207,6 +208,7 @@ async function api(req, env, url) {
     const rows = await store.rows();
     if (!rows.some((r) => r.k === k)) return json({ ok: true });
     if (ownerOf(rows, k) !== email && !(await isAdmin(email))) return json({ error: "Diesen Charakter hat jemand anderes hinzugefügt." }, 403);
+    await keepClassBis(env, JSON.parse(rows.find((r) => r.k === k).v));
     await store.del(k);
     await store.del(`o:${k}`);
     return json({ ok: true });
@@ -237,7 +239,7 @@ async function api(req, env, url) {
     }
     const infoRes = await fetch(kiskCharUrl(who.region, who.server, who.name), { headers });
     const info = infoRes.ok ? await infoRes.json() : undefined;
-    const donors = (await store.rows()).filter((r) => !r.k.startsWith("o:")).map((r) => JSON.parse(r.v));
+    const donors = await classDonors(env, await store.rows());
     return json({ c: charFromApi(who, info, gear, donors), same: false, kiskFetched: gear.fetched ?? null });
   }
 
@@ -252,8 +254,8 @@ async function api(req, env, url) {
     if (req.method !== "GET") return json({ error: "not found" }, 404);
     const k = url.searchParams.get("k");
     if (k) return json(await kiskRefresh(env, { only: k, dry: true }));
-    const [st, on] = await Promise.all([kisk.get("status"), kisk.get("enabled")]);
-    return json({ key: !!env.KISK_API_KEY, enabled: on === "1", status: st ? JSON.parse(st) : null });
+    const [st, on, bis] = await Promise.all([kisk.get("status"), kisk.get("enabled"), kisk.keys("bis:")]);
+    return json({ key: !!env.KISK_API_KEY, enabled: on === "1", classBis: bis.map((b) => b.slice(4)), status: st ? JSON.parse(st) : null });
   }
 
   if (path === "/api/prices" && req.method === "GET") {
@@ -277,6 +279,28 @@ async function api(req, env, url) {
   return json({ error: "not found" }, 404);
 }
 
+/**
+ * kisk's BiS lines per class, kept apart from the characters (Tyron 2026-11-24): a character added only to bring its
+ * class's BiS can be removed again. Row "bis:<class>" in the "kisk" store: the pieces with their ideal lines.
+ */
+async function keepClassBis(env, c) {
+  const cls = typeof c?.className === "string" ? c.className.toLowerCase() : "";
+  if (!cls || !/^[a-z ]{2,30}$/.test(cls)) return;
+  const items = [...(c.gear ?? []), ...(c.arcana ?? [])].filter((i) => Array.isArray(i?.ideal) && i.ideal.length)
+    .map((i) => ({ slot: i.slot, name: i.name, ideal: i.ideal, ...(i.fixedLines ? { fixedLines: true } : {}), grade: "?", lines: [], scored: true }));
+  if (items.length < 5) return;
+  await env.STORE.get(env.STORE.idFromName("kisk")).put(`bis:${cls}`, JSON.stringify({ className: c.className, items }), "bis");
+}
+/** Donors for charFromApi: every stored class BiS plus the shared characters. */
+async function classDonors(env, rows) {
+  const kisk = env.STORE.get(env.STORE.idFromName("kisk"));
+  const bis = await Promise.all((await kisk.keys("bis:")).map((k) => kisk.get(k)));
+  const fromBis = bis.filter(Boolean).map((v) => JSON.parse(v)).map((b) => ({
+    className: b.className, gear: b.items.filter((i) => i.slot !== "arcana"), arcana: b.items.filter((i) => i.slot === "arcana"),
+  }));
+  return [...rows.filter((r) => !r.k.startsWith("o:")).map((r) => JSON.parse(r.v)), ...fromBis];
+}
+
 /* ---------------------------------------------------------------- kisk.app API refresh ---------------------------------------------------------------- */
 
 /** at most this many characters per run (kisk allows 60 requests a minute; the oldest data goes first) */
@@ -292,6 +316,7 @@ async function kiskRefresh(env, { only, dry } = {}) {
   const rows = (await store.rows()).filter((r) => !r.k.startsWith("o:") && (!only || r.k === only.toLowerCase()));
   rows.sort((a, b) => a.at - b.at);
   const result = { at: new Date().toISOString(), checked: 0, updated: [], same: 0, missing: [], errors: [] };
+  for (const r of rows) await keepClassBis(env, JSON.parse(r.v));
   for (const r of rows.slice(0, KISK_PER_RUN)) {
     const old = JSON.parse(r.v);
     let res;
