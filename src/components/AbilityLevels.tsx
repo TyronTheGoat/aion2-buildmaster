@@ -44,7 +44,7 @@ export function AbilityLevels({ cls, char, build }: { cls: string; char: Charact
           const f = skillIcon(cls, r.skill);
           return (
             <div key={r.skill} className="grid grid-cols-[2rem_minmax(0,1fr)_2.75rem_2.75rem_2.5rem] items-center gap-2 rounded-lg bg-white/[0.03] px-2 py-1.5 ring-1 ring-white/5">
-              {f ? <Pic file={f} alt="" className="h-8 w-8 rounded-md ring-1 ring-[#d9c58f]/30" /> : <span className="h-8 w-8 rounded-md bg-white/[0.06]" />}
+              {f ? <span className="bm-gloss rounded-md"><Pic file={f} alt="" className="h-8 w-8 rounded-md ring-1 ring-[#d9c58f]/30" /></span> : <span className="h-8 w-8 rounded-md bg-white/[0.06]" />}
               <span className="truncate text-sm text-[#f4eed7]">{name(r.skill)}</span>
               <span className="text-center text-sm tabular-nums text-zinc-300">{r.now}</span>
               <span className="text-center text-sm font-semibold tabular-nums text-[#f4eed7]">{r.target}</span>

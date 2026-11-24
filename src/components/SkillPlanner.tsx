@@ -91,7 +91,7 @@ const Grip = ({ n, gold }: { n: number; gold?: boolean }) => (
 /** Skill icon from the class guide pictures (empty square when there is none). */
 function SkillIco({ cls, en, size = "h-8 w-8" }: { cls: string; en: string; size?: string }) {
   const f = skillIcon(cls, en);
-  return f ? <Pic file={f} alt="" className={`${size} shrink-0 rounded-md ring-1 ring-[#d9c58f]/30`} /> : <span className={`${size} shrink-0 rounded-md bg-white/[0.06]`} />;
+  return f ? <span className="bm-gloss rounded-md"><Pic file={f} alt="" className={`${size} shrink-0 rounded-md ring-1 ring-[#d9c58f]/30`} /></span> : <span className={`${size} shrink-0 rounded-md bg-white/[0.06]`} />;
 }
 
 const NOW_MARK: Record<NowState, [string, string]> = { ok: ["✓", "text-[#5fbf8a]"], low: ["", "text-[#ff9a2e]"], drop: ["", "text-[#ff8b8b]"], free: ["", "text-zinc-500"] };

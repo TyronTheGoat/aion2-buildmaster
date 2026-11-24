@@ -313,3 +313,55 @@ body { overflow-x: clip; }
 @media (prefers-reduced-motion: reduce) {
   .bm-3d :is(a, button, [role="tab"]):active { transform: none; }
 }
+
+/* gloss (Tyron 2026-11-24, offline preview): a soft light strip in the top third of buttons, icons, pictures and the gold
+   frames, and a shine that runs once across a card or button on hover (on phones: on tap). No gloss on big areas or
+   text boxes. Only background-position and transform move, which the GPU handles. */
+.bm-3d {
+  --bm3d-strip: linear-gradient(180deg, rgba(255, 250, 235, 0.16) 0%, rgba(255, 250, 235, 0.06) 30%, rgba(255, 250, 235, 0) 34%);
+  --bm3d-sweep: linear-gradient(105deg, rgba(255, 255, 255, 0) 38%, rgba(255, 250, 230, 0.20) 50%, rgba(255, 255, 255, 0) 62%);
+}
+.bm-3d :is(a, button, [role="tab"])[class~="border"]:not(.card-tilt):not([class*="bg-["]):not([class*="bg-linear"]):not([class*="bg-gradient"]),
+.bm-3d :is(a, button)[class*="ring-1"]:not(.card-tilt):not([class*="bg-["]):not([class*="bg-linear"]):not([class*="bg-gradient"]) {
+  background-image: var(--bm3d-sweep), var(--bm3d-strip), var(--bm3d-light);
+  background-size: 260% 100%, 100% 100%, 100% 100%;
+  background-position: 130% 0, 0 0, 0 0;
+  background-repeat: no-repeat;
+  transition-property: color, background-color, border-color, box-shadow, transform, background-position;
+  transition-duration: 120ms, 120ms, 120ms, 120ms, 120ms, 0s;
+}
+.bm-3d :is(a, button, [role="tab"])[class~="border"]:not(.card-tilt):hover,
+.bm-3d :is(a, button)[class*="ring-1"]:not(.card-tilt):hover {
+  background-position: -30% 0, 0 0, 0 0;
+  transition-duration: 120ms, 120ms, 120ms, 120ms, 120ms, 650ms;
+}
+.bm-3d button[class*="bg-amber-400"], .bm-3d a[class*="bg-amber-400"] {
+  background-image: var(--bm3d-sweep), linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.18) 32%, rgba(255, 255, 255, 0.04) 36%, rgba(120, 70, 0, 0.2) 100%);
+  background-size: 260% 100%, 100% 100%; background-position: 130% 0, 0 0; background-repeat: no-repeat;
+  transition: background-position 0s, transform 120ms;
+}
+.bm-3d button[class*="bg-amber-400"]:hover, .bm-3d a[class*="bg-amber-400"]:hover { background-position: -30% 0, 0 0; transition: background-position 650ms, transform 120ms; }
+/* pictures and icons: the strip lies over the picture */
+.bm-3d [class*="bg-[radial-gradient"][class*="rounded"][class*="overflow-hidden"]::after,
+.bm-3d .bm-gloss::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  /* softer than on buttons: no edge across a picture */
+  background: linear-gradient(180deg, rgba(255, 250, 235, 0.15) 0%, rgba(255, 250, 235, 0.05) 28%, rgba(255, 250, 235, 0) 48%);
+}
+.bm-gloss { position: relative; display: inline-flex; flex-shrink: 0; }
+/* big cards: one shine across on hover / tap, in the layer that already clips to the card */
+.bm-3d .card-face > span[class*="overflow-hidden"][class*="absolute"]::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 60%; pointer-events: none;
+  background: linear-gradient(105deg, rgba(255, 255, 255, 0) 20%, rgba(255, 250, 230, 0.13) 50%, rgba(255, 255, 255, 0) 80%);
+  transform: translateX(-120%); will-change: transform;
+}
+.bm-3d .card-face:hover > span[class*="overflow-hidden"][class*="absolute"]::after,
+.bm-3d .card-face:active > span[class*="overflow-hidden"][class*="absolute"]::after {
+  transform: translateX(260%); transition: transform 800ms ease-out;
+}
+/* the gold frame: light on its upper edge */
+.bm-3d .card-face > span[class*="absolute"][class~="border"] { border-top-color: rgba(240, 222, 168, 0.5); }
+@media (prefers-reduced-motion: reduce) {
+  .bm-3d .card-face:hover > span[class*="overflow-hidden"]::after { transition: none; transform: translateX(-120%); }
+  .bm-3d :is(a, button):hover { transition-duration: 0s !important; }
+}
