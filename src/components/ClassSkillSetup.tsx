@@ -16,13 +16,15 @@ const ALL = data as ClassSkills[];
 /** wakayashi names the Spiritmaster "Elementalist". */
 const EN: Record<string, string> = { spiritmaster: "Elementalist", gladiator: "Gladiator", templar: "Templar", assassin: "Assassin", ranger: "Ranger", sorcerer: "Sorcerer", cleric: "Cleric", chanter: "Chanter" };
 export const skillsFor = (slug?: string) => (slug ? ALL.find((c) => c.nameEn === EN[slug]) : undefined);
+/** Icon file of a skill by its English name (class of the reference database, e.g. "Spiritmaster"). */
+export const skillIcon = (refCls: string, skillEn: string) => skillsFor(refCls.toLowerCase())?.skills.find((s) => s.nameEn === skillEn)?.icon;
 
 /** Picture from the icon pack (online) or embedded in the offline file. */
 function pic(file: string) {
   return globalThis.__BM_ICONS__?.[file] ?? (typeof location !== "undefined" && /^https?:$/.test(location.protocol) ? `/api/icon/${file}` : undefined);
 }
 
-function Pic({ file, alt, className }: { file: string; alt: string; className: string }) {
+export function Pic({ file, alt, className }: { file: string; alt: string; className: string }) {
   const src = pic(file);
   const [bad, setBad] = useState(false);
   if (!src || bad) return <span className={`${className} block rounded-lg bg-white/[0.06]`} aria-hidden />;

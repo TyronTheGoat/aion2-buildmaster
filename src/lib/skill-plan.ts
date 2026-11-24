@@ -56,25 +56,45 @@ export interface Goal { skill: string; target: number; story: number; daevanion:
 /** A place in the player's order, with the most abilities they allow on it. */
 export interface PlaceRule { id: PlaceId; max: number }
 
+export interface Line { skill: string; levels: number }
+/** What already stands on a piece. Locked: the player keeps the piece as it is, the plan counts it and adds nothing there. */
+export interface Have { locked: boolean; lines: Line[] }
+export type HaveMap = Partial<Record<PlaceId, Have>>;
+
 export interface PlanResult {
-  goals: { goal: Goal; base: number; need: number; got: { place: PlaceId; levels: number }[]; missing: number }[];
-  places: { id: PlaceId; lines: { skill: string; levels: number }[]; levelsLeft: number | null }[];
+  goals: { goal: Goal; base: number; need: number; got: { place: PlaceId; levels: number; fixed?: true }[]; missing: number }[];
+  places: { id: PlaceId; lines: Line[]; levelsLeft: number | null; locked?: true }[];
 }
 
 /**
  * Goals in priority order, places in priority order: every goal takes what it still needs from the first place that
  * allows it and has room (Arcana: up to +4 per ability, 5 levels and 4 lines per card; gear: +1, at most `max` abilities).
  */
-export function planSkills(className: string, goals: Goal[], order: PlaceRule[]): PlanResult {
-  const state = order.map((r) => ({ rule: r, place: placeOf(r.id), lines: [] as { skill: string; levels: number }[], levelsLeft: placeOf(r.id).kind === "arcana" ? ARCANA_CARD_LEVELS : null as number | null }));
+export function planSkills(className: string, goals: Goal[], order: PlaceRule[], have: HaveMap = {}): PlanResult {
+  const state = order.map((r) => {
+    const h = have[r.id];
+    const locked = !!h?.locked;
+    const lines: Line[] = locked ? h!.lines.map((l) => ({ ...l })) : [];
+    const arcana = placeOf(r.id).kind === "arcana";
+    const levelsLeft = arcana ? Math.max(0, ARCANA_CARD_LEVELS - lines.reduce((a, l) => a + l.levels, 0)) : null;
+    return { rule: r, place: placeOf(r.id), lines, levelsLeft, locked };
+  });
   const out: PlanResult["goals"] = [];
   for (const goal of goals) {
     const base = Math.min(goal.story, STORY_MAX) + Math.min(goal.daevanion, DAEVANION_MAX);
     const need = Math.max(0, goal.target - base);
     let left = need;
-    const got: { place: PlaceId; levels: number }[] = [];
+    const got: PlanResult["goals"][number]["got"] = [];
+    // locked pieces count first, whatever their place in the order
+    for (const p of state) {
+      if (!p.locked) continue;
+      const l = p.lines.find((x) => x.skill === goal.skill);
+      if (l) { got.push({ place: p.rule.id, levels: l.levels, fixed: true }); left -= l.levels; }
+    }
+    left = Math.max(0, left);
     for (const p of state) {
       if (left <= 0) break;
+      if (p.locked) continue;
       if (p.rule.max <= 0 || p.lines.length >= p.rule.max || !allowed(className, goal.skill, p.place)) continue;
       if (p.lines.some((l) => l.skill === goal.skill)) continue;
       const give = p.place.kind === "arcana" ? Math.min(ARCANA_SKILL_MAX, left, p.levelsLeft ?? 0) : 1;
@@ -86,7 +106,7 @@ export function planSkills(className: string, goals: Goal[], order: PlaceRule[])
     }
     out.push({ goal, base, need, got, missing: left });
   }
-  return { goals: out, places: state.map((p) => ({ id: p.rule.id, lines: p.lines, levelsLeft: p.levelsLeft })) };
+  return { goals: out, places: state.map((p) => ({ id: p.rule.id, lines: p.lines, levelsLeft: p.levelsLeft, ...(p.locked ? { locked: true as const } : {}) })) };
 }
 
 /** Default order: Arcana first, then rings, then the rest; Arcana up to 4 abilities, every gear piece up to 2. */

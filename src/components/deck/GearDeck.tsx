@@ -6,12 +6,10 @@ import { iconFor } from "@/lib/knowledge/item-catalog";
 import { numberLocale, slotLabel, useLang, useT, type Lang } from "@/lib/i18n";
 import { GRADE_HEX_CSS } from "@/lib/grades";
 import { Card, CardArt, Filler, Portrait, SHOW_ITEM_ICONS } from "./Card";
-import { charKey, portraitOf } from "../store";
+import { portraitOf } from "../store";
 import { GearCompare } from "../GearCompare";
-import { CraftingView, type CraftUi } from "../crafting/CraftingView";
 import { ClassGuideBody, guideForClass } from "../ClassGuides";
 import { SkillPlanner } from "../SkillPlanner";
-import { useCraft } from "../craft-store";
 
 /** Order of the cards: weapon first, then armour, jewellery, the rest and Arcana last. */
 const ORDER: Item["slot"][] = [
@@ -43,11 +41,11 @@ export function deckOf(char: Character, lang: Lang = "en"): DeckEntry[] {
  * Character view: the gear laid out as physical cards (big icon, slot, name, rank glow, no stats yet).
  * Tapping a card opens the Ist / Soll comparison as two cards side by side.
  */
-type View = "gear" | "arcana" | "guide" | "crafting";
-declare const __BM_CRAFTING__: boolean | undefined;
-/** The live site is built with BM_CRAFTING=0: no Crafting tab until it is reworked (Tyron 2026-11-23); projects and prices stay stored. */
-const SHOW_CRAFTING = typeof __BM_CRAFTING__ === "undefined" || !!__BM_CRAFTING__;
-const VIEWS: View[] = SHOW_CRAFTING ? ["gear", "arcana", "guide", "crafting"] : ["gear", "arcana", "guide"];
+type View = "gear" | "arcana" | "guide" | "planner";
+declare const __BM_PREVIEW__: boolean | undefined;
+/** Crafting is out for good (Tyron 2026-11-24). Previews (the skill planner) only in the offline file; the live site is built with BM_PREVIEW=0. */
+const SHOW_PREVIEW = typeof __BM_PREVIEW__ === "undefined" || !!__BM_PREVIEW__;
+const VIEWS: View[] = SHOW_PREVIEW ? ["gear", "arcana", "guide", "planner"] : ["gear", "arcana", "guide"];
 
 export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
   char: Character; onBack: () => void; onRefresh: () => void; onRemove: () => void; note?: React.ReactNode;
@@ -55,15 +53,13 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
   const t = useT();
   const lang = useLang();
   const all = useMemo(() => deckOf(char, lang), [char, lang]);
-  // three pages on one wheel: equipment cards, Arcana cards, crafting
+  // three pages on one wheel: equipment cards, Arcana cards, class guide, skill planner (offline)
   const [tab, setTab] = useState<View>("gear");
   // the view that is turning away during the wheel switch
   const [leaving, setLeaving] = useState<View>();
   // keep the taller height while the wheel turns, so the outgoing view is not cut off
   const wheelRef = useRef<HTMLDivElement>(null);
   const [lockH, setLockH] = useState<number>();
-  // crafting keeps its own sub-view and open project while the wheel shows another page
-  const [craftUi, setCraftUi] = useState<CraftUi>({ sub: "projects" });
   const switchTo = (v: View) => {
     if (leaving || v === tab) return; // no second switch while the wheel turns
     setLockH(wheelRef.current?.offsetHeight);
@@ -78,7 +74,6 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
   const deckFor = (v: View) => all.filter((d) => (v === "arcana") === (d.item.slot === "arcana"));
   const [open, setOpen] = useState<string>();
   const entry = all.find((d) => d.id === open);
-  const { state: craftState } = useCraft();
 
   useEffect(() => {
     if (!entry) return;
@@ -126,7 +121,6 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
 
   // 2 / gear overview: compact character bar, switch, cards
   const arcanaCount = all.filter((d) => d.item.slot === "arcana").length;
-  const craftCount = craftState.projects.filter((p) => p.charKey === charKey(char) && p.status !== "done").length || null;
   return (
     <div className="space-y-4">
       <div className="card-face relative flex flex-wrap items-center gap-x-3 gap-y-2 overflow-hidden rounded-2xl px-3 py-2.5">
@@ -148,7 +142,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
       </div>
       {note}
 
-      {/* one switch: Ausrüstung | Arcana | Crafting; all views ride an invisible flat ring in depth that always turns the same way */}
+      {/* one switch: Ausrüstung | Arcana | Klassenguide (| Skill-Planer offline); all views ride an invisible flat ring in depth that always turns the same way */}
       <div role="tablist" aria-label={t("Ansicht", "View")} onKeyDown={(e) => {
         const i = VIEWS.indexOf(tab);
         if (e.key === "ArrowRight") switchTo(VIEWS[(i + 1) % VIEWS.length]);
@@ -157,7 +151,7 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
         className={`relative grid ${VIEWS.length === 4 ? "grid-cols-4" : "grid-cols-3"} rounded-xl border border-[#d9c58f]/25 bg-white/[0.03] p-1 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_3px_0_-0.5px_#06070a] hover:border-[#d9c58f]/45`}>
         <span aria-hidden className={`absolute inset-y-1 left-1 ${VIEWS.length === 4 ? "w-[calc((100%-0.5rem)/4)]" : "w-[calc((100%-0.5rem)/3)]"} rounded-lg bg-white/[0.09] ring-1 ring-[#d9c58f]/40 transition-transform duration-500 ease-out motion-reduce:transition-none`}
           style={{ transform: `translateX(${VIEWS.indexOf(tab) * 100}%)` }} />
-        {([["gear", t("Ausrüstung", "Equipment"), all.length - arcanaCount], ["arcana", "Arcana", arcanaCount], ["guide", t("Klassenguide", "Class guide"), null], ["crafting", "Crafting", craftCount]] as const).filter(([k]) => VIEWS.includes(k)).map(([k, l, n]) => (
+        {([["gear", t("Ausrüstung", "Equipment"), all.length - arcanaCount], ["arcana", "Arcana", arcanaCount], ["guide", t("Klassenguide", "Class guide"), null], ["planner", t("Skill-Planer", "Skill planner"), null]] as const).filter(([k]) => VIEWS.includes(k)).map(([k, l, n]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} tabIndex={tab === k ? 0 : -1} onClick={() => switchTo(k)}
             className={`relative px-2 py-1.5 text-center transition-colors sm:px-4 ${tab === k ? "text-[#f4eed7]" : "text-zinc-500 hover:text-zinc-300"}`}>
             {l} {n !== null && <span className="text-xs text-zinc-500">{n}</span>}
@@ -172,17 +166,19 @@ export function GearDeck({ char, onBack, onRefresh, onRemove, note }: {
     </div>
   );
 
-  // one page of the wheel (a plain function, not a component, so crafting keeps its state while it is shown)
+  // one page of the wheel (a plain function, not a component)
   function page(view: View, className: string, out = false) {
     const key = `${out ? "out" : "in"}-${view}`;
     if (view === "guide") {
       const g = guideForClass(char.className);
       return <div key={key} className={className} inert={out} aria-hidden={out || undefined}>
-        {g ? <div className="card-face relative rounded-[24px] p-4 sm:p-7"><span aria-hidden className="pointer-events-none absolute inset-[6px] rounded-[18px] border border-[#d9c58f]/20" /><div className="relative"><ClassGuideBody g={g} compare={SHOW_CRAFTING ? <SkillPlanner char={char} /> : undefined} /></div></div>
+        {g ? <div className="card-face relative rounded-[24px] p-4 sm:p-7"><span aria-hidden className="pointer-events-none absolute inset-[6px] rounded-[18px] border border-[#d9c58f]/20" /><div className="relative"><ClassGuideBody g={g} /></div></div>
           : <p className="text-sm text-zinc-400">{t("Für diese Klasse gibt es noch keinen Guide.", "No guide for this class yet.")}</p>}
       </div>;
     }
-    if (view === "crafting") return <div key={key} className={className} inert={out} aria-hidden={out || undefined}><CraftingView char={char} ui={craftUi} setUi={setCraftUi} /></div>;
+    if (view === "planner") return <div key={key} className={className} inert={out} aria-hidden={out || undefined}>
+      <div className="card-face relative rounded-[24px] p-4 sm:p-7"><span aria-hidden className="pointer-events-none absolute inset-[6px] rounded-[18px] border border-[#d9c58f]/20" /><div className="relative"><SkillPlanner char={char} /></div></div>
+    </div>;
     return <Tiles key={key} deck={deckFor(view)} onOpen={setOpen} className={className} />;
   }
 }
