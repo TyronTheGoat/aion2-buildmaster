@@ -295,7 +295,7 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
                 data-col={i < half ? 1 : 2}>
                 <Grip n={i + 1} />
                 <span className="min-w-0 flex-1 truncate text-sm text-[#f4eed7]">{locked && "🔒 "}{placeName(r.id, lang)}<PieceIco item={items[r.id]} /><span className="ml-1.5 text-xs text-zinc-500">{p.kind === "arcana" ? "Arcana" : ""}</span></span>
-                <select className={`${SEL} shrink-0 !px-1.5`} value={r.max} aria-label={`${p.de}: max. Abilities`} disabled={locked}
+                <select className={`${SEL} shrink-0 !px-1.5`} value={r.max} aria-label={`${placeName(p.id, lang)}: max. Abilities`} disabled={locked}
                   onChange={(e) => setOrder((o) => o.map((x) => (x.id === r.id ? { ...x, max: Number(e.target.value) } : x)))}>
                   {maxes.map((n) => <option key={n} value={n}>{n === 0 ? t("keine", "none") : `max ${n}`}</option>)}
                 </select>
@@ -363,15 +363,15 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
                   return (
                     <li key={id} className={`rounded-xl px-2 py-2 ring-1 ${h.locked ? "bg-[#d9c58f]/[0.08] ring-[#d9c58f]/45" : "bg-white/[0.03] ring-white/5"}`}>
                       <div className="flex items-center gap-2">
-                        <button className={`${ICON_BTN} ${h.locked ? "border-[#d9c58f]/70 bg-[#d9c58f]/20" : ""}`} aria-pressed={h.locked} aria-label={`${p.de} sperren`}
+                        <button className={`${ICON_BTN} ${h.locked ? "border-[#d9c58f]/70 bg-[#d9c58f]/20" : ""}`} aria-pressed={h.locked} aria-label={t(`${p.de} sperren`, `Lock ${p.en}`)}
                           title={h.locked ? t("Gesperrt: bleibt so", "Locked: stays as it is") : t("Sperren: Teil so behalten", "Lock: keep the piece as it is")}
                           onClick={() => setHave((m) => ({ ...m, [id]: { ...h, locked: !h.locked } }))}>{h.locked ? "🔒" : "🔓"}</button>
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#f4eed7]">{placeName(id, lang)}<PieceIco item={items[id]} /></span>
                         {!full && options.length > 0 && (
-                          <select className={`${SEL} w-36 min-w-0 sm:w-44`} value="" aria-label={`${p.de}: Ability hinzufügen`}
+                          <select className={`${SEL} w-36 min-w-0 sm:w-44`} value="" aria-label={t(`${p.de}: Ability hinzufügen`, `${p.en}: add ability`)}
                             onChange={(e) => { const en = e.target.value; if (en) setLines(id, (l) => [...l, { skill: en, levels: 1 }]); }}>
                             <option value="">+ Ability</option>
-                            {options.map((s) => <option key={s.skill_en} value={s.skill_en}>{s.skill_de}</option>)}
+                            {options.map((s) => <option key={s.skill_en} value={s.skill_en}>{de(s.skill_en)}</option>)}
                           </select>
                         )}
                       </div>
