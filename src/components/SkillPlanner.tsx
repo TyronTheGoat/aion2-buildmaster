@@ -191,13 +191,13 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
   const placed = goals.filter((g) => skills.some((s) => s.skill_en === g.skill)).length;
   const complete = allPlaced(cls, goals);
   const current = builds.builds.find((b) => b.id === loaded);
-  const saveBuild = (asBis: boolean) => {
-    const name = window.prompt(asBis ? t("Name für deinen eigenen BiS (z. B. PvP, Main Build 2):", "Name of your own BiS (e.g. PvP, Main Build 2):") : t("Name für den Build:", "Name of the build:"), current?.name ?? "");
+  const saveBuild = () => {
+    const name = window.prompt(t("Name für den Build (z. B. PvP, Main Build 2):", "Name of the build (e.g. PvP, Main Build 2):"), current?.name ?? "");
     if (!name?.trim()) return;
     // same name: that build is overwritten (its kisk line choices stay)
     const same = builds.builds.find((b) => b.name.toLowerCase() === name.trim().toLowerCase());
     const b: OwnBuild = {
-      id: same?.id ?? newBuildId(), name: name.trim(), bis: asBis || (!!same?.bis && complete), savedAt: nowIso(),
+      id: same?.id ?? newBuildId(), name: name.trim(), bis: complete, savedAt: nowIso(),
       goals, order, have, places: raw.places.map((p) => ({ id: p.id, lines: p.lines })), picks: same?.picks ?? {},
     };
     builds.save(b);
@@ -225,13 +225,11 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
           <span className="text-[11px] uppercase tracking-widest text-zinc-500">Builds</span>
           <select className={`${SEL} min-w-0 max-w-[14rem]`} value={loaded} onChange={(e) => loadBuild(e.target.value)} aria-label={t("Build laden", "Load build")}>
             <option value="">{builds.builds.length ? t("– Build laden –", "– load build –") : t("noch keine gespeichert", "none saved yet")}</option>
-            {builds.builds.map((b) => <option key={b.id} value={b.id}>{b.bis ? "★ " : ""}{b.name}</option>)}
+            {builds.builds.map((b) => <option key={b.id} value={b.id}>{allPlaced(cls, b.goals) ? "★ " : ""}{b.name}</option>)}
           </select>
-          <button className="rounded-lg border border-[#d9c58f]/30 px-3 py-1.5 text-sm text-[#f4eed7] hover:bg-[#d9c58f]/10" onClick={() => saveBuild(false)}>{t("Speichern", "Save")}</button>
-          <button className="rounded-lg border border-[#d9c58f]/50 bg-[#d9c58f]/10 px-3 py-1.5 text-sm font-semibold text-[#f4eed7] hover:bg-[#d9c58f]/20 disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={!complete} title={complete ? t("Als eigenen BiS speichern", "Save as own BiS") : t(`Erst alle Abilities platzieren (${placed}/${skills.length})`, `Place every ability first (${placed}/${skills.length})`)} onClick={() => saveBuild(true)}>★ {t("Als eigenen BiS", "As own BiS")}</button>
+          <button className="rounded-lg border border-[#d9c58f]/30 px-3 py-1.5 text-sm text-[#f4eed7] hover:bg-[#d9c58f]/10" onClick={saveBuild}>{t("Speichern", "Save")}</button>
           {current && <button className="rounded-lg px-2 py-1.5 text-sm text-zinc-500 hover:text-[#ff8b8b]" onClick={() => { if (window.confirm(t(`Build „${current.name}“ löschen?`, `Delete build "${current.name}"?`))) { builds.remove(current.id); setLoaded(""); } }}>{t("Löschen", "Delete")}</button>}
-          <span className={`ml-auto text-xs ${complete ? "text-[#5fbf8a]" : "text-zinc-500"}`}>{placed}/{skills.length} {t("Abilities platziert", "abilities placed")}</span>
+          <span className={`ml-auto text-xs ${complete ? "text-[#5fbf8a]" : "text-zinc-500"}`} title={t("Ein gespeicherter Build mit allen Abilities ist bei Ausrüstung und Arcana als Ziel wählbar", "A saved build with every ability placed can be chosen as target in equipment and Arcana")}>{placed}/{skills.length} {t("Abilities platziert", "abilities placed")}{complete ? t(" · als Ziel wählbar", " · usable as target") : ""}</span>
         </div>
       )}
 

@@ -31,7 +31,7 @@ export function useBuilds(charKey: string) {
   return {
     builds,
     /** the own BiS chosen as target in the comparison ("" = kisk's BiS) */
-    active: builds.find((b) => b.id === activeId && b.bis),
+    active: builds.find((b) => b.id === activeId),
     activeId,
     save(b: OwnBuild) {
       const cur = read();

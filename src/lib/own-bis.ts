@@ -10,8 +10,9 @@
 import type { Character, Grade, IdealLine, Item } from "./types";
 import { gradeFromScore } from "./grades";
 import { toNum } from "./compare";
+import { refSkills } from "./reference/rolls-v3";
 import {
-  ARCANA_CARD_LINES, currentItems, placeOf, refSkillKey, type Goal, type HaveMap, type Line, type PlaceId, type PlaceRule,
+  ARCANA_CARD_LINES, DAEVANION_MAX, STORY_MAX, currentItems, currentLines, placeOf, refSkillKey, type Goal, type HaveMap, type Line, type PlaceId, type PlaceRule,
 } from "./skill-plan";
 
 export const ANY = "Any";
@@ -19,7 +20,7 @@ export const ANY = "Any";
 export interface OwnBuild {
   id: string;
   name: string;
-  /** saved as own BiS (only possible once every ability of the class is placed) */
+  /** every ability of the class was placed when saved (only such builds can be the target; checked again with allPlaced) */
   bis: boolean;
   savedAt: string;
   goals: Goal[];
@@ -109,3 +110,37 @@ export const allPlaced = (className: string, goals: Goal[]) => {
   const all = refSkillKey(className);
   return all.length > 0 && all.every((k) => goals.some((g) => g.skill === k));
 };
+
+export interface AbilityLevel {
+  skill: string;
+  active: boolean;
+  /** story + Daevanion (from the planner's goals; 10 + 4 when the ability has no goal there) */
+  base: number;
+  /** base + the ability lines the character wears now (kisk) */
+  now: number;
+  /** base + the ability lines of the target (own build or kisk's BiS) */
+  target: number;
+}
+
+const sumLines = (m: Partial<Record<PlaceId, Line[]>>, skill: string) =>
+  Object.values(m).flat().filter((l) => l!.skill === skill).reduce((a, l) => a + l!.levels, 0);
+
+/**
+ * Every ability of the class with its level now and with the target: base (story + Daevanion) plus the +N lines of
+ * gear and Arcana. Target = the own build's plan, or kisk's BiS lines (only the abilities kisk lists).
+ */
+export function abilityLevels(className: string, char: Character, build: OwnBuild | undefined, plannerGoals: Goal[] = []): AbilityLevel[] {
+  const goals = build?.goals ?? plannerGoals;
+  const now = currentLines(className, char);
+  // kisk's BiS: read its target lines as if they were worn
+  const ideal = currentLines(className, {
+    gear: char.gear.map((it) => ({ ...it, lines: (it.ideal ?? []).map((l) => ({ name: l.name, value: l.value })) })),
+    arcana: char.arcana.map((it) => ({ ...it, lines: (it.ideal ?? []).map((l) => ({ name: l.name, value: l.value })) })),
+  });
+  const planned: Partial<Record<PlaceId, Line[]>> = build ? Object.fromEntries(build.places.map((p) => [p.id, p.lines])) : ideal;
+  return refSkills(className).map((s) => {
+    const g = goals.find((x) => x.skill === s.skill_en);
+    const base = Math.min(g?.story ?? STORY_MAX, STORY_MAX) + Math.min(g?.daevanion ?? DAEVANION_MAX, DAEVANION_MAX);
+    return { skill: s.skill_en, active: s.skill_type === "active", base, now: base + sumLines(now, s.skill_en), target: base + sumLines(planned, s.skill_en) };
+  });
+}

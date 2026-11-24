@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { FLORENTINA } from "../fixtures/florentina";
-import { applyBuild, needsPick, ownIdeal, ownScore, pickOptions, type OwnBuild } from "../own-bis";
+import { abilityLevels, applyBuild, needsPick, ownIdeal, ownScore, pickOptions, type OwnBuild } from "../own-bis";
 import { compareIdeal } from "../compare";
 
 const build: OwnBuild = {
@@ -44,4 +44,19 @@ test("the character with the build: own ranks, other pieces keep kisk's BiS", ()
   expect(comp.grade).toBe("S+");
   const weapon = c.gear.find((g) => g.slot === "weapon")!;
   expect(weapon.ideal).toBe(FLORENTINA.gear.find((g) => g.slot === "weapon")!.ideal);
+});
+
+test("ability levels: base + worn lines now, base + planned lines as target", () => {
+  const cls = "Elementalist";
+  const goals = [{ skill: "Combustion", target: 20, story: 8, daevanion: 2 }];
+  const rows = abilityLevels(cls, FLORENTINA, { ...build, goals }, []);
+  const comb = rows.find((r) => r.skill === "Combustion")!;
+  expect(comb.base).toBe(10);
+  expect(comb.target).toBe(14);
+  expect(comb.now).toBeGreaterThanOrEqual(10);
+  const wind = rows.find((r) => r.skill === "Summon: Wind Spirit")!;
+  expect(wind.base).toBe(14);
+  expect(wind.target).toBe(18);
+  // kisk's BiS as target: every ability still listed
+  expect(abilityLevels(cls, FLORENTINA, undefined).length).toBe(rows.length);
 });

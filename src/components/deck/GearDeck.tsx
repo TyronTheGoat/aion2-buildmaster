@@ -13,7 +13,9 @@ import { SkillPlanner } from "../SkillPlanner";
 import { OwnBisPicker } from "../OwnBisPicker";
 import { OwnBisWizard, pendingPieces } from "../OwnBisWizard";
 import { useBuilds } from "../build-store";
-import { applyBuild } from "@/lib/own-bis";
+import { allPlaced, applyBuild } from "@/lib/own-bis";
+import { refClass } from "@/lib/reference/rolls-v3";
+import { AbilityLevels } from "../AbilityLevels";
 import { currentItems, type PlaceId } from "@/lib/skill-plan";
 
 /** Order of the cards: weapon first, then armour, jewellery, the rest and Arcana last. */
@@ -60,7 +62,10 @@ export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note }: 
   const lang = useLang();
   // own BiS (offline preview): the chosen build replaces kisk's BiS as the target of every piece
   const builds = useBuilds(charKey(kiskChar));
-  const ownBis = SHOW_PREVIEW ? builds.active : undefined;
+  const cls = refClass(kiskChar.className);
+  // every saved build with all abilities placed can be the target (Arcana and gear switch together)
+  const targets = useMemo(() => (cls ? builds.builds.filter((b) => allPlaced(cls, b.goals)) : []), [cls, builds.builds]);
+  const ownBis = useMemo(() => (SHOW_PREVIEW ? targets.find((b) => b.id === builds.activeId) : undefined), [targets, builds.activeId]);
   const char = useMemo(() => applyBuild(kiskChar, ownBis), [kiskChar, ownBis]);
   const all = useMemo(() => deckOf(char, lang), [char, lang]);
   // three pages on one wheel: equipment cards, Arcana cards, class guide, skill planner (offline)
@@ -184,13 +189,14 @@ export function GearDeck({ char: kiskChar, onBack, onRefresh, onRemove, note }: 
 
       {SHOW_PREVIEW && (tab === "gear" || tab === "arcana") && (
         <div className="flex flex-wrap items-center justify-end gap-2 text-sm">
+          {cls && <AbilityLevels cls={cls} char={kiskChar} build={ownBis} />}
           <span className="text-[11px] uppercase tracking-widest text-zinc-500">{t("Ziel", "Target")}</span>
           <select value={ownBis?.id ?? ""} onChange={(e) => builds.setActive(e.target.value)} aria-label={t("Ziel-BiS", "Target BiS")}
             className="rounded-lg border border-[#d9c58f]/30 bg-[#0d1119] px-2 py-1.5 text-sm text-[#f4eed7] outline-none">
             <option value="">kisk-BiS</option>
-            {builds.builds.filter((b) => b.bis).map((b) => <option key={b.id} value={b.id}>★ {b.name}</option>)}
+            {targets.map((b) => <option key={b.id} value={b.id}>★ {b.name}</option>)}
           </select>
-          {!builds.builds.some((b) => b.bis) && <span className="text-xs text-zinc-500">{t("Eigenen BiS im Skill-Planer speichern", "Save an own BiS in the skill planner")}</span>}
+          {!targets.length && <span className="text-xs text-zinc-500">{t("Build mit allen Abilities im Skill-Planer speichern", "Save a build with every ability in the skill planner")}</span>}
         </div>
       )}
 
