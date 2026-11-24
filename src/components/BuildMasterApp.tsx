@@ -228,7 +228,7 @@ function KiskBookmarklet() {
   return (
     <div className="space-y-3 rounded-lg border border-[#d9c58f]/25 bg-white/[0.02] p-3 text-sm">
       <div className="font-semibold text-[#f4eed7]">{t("Charakter von kisk holen: Lesezeichen „BuildMaster“", "Get a character from kisk: the “BuildMaster” bookmark")}</div>
-      <p className="text-xs text-zinc-400">{t("Einmal einrichten, danach reicht auf kisk ein Tipp. BuildMaster fragt kisk.app nie selbst ab, es liest nur die Seite, die du geöffnet hast.", "Set up once, afterwards one tap on kisk is enough. BuildMaster never queries kisk.app itself, it only reads the page you opened.")}</p>
+      <p className="text-xs text-zinc-400">{t("Einmal einrichten, danach reicht auf kisk ein Tipp. Das Lesezeichen bringt neue Charaktere und kisks BiS-Zeilen. Danach holt BuildMaster alle 30 Minuten über die offizielle kisk-API den neuesten Stand.", "Set up once, afterwards one tap on kisk is enough. The bookmark brings new characters and kisk's BiS lines. After that BuildMaster fetches the latest state through kisk's official API every 30 minutes.")}</p>
       <div className="flex gap-1 text-xs" role="tablist">
         {(["iphone", "android", "pc"] as const).map((d) => (
           <button key={d} role="tab" aria-selected={device === d} onClick={() => setDevice(d)}

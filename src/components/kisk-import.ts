@@ -2,7 +2,7 @@
 /**
  * "Zu BuildMaster senden": a bookmarklet the player clicks on the kisk.app character page they have open.
  * It packs that page (scripts and styles removed, gzip, base64url) into the link of BuildMaster, which reads it
- * with the same parser as the paste import. Our server never queries kisk.app itself.
+ * with the same parser as the paste import. Afterwards the live server refreshes the gear through kisk's API (worker, every 30 minutes).
  * Fallback when the link loses its data (e.g. a login page in between): the opened window asks the kisk tab via postMessage.
  */
 import { parseKiskGear } from "@/lib/kisk/parse";
