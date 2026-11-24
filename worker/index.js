@@ -4,9 +4,9 @@
 // - character data from kisk shared by every account: whoever refreshes a character refreshes it for all (Tyron 2026-11-24)
 // Storage: SQLite-backed Durable Objects, one per account and one for the shared prices; no setup needed in the dashboard.
 import { DurableObject } from "cloudflare:workers";
-import { charFromApi, kiskCharUrl, kiskGearUrl, mergeKiskGear } from "../src/lib/kisk/api.ts";
+import { charFromApi, kiskCharUrl, kiskGearUrl, legionOf, mergeKiskGear } from "../src/lib/kisk/api.ts";
 
-const USER_KEYS = new Set(["chars", "gender", "planned", "craft", "skills", "skillplan", "builds", "buildactive"]);
+const USER_KEYS = new Set(["chars", "gender", "planned", "craft", "skills", "skillplan", "builds", "buildactive", "favorites", "intro"]);
 const MAX_DOC = 1_500_000;
 const MAX_PRICE = 4_000;
 const MAX_CHAR = 400_000;
@@ -107,7 +107,7 @@ async function api(req, env, url) {
   if (!who) return json({ error: "nicht angemeldet" }, 401);
   const email = who.id;
   // a service token may only maintain shared data (icon pack, market prices), never an account's characters or projects
-  if (who.service && !/^\/api\/(me|icons?|prices|kisk)(\/|$)/.test(url.pathname) && !(url.pathname === "/api/chars" && req.method === "GET")) return json({ error: "nur für Personen-Logins" }, 403);
+  if (who.service && !/^\/api\/(me|icons?|prices|kisk|history)(\/|$)/.test(url.pathname) && !(url.pathname === "/api/chars" && req.method === "GET")) return json({ error: "nur für Personen-Logins" }, 403);
   // writes need our own header: a plain cross-site form or fetch cannot send it without a CORS preflight we never allow
   if (req.method !== "GET" && req.headers.get("x-bm") !== "1") return json({ error: "forbidden" }, 403);
   const path = url.pathname.replace(/\/+$/, "");
@@ -198,7 +198,10 @@ async function api(req, env, url) {
       // only newer data replaces what is there
       return json({ at: null, kept: true });
     }
+    // a bookmark import has no guild: keep the one the API gave
+    if (old && !c.legion && JSON.parse(old).legion) c.legion = JSON.parse(old).legion;
     await keepClassBis(env, c);
+    await recordCp(env, k, c);
     return json({ at: await store.put(k, JSON.stringify(c), email) });
   }
   if (path === "/api/chars" && req.method === "DELETE") {
@@ -232,13 +235,13 @@ async function api(req, env, url) {
     const k = `${who.region}/${who.server}/${who.name}`.toLowerCase();
     const store = chars();
     const oldRaw = await store.get(k);
-    if (oldRaw) {
-      const old = JSON.parse(oldRaw);
-      const next = mergeKiskGear(old, gear);
-      return json({ c: next ?? old, same: !next, kiskFetched: gear.fetched ?? null });
-    }
     const infoRes = await fetch(kiskCharUrl(who.region, who.server, who.name), { headers });
     const info = infoRes.ok ? await infoRes.json() : undefined;
+    if (oldRaw) {
+      const old = JSON.parse(oldRaw);
+      const next = mergeKiskGear(old, gear, info) ?? withLegion(old, info);
+      return json({ c: next ?? old, same: !next, kiskFetched: gear.fetched ?? null });
+    }
     const donors = await classDonors(env, await store.rows());
     return json({ c: charFromApi(who, info, gear, donors), same: false, kiskFetched: gear.fetched ?? null });
   }
@@ -256,6 +259,13 @@ async function api(req, env, url) {
     if (k) return json(await kiskRefresh(env, { only: k, dry: true }));
     const [st, on, bis] = await Promise.all([kisk.get("status"), kisk.get("enabled"), kisk.keys("bis:")]);
     return json({ key: !!env.KISK_API_KEY, enabled: on === "1", classBis: bis.map((b) => b.slice(4)), status: st ? JSON.parse(st) : null });
+  }
+
+  // CP over time per character (stored by the server since 2026-11-24 with every new snapshot)
+  if (path === "/api/history" && req.method === "GET") {
+    const k = (url.searchParams.get("k") ?? "").toLowerCase();
+    const h = k ? await env.STORE.get(env.STORE.idFromName("history")).get(k) : null;
+    return json({ k, points: h ? JSON.parse(h) : [] });
   }
 
   if (path === "/api/prices" && req.method === "GET") {
@@ -301,10 +311,30 @@ async function classDonors(env, rows) {
   return [...rows.filter((r) => !r.k.startsWith("o:")).map((r) => JSON.parse(r.v)), ...fromBis];
 }
 
+/** The character with the guild from kisk's answer when it had none or another one (same data time), else undefined. */
+function withLegion(c, info) {
+  const l = legionOf(info);
+  return l && l !== c.legion ? { ...c, legion: l } : undefined;
+}
+
+/** CP history: [time ms, CP] per character, a new point when the CP changed or a day passed. */
+async function recordCp(env, k, c) {
+  const cp = c?.combatPower;
+  const at = Date.parse(c?.source?.fetchedAt ?? "");
+  if (!Number.isFinite(cp) || !Number.isFinite(at)) return;
+  const store = env.STORE.get(env.STORE.idFromName("history"));
+  const raw = await store.get(k);
+  const pts = raw ? JSON.parse(raw) : [];
+  const last = pts[pts.length - 1];
+  if (last && (at <= last[0] || (last[1] === cp && at - last[0] < 86_400_000))) return;
+  pts.push([at, cp]);
+  await store.put(k, JSON.stringify(pts.slice(-2000)), "cp");
+}
+
 /* ---------------------------------------------------------------- kisk.app API refresh ---------------------------------------------------------------- */
 
 /** at most this many characters per run (kisk allows 60 requests a minute; the oldest data goes first) */
-const KISK_PER_RUN = 40;
+const KISK_PER_RUN = 25;
 /**
  * Refreshes the shared characters from kisk's API (Tyron 2026-11-24, kisk's team pointed us to https://kisk.app/api).
  * The secret is the Worker secret KISK_API_KEY; without it nothing happens. `dry`: one character, returns kisk's raw answer
@@ -316,7 +346,7 @@ async function kiskRefresh(env, { only, dry } = {}) {
   const rows = (await store.rows()).filter((r) => !r.k.startsWith("o:") && (!only || r.k === only.toLowerCase()));
   rows.sort((a, b) => a.at - b.at);
   const result = { at: new Date().toISOString(), checked: 0, updated: [], same: 0, missing: [], errors: [] };
-  for (const r of rows) await keepClassBis(env, JSON.parse(r.v));
+  for (const r of rows) { const c = JSON.parse(r.v); await keepClassBis(env, c); await recordCp(env, r.k, c); }
   for (const r of rows.slice(0, KISK_PER_RUN)) {
     const old = JSON.parse(r.v);
     let res;

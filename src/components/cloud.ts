@@ -111,7 +111,8 @@ let sharedChars: Record<string, Character> = {};
 /** characters this account added for everybody, and how many it may add (null: no limit) */
 const sharedMine = new Set<string>();
 let sharedLimit: number | null = 10;
-const isNewer = (a?: Character, b?: Character) => !!a && (!b || a.source.fetchedAt > b.source.fetchedAt);
+// same data time but now with the guild (filled in by the server later) counts as newer too
+const isNewer = (a?: Character, b?: Character) => !!a && (!b || a.source.fetchedAt > b.source.fetchedAt || (a.source.fetchedAt === b.source.fetchedAt && !!a.legion && !b.legion));
 const writeShared = () => origSet(SHARED_CHARS_KEY, JSON.stringify({ chars: sharedChars, mine: [...sharedMine], limit: sharedLimit }));
 
 /** Sends every character of the list whose data is newer than the shared one (real kisk data only, never the demo data). */

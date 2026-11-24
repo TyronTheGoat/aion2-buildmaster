@@ -89,7 +89,7 @@ function toItem(it: KiskGearItem, old: Item | undefined): Item {
  * The character with the API's gear. Undefined when the answer is not newer than what we have or has no items.
  * Pieces the API leaves out (e.g. the armory would not give them) stay as they were.
  */
-export function mergeKiskGear(old: Character, api: KiskGear): Character | undefined {
+export function mergeKiskGear(old: Character, api: KiskGear, info?: KiskCharInfo): Character | undefined {
   if (!api.fetched || !api.items?.length) return undefined;
   const fetchedAt = new Date(api.fetched).toISOString();
   if (fetchedAt <= old.source.fetchedAt) return undefined;
@@ -111,6 +111,7 @@ export function mergeKiskGear(old: Character, api: KiskGear): Character | undefi
   return {
     ...old,
     combatPower: api.combatPower ?? old.combatPower,
+    ...(legionOf(info) ?? old.legion ? { legion: legionOf(info) ?? old.legion } : {}),
     gear: all.filter((i) => i.slot !== "arcana"),
     arcana: all.filter((i) => i.slot === "arcana"),
     source: { url: `https://kisk.app/c/${old.region}/${old.server}/${encodeURIComponent(old.name)}/gear`, fetchedAt, mode: "live" },
@@ -120,9 +121,11 @@ export function mergeKiskGear(old: Character, api: KiskGear): Character | undefi
 export interface KiskCharInfo {
   name?: string;
   side?: string;
-  armory?: { class?: string; race?: string; level?: number; combatPower?: number } | null;
-  census?: { class?: string; level?: number; combatPower?: number } | null;
+  armory?: { class?: string; race?: string; level?: number; combatPower?: number; legion?: string | null } | null;
+  census?: { class?: string; level?: number; combatPower?: number; legion?: string | null } | null;
 }
+/** The guild (legion) from kisk's character answer: the armory's first, then what addons saw. */
+export const legionOf = (info?: KiskCharInfo) => info?.armory?.legion || info?.census?.legion || undefined;
 
 const cardWord = (name: string) => /(chalice|grail|parchment|compass|bell|mirror)/i.exec(name)?.[1].toLowerCase().replace("grail", "chalice");
 
@@ -151,7 +154,7 @@ export function charFromApi(who: { region: string; server: string; name: string 
   const race = info?.armory?.race ?? (info?.side ? info.side[0].toUpperCase() + info.side.slice(1) : undefined);
   return {
     region: who.region, server: who.server, name: api.name ?? info?.name ?? who.name,
-    className, race, level: info?.armory?.level ?? info?.census?.level, combatPower: api.combatPower ?? info?.armory?.combatPower,
+    className, race, level: info?.armory?.level ?? info?.census?.level, ...(legionOf(info) ? { legion: legionOf(info) } : {}), combatPower: api.combatPower ?? info?.armory?.combatPower,
     gear: items.filter((i) => i.slot !== "arcana"), arcana: items.filter((i) => i.slot === "arcana"),
     source: { url: `https://kisk.app/c/${who.region}/${who.server}/${encodeURIComponent(who.name)}/gear`, fetchedAt: new Date(api.fetched ?? Date.now()).toISOString(), mode: "live" },
     warnings: donorItems.length ? [] : ["Noch keine BiS-Zeilen für diese Klasse: einmal das Lesezeichen auf der kisk-Gear-Seite klicken."],

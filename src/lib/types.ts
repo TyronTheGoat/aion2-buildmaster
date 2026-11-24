@@ -48,6 +48,8 @@ export interface Character {
   race?: string;
   level?: number;
   combatPower?: number;
+  /** guild (legion) as kisk's API knows it */
+  legion?: string;
   gearGrade?: Grade;
   /** Character portrait (head) as kisk.app links it; hosted by NCSOFT (profileimg.plaync.com), loaded live, never stored */
   portrait?: string;
