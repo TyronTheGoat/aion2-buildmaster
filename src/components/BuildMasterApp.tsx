@@ -34,12 +34,26 @@ const isOffline = () =>
   (typeof __BM_OFFLINE__ !== "undefined" && __BM_OFFLINE__) ||
   (typeof location !== "undefined" && !/^https?:$/.test(location.protocol));
 
-async function fetchLive(c: SavedChar): Promise<Character> {
-  const q = new URLSearchParams({ region: c.region, server: c.server, name: c.name });
-  const res = await fetch(`/api/character?${q}`);
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error ?? "Loading failed / Laden fehlgeschlagen");
-  return body as Character;
+/** Online: the character from kisk's API through our server (same: kisk has nothing newer than what we have). */
+async function fetchLive(c: { region: string; server: string; name: string }): Promise<{ c: Character; same: boolean; kiskFetched: number | null }> {
+  const res = await fetch("/api/kisk/char", {
+    method: "POST", credentials: "same-origin", cache: "no-store",
+    headers: { "x-bm": "1", "content-type": "application/json" },
+    body: JSON.stringify({ region: c.region, server: c.server, name: c.name }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error ?? `${res.status}`);
+  return body;
+}
+
+/** kisk link, "region/server/Name", "server/Name" or just "Name" (EU Odar). */
+function parseCharInput(s: string): { region: string; server: string; name: string } | undefined {
+  const link = parseKiskLink(s);
+  if (link) return link;
+  const parts = s.trim().split("/").filter(Boolean);
+  if (!parts.length || parts.length > 3 || parts.some((p) => /[\s?#]/.test(p))) return undefined;
+  const [region, server, name] = parts.length === 3 ? parts : parts.length === 2 ? ["eu", ...parts] : ["eu", "odar", parts[0]];
+  return /^[a-z]{2,3}$/i.test(region) && name.length <= 40 ? { region: region.toLowerCase(), server: server.toLowerCase(), name } : undefined;
 }
 
 export function BuildMasterApp() {
@@ -145,17 +159,25 @@ export function BuildMasterApp() {
 function AddCharacterSheet({ open, onClose, onAdd }: { open: boolean; onClose: () => void; onAdd: (c: SavedChar) => void }) {
   const [link, setLink] = useState("");
   const [text, setText] = useState("");
-  const parsed = parseKiskLink(link);
   const t = useT();
   const online = useCloud().mode === "online";
+  const parsed = online ? parseCharInput(link) : parseKiskLink(link);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string>();
   const input = "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-base outline-none focus:border-amber-400";
 
-  function submit() {
+  async function submit() {
     if (!parsed) return;
-    const snapshot = text.trim()
+    let snapshot = text.trim()
       ? parseKiskGear(textToLines(text), { ...parsed, url: `https://kisk.app/c/${parsed.region}/${parsed.server}/${encodeURIComponent(parsed.name)}/gear`, mode: "paste" })
       : undefined;
-    onAdd({ ...parsed, snapshot });
+    if (!snapshot && online) {
+      // straight from kisk's API: no bookmark needed
+      setBusy(true); setErr(undefined);
+      try { snapshot = (await fetchLive(parsed)).c; } catch (e) { setErr((e as Error).message); setBusy(false); return; }
+      setBusy(false);
+    }
+    onAdd({ ...parsed, name: snapshot?.name ?? parsed.name, snapshot });
     setLink(""); setText("");
   }
 
@@ -163,17 +185,18 @@ function AddCharacterSheet({ open, onClose, onAdd }: { open: boolean; onClose: (
     <Sheet open={open} onClose={onClose} title={<h2 className="text-lg font-semibold">{t("Charakter hinzufügen", "Add character")}</h2>}>
       <div className="space-y-3">
         {online && <KiskBookmarklet />}
-        <label className="block text-sm text-zinc-400">{t("kisk.app-Link", "kisk.app link")}
-          <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://kisk.app/c/eu/odar/Name" className={`${input} mt-1`} autoCapitalize="none" inputMode="url" />
+        <label className="block text-sm text-zinc-400">{online ? t("kisk.app-Link oder Name", "kisk.app link or name") : t("kisk.app-Link", "kisk.app link")}
+          <input value={link} onChange={(e) => { setLink(e.target.value); setErr(undefined); }} placeholder={online ? t("Name (EU Odar) oder https://kisk.app/c/eu/odar/Name", "Name (EU Odar) or https://kisk.app/c/eu/odar/Name") : "https://kisk.app/c/eu/odar/Name"} className={`${input} mt-1`} autoCapitalize="none" inputMode="url" />
         </label>
         {link && !parsed && <p className="text-xs text-red-300">{t("Das sieht nicht wie ein kisk.app-Charakterlink aus.", "That does not look like a kisk.app character link.")}</p>}
+        {err && <p className="text-xs text-red-300">{err}</p>}
         {parsed && <p className="text-xs text-emerald-300">{parsed.name} · {parsed.server} · {parsed.region.toUpperCase()}</p>}
         <details className="rounded-lg border border-white/10 p-3 text-sm" open={isOffline() && !online}>
           <summary className="cursor-pointer text-zinc-300">{t("Seiteninhalt einfügen", "Paste page content")} {isOffline() ? t("(nötig in der Offline-Version)", "(required in the offline version)") : "(optional)"}</summary>
           <p className="mt-2 text-xs text-zinc-500">{t("Öffne die Gear-Seite auf kisk.app, markiere alles, kopiere es und füge es hier ein.", "Open the gear page on kisk.app, select everything, copy it and paste it here.")}</p>
           <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} className={`${input} mt-2`} placeholder={t("Seiteninhalt…", "Page content…")} />
         </details>
-        <button onClick={submit} disabled={!parsed} className="w-full rounded-lg bg-amber-400 py-3 font-semibold text-black disabled:opacity-40">{t("Hinzufügen", "Add")}</button>
+        <button onClick={() => void submit()} disabled={!parsed || busy} className="w-full rounded-lg bg-amber-400 py-3 font-semibold text-black disabled:opacity-40">{busy ? t("Lade von kisk.app…", "Loading from kisk.app…") : t("Hinzufügen", "Add")}</button>
       </div>
     </Sheet>
   );
@@ -255,6 +278,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
 }) {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string>();
+  const [info, setInfo] = useState<string>();
   const [pasting, setPasting] = useState(false);
   const [text, setText] = useState("");
   const [view, setView] = useState<"deck" | "list">("deck");
@@ -262,15 +286,20 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
   const t = useT();
   const lang = useLang();
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (manual: unknown = true) => {
     if (isOffline()) { setPasting(true); return; }
-    setStatus("loading");
+    setStatus("loading"); setInfo(undefined);
     try {
-      const char = await fetchLive(saved);
-      upsert({ ...saved, snapshot: { ...char, portrait: char.portrait ?? portraitOf(saved) } });
+      const r = await fetchLive(saved);
+      const mine = saved.snapshot;
+      // only something newer than what this device has replaces it
+      if (!mine || r.c.source.fetchedAt > mine.source.fetchedAt) upsert({ ...saved, snapshot: { ...r.c, portrait: r.c.portrait ?? portraitOf(saved) } });
+      if (manual !== false) setInfo(r.same || (mine && r.c.source.fetchedAt <= mine.source.fetchedAt)
+        ? t("kisk.app hat keinen neueren Stand. Für frische Daten einmal die Gear-Seite auf kisk.app öffnen, dann noch mal aktualisieren.", "kisk.app has nothing newer. For fresh data open the gear page on kisk.app once, then refresh again.")
+        : t("Neuer Stand von kisk.app übernommen.", "New data from kisk.app applied."));
       setStatus("idle");
     } catch (e) {
-      setError(e instanceof TypeError ? t("kisk.app gerade nicht erreichbar", "kisk.app is not reachable right now") : e instanceof Error ? e.message : String(e));
+      setError(e instanceof TypeError ? t("Server gerade nicht erreichbar", "Server not reachable right now") : e instanceof Error ? e.message : String(e));
       setStatus("error");
     }
   }, [saved, upsert, t]);
@@ -279,7 +308,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
   useEffect(() => {
     const age = saved.snapshot ? Date.now() - new Date(saved.snapshot.source.fetchedAt).getTime() : Infinity;
     if (isOffline() || age <= 30 * 60 * 1000) return;
-    const t = setTimeout(() => void refresh(), 0);
+    const t = setTimeout(() => void refresh(false), 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -334,7 +363,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
     ? <p className="animate-pulse text-center text-xs text-zinc-400">{t("Aktualisiere von kisk.app…", "Refreshing from kisk.app…")}</p>
     : status === "error"
       ? <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">{t("Aktualisieren hat nicht geklappt", "Refresh failed")} ({error}). {t("Du siehst den letzten Stand.", "You are seeing the last snapshot.")}</p>
-      : null;
+      : info ? <p className="rounded-lg bg-white/[0.03] px-3 py-2 text-center text-xs text-zinc-400">{info}</p> : null;
 
   if (view === "deck") {
     return (

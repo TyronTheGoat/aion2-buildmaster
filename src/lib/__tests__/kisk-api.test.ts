@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { FLORENTINA } from "../fixtures/florentina";
-import { mergeKiskGear, type KiskGear } from "../kisk/api";
+import { charFromApi, mergeKiskGear, type KiskGear } from "../kisk/api";
 
 const later = Date.parse(FLORENTINA.source.fetchedAt) + 3_600_000;
 const asApi = (patch: (i: number) => object = () => ({})): KiskGear => ({
@@ -37,4 +37,16 @@ test("changed lines: own rank against the BiS lines", () => {
 
 test("not newer: nothing to do", () => {
   expect(mergeKiskGear(FLORENTINA, { ...asApi(), fetched: Date.parse(FLORENTINA.source.fetchedAt) })).toBeUndefined();
+});
+
+test("new character by link: BiS lines from a character of the same class", () => {
+  const api = asApi();
+  const c = charFromApi({ region: "eu", server: "odar", name: "Neu" }, { armory: { class: "Spiritmaster", race: "Asmodian", level: 45 } }, api, [FLORENTINA]);
+  expect(c.className).toBe("Spiritmaster");
+  expect(c.combatPower).toBe(200000);
+  expect(c.gear.filter((g) => g.ideal?.length).length).toBe(FLORENTINA.gear.filter((g) => g.ideal?.length).length);
+  expect(c.warnings).toEqual([]);
+  const other = charFromApi({ region: "eu", server: "odar", name: "Neu" }, { armory: { class: "Templar" } }, api, [FLORENTINA]);
+  expect(other.gear.every((g) => !g.ideal)).toBe(true);
+  expect(other.warnings.length).toBe(1);
 });

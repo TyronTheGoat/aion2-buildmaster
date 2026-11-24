@@ -4,7 +4,7 @@
 // - character data from kisk shared by every account: whoever refreshes a character refreshes it for all (Tyron 2026-11-24)
 // Storage: SQLite-backed Durable Objects, one per account and one for the shared prices; no setup needed in the dashboard.
 import { DurableObject } from "cloudflare:workers";
-import { kiskGearUrl, mergeKiskGear } from "../src/lib/kisk/api.ts";
+import { charFromApi, kiskCharUrl, kiskGearUrl, mergeKiskGear } from "../src/lib/kisk/api.ts";
 
 const USER_KEYS = new Set(["chars", "gender", "planned", "craft", "skills", "skillplan", "builds", "buildactive"]);
 const MAX_DOC = 1_500_000;
@@ -210,6 +210,35 @@ async function api(req, env, url) {
     await store.del(k);
     await store.del(`o:${k}`);
     return json({ ok: true });
+  }
+
+  // one character from kisk's API for any signed-in person: "Aktualisieren" and adding by link (Tyron 2026-11-24).
+  // Returns the character (not saved here: the app shares it like a bookmark import, with the per-account limit).
+  if (path === "/api/kisk/char" && req.method === "POST") {
+    if (!env.KISK_API_KEY) return json({ error: "kisk-Anbindung nicht eingerichtet" }, 503);
+    let body;
+    try { body = await req.json(); } catch { return json({ error: "kein JSON" }, 400); }
+    const ok = (v, re) => typeof v === "string" && re.test(v);
+    if (!ok(body?.region, /^[a-z]{2,3}$/) || !ok(body?.server, /^[a-z0-9-]{1,30}$/) || !ok(body?.name, /^[^/?#\s]{1,40}$/)) return json({ error: "ungültiger Charakter" }, 400);
+    const who = { region: body.region, server: body.server, name: body.name };
+    const headers = { authorization: `Bearer ${env.KISK_API_KEY}`, accept: "application/json" };
+    const res = await fetch(kiskGearUrl(who.region, who.server, who.name), { headers });
+    if (res.status === 404) return json({ error: "kisk.app kennt die Ausrüstung dieses Charakters noch nicht. Öffne einmal seine Gear-Seite auf kisk.app und versuch es dann noch mal." }, 404);
+    if (res.status === 429) return json({ error: "kisk.app bremst gerade (zu viele Anfragen). Bitte in einer Minute noch mal." }, 429);
+    if (!res.ok) return json({ error: `kisk.app antwortet mit ${res.status}` }, 502);
+    const gear = await res.json();
+    const k = `${who.region}/${who.server}/${who.name}`.toLowerCase();
+    const store = chars();
+    const oldRaw = await store.get(k);
+    if (oldRaw) {
+      const old = JSON.parse(oldRaw);
+      const next = mergeKiskGear(old, gear);
+      return json({ c: next ?? old, same: !next, kiskFetched: gear.fetched ?? null });
+    }
+    const infoRes = await fetch(kiskCharUrl(who.region, who.server, who.name), { headers });
+    const info = infoRes.ok ? await infoRes.json() : undefined;
+    const donors = (await store.rows()).filter((r) => !r.k.startsWith("o:")).map((r) => JSON.parse(r.v));
+    return json({ c: charFromApi(who, info, gear, donors), same: false, kiskFetched: gear.fetched ?? null });
   }
 
   // kisk.app API: status of the 30-minute refresh, one character as a test (nothing saved), or a run now (admin / service token)

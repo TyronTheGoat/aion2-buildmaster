@@ -116,3 +116,47 @@ export function mergeKiskGear(old: Character, api: KiskGear): Character | undefi
     source: { url: `https://kisk.app/c/${old.region}/${old.server}/${encodeURIComponent(old.name)}/gear`, fetchedAt, mode: "live" },
   };
 }
+
+export interface KiskCharInfo {
+  name?: string;
+  side?: string;
+  armory?: { class?: string; race?: string; level?: number; combatPower?: number } | null;
+  census?: { class?: string; level?: number; combatPower?: number } | null;
+}
+
+const cardWord = (name: string) => /(chalice|grail|parchment|compass|bell|mirror)/i.exec(name)?.[1].toLowerCase().replace("grail", "chalice");
+
+/**
+ * A new character from the API alone (added by link, no bookmark). kisk's BiS lines are per class and slot, so they are
+ * taken from a character of the same class we already have (Arcana: the same card); without one the pieces have no BiS yet.
+ */
+export function charFromApi(who: { region: string; server: string; name: string }, info: KiskCharInfo | undefined, api: KiskGear, donors: Character[]): Character {
+  const className = info?.armory?.class ?? info?.census?.class;
+  const donorItems = donors.filter((d) => className && d.className?.toLowerCase() === className.toLowerCase()).flatMap((d) => [...d.gear, ...d.arcana]).filter((i) => i.ideal?.length);
+  const items = (api.items ?? []).map((it) => {
+    const slot = slotOf(it);
+    const donor = slot === "arcana"
+      ? donorItems.find((d) => d.slot === "arcana" && cardWord(d.name) === cardWord(it.name ?? ""))
+      : donorItems.find((d) => d.slot === slot);
+    const item = toItem(it, undefined);
+    if (donor?.ideal) {
+      item.ideal = donor.ideal;
+      const s = ownScore(item, donor.ideal);
+      item.score = Math.round(s);
+      item.grade = gradeFromScore(s);
+    } else item.scored = false;
+    if (donor?.fixedLines) item.fixedLines = true;
+    return item;
+  }).filter((i) => i.slot !== "unknown");
+  const race = info?.armory?.race ?? (info?.side ? info.side[0].toUpperCase() + info.side.slice(1) : undefined);
+  return {
+    region: who.region, server: who.server, name: api.name ?? info?.name ?? who.name,
+    className, race, level: info?.armory?.level ?? info?.census?.level, combatPower: api.combatPower ?? info?.armory?.combatPower,
+    gear: items.filter((i) => i.slot !== "arcana"), arcana: items.filter((i) => i.slot === "arcana"),
+    source: { url: `https://kisk.app/c/${who.region}/${who.server}/${encodeURIComponent(who.name)}/gear`, fetchedAt: new Date(api.fetched ?? Date.now()).toISOString(), mode: "live" },
+    warnings: donorItems.length ? [] : ["Noch keine BiS-Zeilen für diese Klasse: einmal das Lesezeichen auf der kisk-Gear-Seite klicken."],
+  };
+}
+
+export const kiskCharUrl = (region: string, server: string, name: string) =>
+  `https://kisk.app/api/v1/c/${encodeURIComponent(region)}/${encodeURIComponent(server)}/${encodeURIComponent(name)}`;
