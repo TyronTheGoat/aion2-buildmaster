@@ -3,15 +3,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Character } from "@/lib/types";
 import { refClass, refSkills } from "@/lib/reference/rolls-v3";
 import {
-  ARCANA_CARD_LEVELS, ARCANA_CARD_LINES, ARCANA_SKILL_MAX, DAEVANION_MAX, DEFAULT_ORDER, PLACES, STORY_MAX, allowed, placeOf, planSkills,
-  type Goal, type HaveMap, type Line, type PlaceId, type PlaceRule,
+  ARCANA_CARD_LEVELS, ARCANA_CARD_LINES, ARCANA_ENHANCE, ARCANA_SKILL_MAX, DAEVANION_MAX, DEFAULT_ORDER, PLACES, STORY_MAX, allowed, alignToCurrent,
+  currentLines, diffPlan, placeOf, planSkills, type Goal, type HaveMap, type Line, type NowState, type PieceDiff, type PlaceId, type PlaceRule, type WantState,
 } from "@/lib/skill-plan";
 import { charKey } from "./store";
 import { Pic, skillIcon } from "./ClassSkillSetup";
 
 /** Saved per character on this device (offline preview): goals, order / limits of the places, what already stands on them. */
 const KEY = "bm:skillplan";
-interface Saved { goals: Goal[]; order: PlaceRule[]; have?: HaveMap }
+interface Saved { goals: Goal[]; order: PlaceRule[]; have?: HaveMap; compareNow?: boolean }
 const load = (k: string): Saved | undefined => { try { return JSON.parse(localStorage.getItem(KEY) ?? "{}")[k]; } catch { return undefined; } };
 const save = (k: string, v: Saved) => { try { const all = JSON.parse(localStorage.getItem(KEY) ?? "{}"); all[k] = v; localStorage.setItem(KEY, JSON.stringify(all)); } catch { /* full */ } };
 
@@ -19,7 +19,6 @@ const SEL = "rounded-lg border border-[#d9c58f]/25 bg-[#0d1119] px-2 py-1.5 text
 const ICON_BTN = "h-8 w-8 shrink-0 rounded-lg border border-[#d9c58f]/20 text-[#efe6cc] hover:border-[#d9c58f]/50 disabled:opacity-30";
 const H = "text-base font-semibold text-[#efe6cc]";
 const range = (a: number, b: number) => Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i);
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /**
  * Drag to reorder, with mouse and touch: grab a row (on touch: its number), pull it to its new place, let go.
@@ -75,6 +74,60 @@ const Grip = ({ n, gold }: { n: number; gold?: boolean }) => (
   </span>
 );
 
+/** Skill icon from the class guide pictures (empty square when there is none). */
+function SkillIco({ cls, en, size = "h-8 w-8" }: { cls: string; en: string; size?: string }) {
+  const f = skillIcon(cls, en);
+  return f ? <Pic file={f} alt="" className={`${size} shrink-0 rounded-md ring-1 ring-[#d9c58f]/30`} /> : <span className={`${size} shrink-0 rounded-md bg-white/[0.06]`} />;
+}
+
+const NOW_MARK: Record<NowState, [string, string]> = { ok: ["✓", "text-[#5fbf8a]"], low: ["zu niedrig", "text-[#ff9a2e]"], drop: ["raus", "text-[#ff8b8b]"], free: ["egal", "text-zinc-500"] };
+const WANT_MARK: Record<WantState, [string, string]> = { ok: ["✓", "text-[#5fbf8a]"], low: ["", "text-[#ff9a2e]"], missing: ["fehlt", "text-[#ff9a2e]"] };
+
+/**
+ * One piece: the current card first stands in the middle, slides to the left, then the target card opens on the right
+ * (same motion as the slot comparison).
+ */
+function CompareRow({ d, cls, de, delay }: { d: PieceDiff; cls: string; de: (en: string) => string; delay: number }) {
+  const [stage, setStage] = useState(0);
+  // side by side from 640 px on, with the slide; on a phone the two cards stand on top of each other
+  const [wide] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 640px)").matches);
+  useEffect(() => { const t = setTimeout(() => setStage(1), 150 + delay); return () => clearTimeout(t); }, [delay]);
+  const p = placeOf(d.id);
+  const card = "card-face flex h-full min-w-0 flex-col rounded-xl p-2.5 ring-1 sm:p-3";
+  const tag = "mb-1.5 text-[10px] uppercase tracking-widest";
+  return (
+    <li>
+      <div className="mb-1.5 flex items-baseline gap-2 px-1 text-sm font-semibold text-[#f4eed7]">{d.locked && "🔒 "}{p.de}
+        <span className={`text-[10px] font-normal uppercase tracking-widest ${d.change ? "text-[#ff9a2e]" : "text-[#5fbf8a]"}`}>{d.change ? "ändern" : "passt ✓"}</span></div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-6 sm:[--gap:1.5rem]">
+        <div className="min-w-0 transition-transform duration-[800ms] ease-[cubic-bezier(.45,0,.2,1)] motion-reduce:transition-none"
+          style={wide ? { transform: stage ? "translateX(0)" : "translateX(calc(50% + var(--gap) / 2))" } : undefined}>
+          <div className={`${card} ring-white/15`}>
+            <div className={`${tag} text-zinc-500`}>Aktuell</div>
+            {d.now.length ? <ul className="space-y-1 text-sm">{d.now.map((l) => (
+              <li key={l.skill} className={`flex items-center gap-1.5 ${l.state === "free" ? "text-zinc-500" : "text-[#efe6cc]/90"}`}>
+                <SkillIco cls={cls} en={l.skill} size="h-5 w-5" /><span className="min-w-0 flex-1 truncate">{de(l.skill)}</span>
+                <b className="text-[#d9c58f]">+{l.levels}</b><span className={`w-16 shrink-0 text-right text-[10px] ${NOW_MARK[l.state][1]}`}>{l.state === "ok" ? "✓" : l.state === "low" ? "↑ zu niedrig" : l.state === "drop" ? "✕ raus" : "· egal"}</span>
+              </li>))}</ul>
+              : <p className="text-xs text-zinc-500">keine Ability</p>}
+          </div>
+        </div>
+        <div className="min-w-0 transition-[opacity,transform] duration-[700ms] motion-reduce:transition-none"
+          style={{ opacity: stage ? 1 : 0, transform: stage ? "none" : wide ? "translateX(1.5rem)" : "translateY(0.5rem)", transitionDelay: wide ? "250ms" : "0ms" }}>
+          <div className={`${card} ${d.change ? "ring-[#ff9a2e]/45" : "ring-[#5fbf8a]/45"}`}>
+            <div className={`${tag} ${d.change ? "text-[#ff9a2e]" : "text-[#5fbf8a]"}`}>So muss es sein</div>
+            <ul className="space-y-1 text-sm">{d.want.map((l) => (
+              <li key={l.skill} className="flex items-center gap-1.5 text-[#efe6cc]/90">
+                <SkillIco cls={cls} en={l.skill} size="h-5 w-5" /><span className="min-w-0 flex-1 truncate">{de(l.skill)}</span>
+                <b className="text-[#d9c58f]">+{l.levels}</b><span className={`w-16 shrink-0 text-right text-[10px] ${WANT_MARK[l.state][1]}`}>{l.state === "ok" ? "✓" : l.state === "low" ? `+${l.has} → +${l.levels}` : "! fehlt"}</span>
+              </li>))}</ul>
+          </div>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 const GROUPS: { title: string; ids: PlaceId[] }[] = [
   { title: "Arcana-Karten", ids: ["Chalice", "Parchment", "Compass", "Bell", "Mirror"] },
   { title: "Waffe & Schützer", ids: ["weapon", "guard"] },
@@ -93,20 +146,22 @@ export function SkillPlanner({ char }: { char: Character }) {
     return [...o.filter((r) => PLACES.some((p) => p.id === r.id)), ...DEFAULT_ORDER.filter((d) => !o.some((r) => r.id === d.id))];
   });
   const [have, setHave] = useState<HaveMap>(() => load(key)?.have ?? {});
-  useEffect(() => save(key, { goals, order, have }), [key, goals, order, have]);
+  // off: the plan only shows how to reach the goals; on: compared with the gear the character wears now (kisk)
+  const [compareNow, setCompareNow] = useState(() => !!load(key)?.compareNow);
+  useEffect(() => save(key, { goals, order, have, compareNow }), [key, goals, order, have, compareNow]);
   const goalSort = useSortable<Goal>(setGoals, "goal");
   const placeSort = useSortable<PlaceRule>(setOrder, "place");
   if (!cls) return null;
 
   const de = (en: string) => skills.find((s) => s.skill_en === en)?.skill_de ?? en;
-  const Icon = ({ en, size = "h-8 w-8" }: { en: string; size?: string }) => {
-    const f = skillIcon(cls, en);
-    return f ? <Pic file={f} alt="" className={`${size} shrink-0 rounded-md ring-1 ring-[#d9c58f]/30`} /> : <span className={`${size} shrink-0 rounded-md bg-white/[0.06]`} />;
-  };
-  const plan = planSkills(cls, goals, order, have);
+  const Icon = ({ en, size }: { en: string; size?: string }) => <SkillIco cls={cls} en={en} size={size} />;
+  const now = currentLines(cls, char);
+  const raw = planSkills(cls, goals, order, have);
+  const plan = compareNow ? alignToCurrent(raw, now) : raw;
+  const diffs = compareNow ? diffPlan(plan, now) : [];
+  const toChange = diffs.filter((d) => d.change).length;
   // what the character has right now from kisk (gear + Arcana lines of this skill)
-  const nowBonus = (en: string) => [...char.gear, ...char.arcana].flatMap((i) => i.lines).filter((l) => norm(l.name) === norm(en))
-    .reduce((a, l) => a + (Number(String(l.value).replace(/[^\d]/g, "")) || 0), 0);
+  const nowBonus = (en: string) => Object.values(now).flat().filter((l) => l!.skill === en).reduce((a, l) => a + l!.levels, 0);
   const free = skills.filter((s) => !goals.some((g) => g.skill === s.skill_en));
   const setGoal = (i: number, patch: Partial<Goal>) => setGoals((g) => g.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const shown = plan.places.filter((p) => p.lines.length || p.locked);
@@ -133,7 +188,7 @@ export function SkillPlanner({ char }: { char: Character }) {
         <ul className="space-y-2">
           {plan.goals.map((r, i) => {
             const g = r.goal;
-            const now = Math.min(g.story, STORY_MAX) + Math.min(g.daevanion, DAEVANION_MAX) + nowBonus(g.skill);
+            const nowLevel = Math.min(g.story, STORY_MAX) + Math.min(g.daevanion, DAEVANION_MAX) + nowBonus(g.skill);
             return (
               <li key={g.skill} {...goalSort.row(i)}
                 className={`card-face grid select-none grid-cols-[auto_2rem_minmax(0,1fr)_2rem] items-center gap-2 rounded-xl p-2 ring-1 md:grid-cols-[3.25rem_2rem_minmax(0,1fr)_4.5rem_4.5rem_4.5rem_6rem_2rem] ${goalSort.drag === i ? "relative z-10 scale-[1.01] ring-2 ring-[#d9c58f]/70 shadow-2xl" : "ring-[#d9c58f]/20"}`}>
@@ -151,9 +206,9 @@ export function SkillPlanner({ char }: { char: Character }) {
                   <label className="text-[10px] uppercase tracking-widest text-zinc-500 md:contents"><span className="md:hidden">Ziel</span>
                     <select className={`${SEL} w-full`} value={g.target} onChange={(e) => setGoal(i, { target: Number(e.target.value) })}>{range(10, 30).map((n) => <option key={n}>{n}</option>)}</select></label>
                 </div>
-                <span className="col-span-4 text-sm md:col-span-1" title={`jetzt laut kisk: ${now}`}>
+                <span className="col-span-4 text-sm md:col-span-1">
                   {r.missing === 0 ? <span className="font-semibold text-[#5fbf8a]">✓ erreichbar</span> : <span className="font-semibold text-[#ff8b8b]">fehlt {r.missing}</span>}
-                  <span className="ml-2 text-[11px] text-zinc-500 md:ml-0 md:block">jetzt {now}</span>
+                  {compareNow && <span className="ml-2 text-[11px] text-zinc-500 md:ml-0 md:block" title="mit deinem aktuellen Gear laut kisk">jetzt {nowLevel}</span>}
                 </span>
                 <button className={`${ICON_BTN} hidden md:block`} onClick={() => setGoals((l) => l.filter((_, j) => j !== i))} aria-label="entfernen">×</button>
                 {r.got.length > 0 && <div className="col-span-full flex flex-wrap gap-1.5 md:pl-[5.75rem]">
@@ -191,20 +246,31 @@ export function SkillPlanner({ char }: { char: Character }) {
           })}
         </ul>
         <style>{`@media (min-width: 768px) { .pl-row[data-col="1"] { grid-column: 1 } .pl-row[data-col="2"] { grid-column: 2 } }`}</style>
-        <p className="mt-2 text-xs text-zinc-500">Arcana-Karte: {ARCANA_CARD_LEVELS} Level insgesamt, höchstens +{ARCANA_SKILL_MAX} auf eine Ability. Ausrüstung: +1 pro Ability.</p>
+        <p className="mt-2 text-xs text-zinc-500">Arcana-Karte: {ARCANA_CARD_LINES} Zeilen ab +1, dazu {ARCANA_ENHANCE} Level durchs Verstärken ({ARCANA_CARD_LEVELS} insgesamt), höchstens +{ARCANA_SKILL_MAX} auf eine Ability. Ausrüstung: +1 pro Ability.</p>
       </details>
 
       {/* 3: result */}
       {shown.length > 0 && (
         <div className="space-y-2">
-          <div className={H}>3 · So muss es fallen</div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className={H}>3 · So muss es fallen</div>
+            <label className="flex cursor-pointer select-none items-center gap-2 rounded-xl bg-white/[0.04] px-3 py-1.5 text-sm text-[#efe6cc] ring-1 ring-white/10 hover:ring-[#d9c58f]/40">
+              <input type="checkbox" className="h-4 w-4 accent-[#d9c58f]" checked={compareNow} onChange={(e) => setCompareNow(e.target.checked)} />
+              Änderungen an meinem aktuellen Gear
+            </label>
+          </div>
+          {compareNow ? (<>
+            <p className="text-xs text-zinc-500">{toChange ? `${toChange} von ${diffs.length} Teilen musst du ändern.` : "Dein aktuelles Gear passt schon zum Plan."} Je Teil: dein Gear laut kisk und wie es sein muss.</p>
+            <ul className="space-y-4">{diffs.map((d, i) => <CompareRow key={d.id} d={d} cls={cls} de={de} delay={i * 90} />)}</ul>
+          </>) : (
           <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {shown.map((p) => {
               const before = haveOf(p.id).lines;
+              const freeLines = placeOf(p.id).kind === "arcana" ? ARCANA_CARD_LINES - p.lines.length : 0;
               return (
                 <li key={p.id} className={`card-face rounded-xl p-3 ring-1 ${p.locked ? "ring-[#d9c58f]/50" : "ring-[#d9c58f]/25"}`}>
                   <div className="mb-1.5 flex items-baseline justify-between text-sm font-semibold text-[#f4eed7]">{p.locked && "🔒 "}{placeOf(p.id).de}
-                    <span className="text-xs font-normal text-zinc-500">{p.locked ? "bleibt so" : p.levelsLeft !== null ? `${p.levelsLeft} frei` : ""}</span></div>
+                    <span className="text-xs font-normal text-zinc-500">{p.locked ? "bleibt so" : freeLines > 0 ? `${freeLines} Zeile${freeLines > 1 ? "n" : ""} egal` : ""}</span></div>
                   <ul className="space-y-1 text-sm">{p.lines.map((l) => {
                     const inGoal = goals.some((g) => g.skill === l.skill);
                     const there = !p.locked && before.some((b) => b.skill === l.skill && b.levels >= l.levels);
@@ -216,7 +282,7 @@ export function SkillPlanner({ char }: { char: Character }) {
                 </li>
               );
             })}
-          </ul>
+          </ul>)}
         </div>
       )}
 
@@ -234,7 +300,7 @@ export function SkillPlanner({ char }: { char: Character }) {
                   const h = haveOf(id);
                   const arcana = p.kind === "arcana";
                   const sum = h.lines.reduce((a, l) => a + l.levels, 0);
-                  const full = arcana ? h.lines.length >= ARCANA_CARD_LINES || sum >= ARCANA_CARD_LEVELS : h.lines.length >= 4;
+                  const full = h.lines.length >= 4;
                   const options = skills.filter((s) => allowed(cls, s.skill_en, p) && !h.lines.some((l) => l.skill === s.skill_en));
                   return (
                     <li key={id} className={`rounded-xl px-2 py-2 ring-1 ${h.locked ? "bg-[#d9c58f]/[0.08] ring-[#d9c58f]/45" : "bg-white/[0.03] ring-white/5"}`}>
@@ -258,7 +324,7 @@ export function SkillPlanner({ char }: { char: Character }) {
                             {arcana
                               ? <select className={`${SEL} !px-1 !py-0.5 text-xs`} value={l.levels} aria-label={`${de(l.skill)}: Level`}
                                   onChange={(e) => setLines(id, (ls) => ls.map((x, j) => (j === k ? { ...x, levels: Number(e.target.value) } : x)))}>
-                                  {range(1, Math.min(ARCANA_SKILL_MAX, ARCANA_CARD_LEVELS - (sum - l.levels))).map((n) => <option key={n} value={n}>+{n}</option>)}
+                                  {range(1, Math.min(ARCANA_SKILL_MAX, ARCANA_CARD_LEVELS - (sum - l.levels) - (ARCANA_CARD_LINES - h.lines.length))).map((n) => <option key={n} value={n}>+{n}</option>)}
                                 </select>
                               : <b className="text-[#d9c58f]">+1</b>}
                             <button className="px-1 text-zinc-400 hover:text-[#ff8b8b]" aria-label={`${de(l.skill)} entfernen`} onClick={() => setLines(id, (ls) => ls.filter((_, j) => j !== k))}>×</button>
