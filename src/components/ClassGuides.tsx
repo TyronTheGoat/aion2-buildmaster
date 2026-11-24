@@ -32,7 +32,7 @@ export function ClassGuides({ onBack }: { onBack: () => void }) {
     <div className="space-y-6">
       <div className="bm-backdrop pointer-events-none fixed inset-0 -z-10" aria-hidden />
       <div className="pt-4">
-        <button onClick={onBack} className="text-sm text-zinc-400 hover:text-white">‹ {t("Zurück", "Back")}</button>
+        <button onClick={onBack} className="rounded-lg border border-[#d9c58f]/25 bg-white/[0.04] px-3 py-1.5 text-sm text-[#efe6cc] hover:border-[#d9c58f]/50">‹ {t("Zurück", "Back")}</button>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[#f4eed7]">{t("Klassenguides", "Class guides")}</h1>
         <p className="mt-1 text-sm text-[#efe6cc]/50">{t("Klasse antippen: Beschreibung, Hauptskills, Stärken und Schwächen", "Tap a class: description, main skills, strengths and weaknesses")}</p>
       </div>

@@ -237,3 +237,79 @@ body { overflow-x: clip; }
 @keyframes pop-in { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: none; } }
 .pop-in { animation: pop-in 0.22s cubic-bezier(.2,.8,.2,1); }
 @media (prefers-reduced-motion: reduce) { .pop-in { animation: none; } }
+
+/* ---------------------------------------------------------------------------------------------------------------
+   3D look (Tyron 2026-11-24, offline preview: html.bm-3d): depth from light and edges, hardly any shadow.
+   Raised parts get a soft top-light gradient, a fine light top edge and a darker bottom edge; fields are set in;
+   buttons press in. Tailwind's own box-shadow pieces (ring, shadow) are kept by writing the same composition.
+   Static shadows only (no blur filters, no animation), so phones stay smooth.
+   --------------------------------------------------------------------------------------------------------------- */
+.bm-3d {
+  --bm3d-hi: rgba(255, 238, 200, 0.22);
+  --bm3d-lo: rgba(0, 0, 0, 0.55);
+  --bm3d-raise: inset 0 1px 0 var(--bm3d-hi), inset 0 -2px 0 var(--bm3d-lo);
+  --bm3d-light: linear-gradient(180deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.03) 45%, rgba(0, 0, 0, 0.22) 100%);
+}
+/* everything with an outline (border or ring): raised surface */
+.bm-3d :is(div, li, section, span, label, output, a, button, details)[class~="border"],
+.bm-3d :is(div, li, section, span, label, output, a, button, details)[class*="ring-1"],
+.bm-3d .card-face {
+  --tw-inset-shadow: var(--bm3d-raise);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow, 0 0 #0000);
+}
+/* a soft top light on outlined parts that have no picture or gradient of their own */
+.bm-3d :is(div, li, section, label, output, a, button, details)[class~="border"]:not([class*="bg-["]):not([class*="bg-linear"]):not([class*="bg-gradient"]):not([class*="bg-radial"]):not(.card-face):not([class*="absolute"]),
+.bm-3d :is(div, li, section, label, output, a, button, details)[class*="ring-1"]:not([class*="bg-["]):not([class*="bg-linear"]):not([class*="bg-gradient"]):not([class*="bg-radial"]):not(.card-face):not([class*="absolute"]),
+.bm-3d :is(div, li, a, button)[class*="bg-white/"][class~="rounded-lg"]:not([class*="absolute"]) {
+  background-image: var(--bm3d-light);
+}
+/* buttons and links that look like buttons: a hair of lift, press in on click */
+.bm-3d :is(a, button, [role="tab"])[class~="border"]:not(.card-tilt),
+.bm-3d :is(a, button)[class*="ring-1"]:not(.card-tilt):not([class*="shadow-"]) {
+  /* the button's thickness: a hard 2px edge below, no blur */
+  --tw-shadow: 0 2px 0 rgba(0, 0, 0, 0.55), 0 3px 3px -1px rgba(0, 0, 0, 0.3);
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-duration: 120ms;
+}
+.bm-3d :is(a, button, [role="tab"]):not(.card-tilt):not(:disabled):active {
+  transform: translateY(2px);
+  --tw-inset-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.45), inset 0 -1px 0 rgba(255, 238, 200, 0.06);
+  --tw-shadow: 0 0 #0000;
+}
+/* little pills and chips (priority number, place chips): raised like buttons */
+.bm-3d span[class~="rounded-full"][class*="bg-"]:not([class*="absolute"]), .bm-3d span[class*="rounded-md"][class*="bg-["]:not([class*="absolute"]) {
+  background-image: var(--bm3d-light);
+  box-shadow: inset 0 1px 0 rgba(255, 238, 200, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.45), 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+/* the gold main buttons */
+.bm-3d button[class*="bg-amber-400"], .bm-3d a[class*="bg-amber-400"] {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.06) 50%, rgba(120, 70, 0, 0.18) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 -2px 0 rgba(120, 70, 0, 0.35), 0 2px 0 rgba(90, 55, 0, 0.8), 0 3px 4px -1px rgba(0, 0, 0, 0.4);
+}
+/* fields are set into the surface */
+.bm-3d :is(select, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea) {
+  --tw-inset-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 238, 200, 0.06);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow, 0 0 #0000);
+  background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.22) 0%, rgba(0, 0, 0, 0) 60%);
+}
+/* icons and pictures with a frame sit one step above their box */
+.bm-3d img[class*="ring-1"], .bm-3d img[class~="rounded-md"], .bm-3d img[class~="rounded-lg"] {
+  --tw-shadow: 0 -1px 0 rgba(255, 238, 200, 0.16), 0 2px 0 rgba(0, 0, 0, 0.6), 0 3px 4px -1px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+/* picture windows (class art, card art): set in, light from above */
+.bm-3d [class*="bg-[radial-gradient"][class*="rounded"] {
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 238, 200, 0.10), 0 1px 0 rgba(255, 238, 200, 0.06);
+}
+/* big cards: a slightly stronger rim and a hairline drop where they lie on the page */
+.bm-3d .card-face {
+  --tw-inset-shadow: inset 0 1px 0 rgba(255, 238, 200, 0.16), inset 0 -2px 0 rgba(0, 0, 0, 0.5), inset 1px 0 0 rgba(255, 238, 200, 0.04), inset -1px 0 0 rgba(0, 0, 0, 0.25);
+}
+.bm-3d .card-face:not([class*="shadow-"]) { --tw-shadow: 0 2px 4px -2px rgba(0, 0, 0, 0.6); }
+/* the gold inner frame of a card: engraved */
+.bm-3d .card-face > span[class*="absolute"][class~="border"] {
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 238, 200, 0.08);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bm-3d :is(a, button, [role="tab"]):active { transform: none; }
+}

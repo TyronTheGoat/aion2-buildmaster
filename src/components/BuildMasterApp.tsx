@@ -64,8 +64,14 @@ function parseCharInput(s: string): { region: string; server: string; name: stri
   return /^[a-z]{2,3}$/i.test(region) && name.length <= 40 ? { region: region.toLowerCase(), server: server.toLowerCase(), name } : undefined;
 }
 
+declare const __BM_PREVIEW__: boolean | undefined;
+
 export function BuildMasterApp() {
   const { chars, upsert, remove } = useCharacters();
+  // 3D look: offline preview only for now (styles in globals.css under html.bm-3d)
+  useEffect(() => {
+    if (typeof __BM_PREVIEW__ === "undefined" || __BM_PREVIEW__) document.documentElement.classList.add("bm-3d");
+  }, []);
   const [route, go] = useHashRoute();
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
@@ -350,7 +356,7 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
   if (!saved.snapshot) {
     return (
       <div className="space-y-4">
-        <button onClick={onBack} className="text-sm text-zinc-400">‹ {t("Charaktere", "Characters")}</button>
+        <button onClick={onBack} className="rounded-lg border border-[#d9c58f]/25 bg-white/[0.04] px-3 py-1.5 text-sm text-[#efe6cc] hover:border-[#d9c58f]/50">‹ {t("Charaktere", "Characters")}</button>
         <div className="rounded-2xl border border-white/10 p-5">
           <h1 className="text-xl font-bold">{saved.name}</h1>
           {status === "loading" && <p className="mt-2 animate-pulse text-sm text-zinc-400">{t("Lade Build von kisk.app…", "Loading build from kisk.app…")}</p>}
