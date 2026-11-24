@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { DEFAULT_ORDER, allowed, placeOf, planSkills } from "../skill-plan";
+import { ANY_LEVEL, DEFAULT_ORDER, allowed, placeOf, planSkills, refSkillKey } from "../skill-plan";
 
 test("story 10 + Daevanion 4 + Gral +4 + Pergament +2 = 20 for Elemental Fusion", () => {
   const r = planSkills("Spiritmaster", [{ skill: "Elemental Fusion", target: 20, story: 10, daevanion: 4 }], DEFAULT_ORDER);
@@ -66,4 +66,23 @@ test("Highest takes what the places left over allow, in priority order", () => {
   expect(r.goals[1].got).toEqual([{ place: "Chalice", levels: 3 }, { place: "ring1", levels: 1 }]);
   expect(r.goals[1].reached).toBe(18);
   expect(r.goals[1].missing).toBe(0);
+});
+
+test("Any: placed after every goal with a target, one line where room is left", () => {
+  const cls = "Spiritmaster";
+  const skills = refSkillKey(cls);
+  const order = [{ id: "ring1" as const, max: 1 }, { id: "ring2" as const, max: 1 }];
+  const actives = skills.filter((k) => allowed(cls, k, placeOf("ring1")));
+  const goals = [
+    { skill: actives[0], target: ANY_LEVEL, story: 10, daevanion: 4 },
+    { skill: actives[1], target: 15, story: 10, daevanion: 4 },
+    { skill: actives[2], target: ANY_LEVEL, story: 10, daevanion: 4 },
+  ];
+  const r = planSkills(cls, goals, order);
+  expect(r.goals.map((g) => g.goal.skill)).toEqual(goals.map((g) => g.skill));
+  expect(r.goals[1].got.map((x) => x.place)).toEqual(["ring1"]);
+  expect(r.goals[0].got.map((x) => x.place)).toEqual(["ring2"]);
+  expect(r.goals[0].reached).toBe(15);
+  expect(r.goals[2].got).toEqual([]);
+  expect(r.goals[2].missing).toBe(1);
 });

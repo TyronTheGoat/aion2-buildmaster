@@ -59,6 +59,8 @@ export function allowed(className: string, skillEn: string, place: Place): boole
 
 /** target HIGHEST: as high as the places left over allow (in priority order). */
 export const HIGHEST = 0;
+/** target ANY (Tyron 2026-11-24): the level does not matter, the ability gets one line where room is left, after every goal with a target or Highest. */
+export const ANY_LEVEL = -1;
 export interface Goal { skill: string; target: number; story: number; daevanion: number }
 /** A place in the player's order, with the most abilities they allow on it. */
 export interface PlaceRule { id: PlaceId; max: number }
@@ -86,11 +88,15 @@ export function planSkills(className: string, goals: Goal[], order: PlaceRule[],
     const levelsLeft = arcana ? Math.max(0, ARCANA_CARD_LEVELS - lines.reduce((a, l) => a + l.levels, 0)) : null;
     return { rule: r, place: placeOf(r.id), lines, levelsLeft, locked };
   });
-  const out: PlanResult["goals"] = [];
-  for (const goal of goals) {
+  const out: PlanResult["goals"] = new Array(goals.length);
+  // goals with a target or Highest first (in priority order), then the Any goals (in priority order)
+  const turns = [...goals.keys()].sort((a, b) => Number(goals[a].target === ANY_LEVEL) - Number(goals[b].target === ANY_LEVEL) || a - b);
+  for (const gi of turns) {
+    const goal = goals[gi];
     const base = Math.min(goal.story, STORY_MAX) + Math.min(goal.daevanion, DAEVANION_MAX);
     const highest = goal.target === HIGHEST;
-    const need = highest ? Infinity : Math.max(0, goal.target - base);
+    const any = goal.target === ANY_LEVEL;
+    const need = highest ? Infinity : any ? 1 : Math.max(0, goal.target - base);
     let left = need;
     const got: PlanResult["goals"][number]["got"] = [];
     // locked pieces count first, whatever their place in the order
@@ -115,7 +121,7 @@ export function planSkills(className: string, goals: Goal[], order: PlaceRule[],
       left -= give;
     }
     const reached = base + got.reduce((a, g) => a + g.levels, 0);
-    out.push({ goal, base, need: highest ? reached - base : need, got, missing: highest ? 0 : left, reached });
+    out[gi] = { goal, base, need: highest ? reached - base : need, got, missing: highest ? 0 : left, reached };
   }
   return { goals: out, places: state.map((p) => ({ id: p.rule.id, lines: p.lines, levelsLeft: p.levelsLeft, ...(p.locked ? { locked: true as const } : {}) })) };
 }

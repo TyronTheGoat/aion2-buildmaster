@@ -4,7 +4,7 @@ import type { Character } from "@/lib/types";
 import { refClass, refSkills } from "@/lib/reference/rolls-v3";
 import {
   ARCANA_CARD_LEVELS, ARCANA_CARD_LINES, ARCANA_ENHANCE, ARCANA_SKILL_MAX, DAEVANION_MAX, DEFAULT_ORDER, PLACES, STORY_MAX, allowed, alignToCurrent,
-  HIGHEST, currentItems, placeName, currentLines, diffPlan, placeOf, planSkills, type Goal, type HaveMap, type Line, type NowState, type PieceDiff, type PlaceId, type PlaceRule, type WantState,
+  ANY_LEVEL, HIGHEST, currentItems, placeName, currentLines, diffPlan, placeOf, planSkills, type Goal, type HaveMap, type Line, type NowState, type PieceDiff, type PlaceId, type PlaceRule, type WantState,
 } from "@/lib/skill-plan";
 import { charKey } from "./store";
 import { useLang, useT } from "@/lib/i18n";
@@ -260,10 +260,11 @@ export function SkillPlanner({ char, preview = false }: { char: Character; previ
                   <label className="text-[10px] uppercase tracking-widest text-zinc-500 md:contents"><span className="md:hidden">Daevanion</span>
                     <select className={`${SEL} w-full`} value={g.daevanion} onChange={(e) => setGoal(i, { daevanion: Number(e.target.value) })}>{range(0, DAEVANION_MAX).map((n) => <option key={n}>{n}</option>)}</select></label>
                   <label className="text-[10px] uppercase tracking-widest text-zinc-500 md:contents"><span className="md:hidden">{t("Ziel", "Target")}</span>
-                    <select className={`${SEL} w-full`} value={g.target} onChange={(e) => setGoal(i, { target: Number(e.target.value) })}><option value={HIGHEST}>Highest</option>{range(10, 30).map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
+                    <select className={`${SEL} w-full`} value={g.target} onChange={(e) => setGoal(i, { target: Number(e.target.value) })}><option value={HIGHEST}>Highest</option>{preview && <option value={ANY_LEVEL}>Any</option>}{range(10, 30).map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
                 </div>
                 <span className="col-span-4 text-sm md:col-span-1">
                   {g.target === HIGHEST ? <span className="font-semibold text-[#d9c58f]">{r.reached} {t("erreichbar", "reachable")}</span>
+                    : g.target === ANY_LEVEL ? (r.missing === 0 ? <span className="font-semibold text-[#5fbf8a]">✓ {r.reached}</span> : <span className="font-semibold text-zinc-500" title={t("Kein Platz mehr frei", "No room left")}>{t("kein Platz", "no room")}</span>)
                     : r.missing === 0 ? <span className="font-semibold text-[#5fbf8a]">✓ {t("erreichbar", "reachable")}</span> : <span className="font-semibold text-[#ff8b8b]">{t("fehlt", "missing")} {r.missing}</span>}
                   {compareNow && <span className="ml-2 text-[11px] text-zinc-500 md:ml-0 md:block" title={t("mit deinem aktuellen Gear laut kisk", "with your current gear on kisk")}>{t("jetzt", "now")} {nowLevel}</span>}
                 </span>
