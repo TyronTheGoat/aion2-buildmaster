@@ -16,6 +16,7 @@ import { skillLabel, statLabel } from "@/lib/stat-names";
 import { Card, CardArt, Filler, SHOW_ITEM_ICONS } from "./deck/Card";
 import { slotLabel, useLang, useT } from "@/lib/i18n";
 import { GRADE_HEX_CSS } from "@/lib/grades";
+import { RollChances } from "./RollChances";
 
 const LINK: Record<LinkColor, { hex: string; dot: string; mark: string; markCls: string }> = {
   green: { hex: "#34d399", dot: "bg-emerald-400", mark: "✓", markCls: "text-emerald-300" },
@@ -87,7 +88,8 @@ export function GearCompare({ char, item, slotId }: {
   const section = (side: "ist" | "soll") => (
     <>
       <div className="relative mt-3">
-        <div className="mb-1.5 text-[10px] uppercase tracking-[0.22em] text-zinc-500"><span className="sm:hidden">{t("Werte", "Stats")}</span><span className="hidden sm:inline">{t("Werte / Fähigkeiten", "Stats / abilities")}</span></div>
+        <div className="mb-1.5 text-[10px] uppercase tracking-[0.22em] text-zinc-500"><span className="sm:hidden">{t("Werte", "Stats")}</span><span className="hidden sm:inline">{t("Werte / Fähigkeiten", "Stats / abilities")}</span>
+          {!arcana && <RollChances slot={item.slot} className={char.className} want={stats?.bis.map((b) => b.name)} />}</div>
         <div className="space-y-1">
           {side === "ist"
             ? (istStats.length ? istStats.map((l, i) => <IstStat key={i} id={`s:${i}`} line={l} color={stats ? istColor(i) : undefined} unlockSlot={!arcana && !!stats && i === istStats.length - 1} plus={arcana} />)
