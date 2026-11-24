@@ -359,10 +359,20 @@ async function kiskRefresh(env, { only, dry } = {}) {
     if (!res.ok) { result.errors.push(`${r.k}: HTTP ${res.status}`); continue; }
     let api;
     try { api = await res.json(); } catch { result.errors.push(`${r.k}: kein JSON`); continue; }
-    const next = mergeKiskGear(old, api);
-    if (dry) return { ...result, raw: api, merged: next ?? null };
+    // the guild: asked once while unknown, and again whenever the gear is new
+    let info;
+    const fresh = api.fetched && new Date(api.fetched).toISOString() > old.source.fetchedAt;
+    if (!old.legion || fresh) {
+      try {
+        const ir = await fetch(kiskCharUrl(old.region, old.server, old.name), { headers: { authorization: `Bearer ${env.KISK_API_KEY}`, accept: "application/json" } });
+        if (ir.ok) info = await ir.json();
+      } catch { /* next time */ }
+    }
+    const next = mergeKiskGear(old, api, info) ?? withLegion(old, info);
+    if (dry) return { ...result, raw: api, info: info ?? null, merged: next ?? null };
     if (!next) { result.same++; continue; }
     await store.put(r.k, JSON.stringify(next), "kisk-api");
+    await recordCp(env, r.k, next);
     result.updated.push(r.k);
   }
   if (!dry && !only) await env.STORE.get(env.STORE.idFromName("kisk")).put("status", JSON.stringify(result), "cron");
