@@ -1,12 +1,14 @@
 // Cloudflare Worker: serves the single-file app (static assets) and a small API behind Cloudflare Access.
 // - private data per account (the e-mail Cloudflare Access logged in): character box, crafting projects, stock
 // - market prices shared by every account (anyone with access can change them)
+// - character data from kisk shared by every account: whoever refreshes a character refreshes it for all (Tyron 2026-11-24)
 // Storage: SQLite-backed Durable Objects, one per account and one for the shared prices; no setup needed in the dashboard.
 import { DurableObject } from "cloudflare:workers";
 
 const USER_KEYS = new Set(["chars", "gender", "planned", "craft", "skills", "skillplan"]);
 const MAX_DOC = 1_500_000;
 const MAX_PRICE = 4_000;
+const MAX_CHAR = 400_000;
 
 export class Store extends DurableObject {
   constructor(ctx, env) {
@@ -93,7 +95,7 @@ async function api(req, env, url) {
   if (!who) return json({ error: "nicht angemeldet" }, 401);
   const email = who.id;
   // a service token may only maintain shared data (icon pack, market prices), never an account's characters or projects
-  if (who.service && !/^\/api\/(me|icons?|prices)(\/|$)/.test(url.pathname)) return json({ error: "nur für Personen-Logins" }, 403);
+  if (who.service && !/^\/api\/(me|icons?|prices)(\/|$)/.test(url.pathname) && !(url.pathname === "/api/chars" && req.method === "GET")) return json({ error: "nur für Personen-Logins" }, 403);
   // writes need our own header: a plain cross-site form or fetch cannot send it without a CORS preflight we never allow
   if (req.method !== "GET" && req.headers.get("x-bm") !== "1") return json({ error: "forbidden" }, 403);
   const path = url.pathname.replace(/\/+$/, "");
@@ -146,6 +148,28 @@ async function api(req, env, url) {
     if (text.length > MAX_DOC) return json({ error: "zu groß" }, 413);
     try { JSON.parse(text); } catch { return json({ error: "kein JSON" }, 400); }
     return json({ at: await user().put(doc[1], text, email) });
+  }
+
+  // shared character data (the newest kisk snapshot per character)
+  const chars = () => env.STORE.get(env.STORE.idFromName("chars"));
+  if (path === "/api/chars" && req.method === "GET") {
+    const rows = await chars().list();
+    return json({ chars: rows.map((r) => ({ k: r.k, c: JSON.parse(r.v), at: r.at })) });
+  }
+  if (path === "/api/chars" && req.method === "PUT") {
+    const text = await req.text();
+    if (text.length > MAX_CHAR) return json({ error: "zu groß" }, 413);
+    let body;
+    try { body = JSON.parse(text); } catch { return json({ error: "kein JSON" }, 400); }
+    const c = body?.c;
+    const ok = c && typeof c === "object" && typeof c.region === "string" && typeof c.server === "string" && typeof c.name === "string"
+      && Array.isArray(c.gear) && Array.isArray(c.arcana) && typeof c.source?.fetchedAt === "string" && c.source.mode !== "demo";
+    const k = ok ? `${c.region}/${c.server}/${c.name}`.toLowerCase() : "";
+    if (!ok || body.k !== k || k.length > 120) return json({ error: "ungültiger Charakter" }, 400);
+    // only newer data replaces what is there
+    const old = await chars().get(k);
+    if (old && JSON.parse(old).source?.fetchedAt >= c.source.fetchedAt) return json({ at: null, kept: true });
+    return json({ at: await chars().put(k, JSON.stringify(c), email) });
   }
 
   if (path === "/api/prices" && req.method === "GET") {

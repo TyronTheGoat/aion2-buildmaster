@@ -25,6 +25,9 @@ export const SEED_VERSION = "5";
 export const SEEDED_KEY = SEEDED;
 export const CHARS_KEY = KEY;
 export const GENDER_KEY = "bm:gender";
+/** Newest kisk data per character shared by all accounts on the live site (charKey → snapshot), see cloud.ts */
+export const SHARED_CHARS_KEY = "bm:shared-chars";
+const newer = (a?: Character, b?: Character) => !!a && (!b || a.source.fetchedAt > b.source.fetchedAt);
 /** fetchedAt of the short version-2 snapshots (no stat lines), replaced by the full ones in version 3 */
 const SHORT_SNAPSHOT = "2026-11-22T13:50:00Z";
 /** Gender per character, kept separately so it stays even if the character is removed and added again */
@@ -58,7 +61,7 @@ function read(): SavedChar[] {
     localStorage.setItem(KEY, JSON.stringify(list));
     localStorage.setItem(SEEDED, SEED_VERSION);
   }
-  const raw = (localStorage.getItem(KEY) ?? "[]") + (localStorage.getItem(GENDER) ?? "");
+  const raw = (localStorage.getItem(KEY) ?? "[]") + (localStorage.getItem(GENDER) ?? "") + (localStorage.getItem(SHARED_CHARS_KEY) ?? "");
   if (raw !== cacheRaw) {
     cacheRaw = raw;
     const genders: Record<string, "f" | "m"> = JSON.parse(localStorage.getItem(GENDER) ?? "{}");
@@ -66,7 +69,13 @@ function read(): SavedChar[] {
     // the test characters are always there; a refreshed copy in the box (newer snapshot) wins
     const all = [...own.map((c) => (BUILTIN_CHARS.some((b) => charKey(b) === charKey(c)) ? { ...c, builtin: true } : c)),
       ...BUILTIN_CHARS.filter((b) => !own.some((c) => charKey(c) === charKey(b)))];
-    cache = all.map((c) => ({ ...c, gender: c.gender ?? genders[charKey(c)] }));
+    // someone refreshed the character more recently: everyone gets the newer data
+    let shared: Record<string, Character> = {};
+    try { shared = JSON.parse(localStorage.getItem(SHARED_CHARS_KEY) ?? "{}"); } catch { /* broken */ }
+    cache = all.map((c) => {
+      const s = shared[charKey(c)];
+      return { ...c, snapshot: newer(s, c.snapshot) ? s : c.snapshot, gender: c.gender ?? genders[charKey(c)] };
+    });
   }
   return cache;
 }

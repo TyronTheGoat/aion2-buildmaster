@@ -3,12 +3,14 @@
  * Online storage on the live site (Cloudflare Worker behind Cloudflare Access, see worker/index.js).
  * The app keeps working on localStorage as before; this module mirrors it:
  * - private per account: character box, gender, planned items, skill levels, skill planner, crafting projects / stock / history
- * - shared by all accounts: market prices the players entered (built-in reference prices stay local suggestions)
+ * - shared by all accounts: market prices the players entered (built-in reference prices stay local suggestions),
+ *   and the newest kisk data of every character (a refresh by anyone updates the character for everybody)
  * Without the API (offline file, dev server) nothing changes.
  */
 import { useSyncExternalStore } from "react";
 import { itemKey, type CraftState, type Price } from "@/lib/crafting/model";
-import { CHARS_KEY, GENDER_KEY, SEEDED_KEY, SEED_VERSION } from "./store";
+import { CHARS_KEY, GENDER_KEY, SEEDED_KEY, SEED_VERSION, SHARED_CHARS_KEY, charKey, type SavedChar } from "./store";
+import type { Character } from "@/lib/types";
 import { SKILLS_KEY } from "./skill-store";
 
 const CRAFT_KEY = "bm:craft:v1";
@@ -103,6 +105,31 @@ async function pullPrices() {
   } catch { /* next try later */ }
 }
 
+/* ---------------------------------------------------------------- shared character data ---------------------------------------------------------------- */
+
+let sharedChars: Record<string, Character> = {};
+const isNewer = (a?: Character, b?: Character) => !!a && (!b || a.source.fetchedAt > b.source.fetchedAt);
+
+/** Sends every character of the list whose data is newer than the shared one (real kisk data only, never the demo data). */
+function shareChars(list: SavedChar[]) {
+  for (const c of list) {
+    const snap = c.snapshot;
+    if (!snap || snap.source.mode === "demo" || !snap.gear) continue;
+    const k = charKey(snap);
+    if (!isNewer(snap, sharedChars[k])) continue;
+    sharedChars = { ...sharedChars, [k]: snap };
+    call("PUT", "/api/chars", { k, c: snap }).catch(() => { /* next time */ });
+  }
+  origSet(SHARED_CHARS_KEY, JSON.stringify(sharedChars));
+}
+
+async function pullChars() {
+  try {
+    const { chars } = await call("GET", "/api/chars") as { chars: { k: string; c: Character }[] };
+    for (const { k, c } of chars) if (isNewer(c, sharedChars[k])) sharedChars[k] = c;
+  } catch { /* stays as it is */ }
+}
+
 /**
  * Called once before the app renders. Online: loads the account's data and the shared prices into localStorage,
  * then mirrors every later change. Returns the status.
@@ -134,7 +161,15 @@ export async function initCloud(): Promise<CloudStatus> {
     synced = new Map(prices.map((x) => [x.k, JSON.stringify(x.p)] as const));
     const shared = [...prices.map((x) => x.p), ...localOwn.filter((p) => !synced.has(priceKey(p)))];
     localStorage.setItem(SEEDED_KEY, SEED_VERSION);
-    localStorage.setItem(CHARS_KEY, JSON.stringify(docs.chars ?? []));
+    // shared kisk data: newer data from others replaces the own copy, own newer data goes out to everybody
+    await pullChars();
+    const own = ((docs.chars ?? []) as SavedChar[]).map((c) => {
+      const s = sharedChars[charKey(c)];
+      return isNewer(s, c.snapshot) ? { ...c, snapshot: s } : c;
+    });
+    localStorage.setItem(CHARS_KEY, JSON.stringify(own));
+    origSet = (k, v) => Storage.prototype.setItem.call(localStorage, k, v);
+    shareChars(own);
     localStorage.setItem(GENDER_KEY, JSON.stringify(docs.gender ?? {}));
     localStorage.setItem(PLANNED_KEY, JSON.stringify(docs.planned ?? {}));
     localStorage.setItem(SKILLS_KEY, JSON.stringify(docs.skills ?? {}));
@@ -159,9 +194,11 @@ export async function initCloud(): Promise<CloudStatus> {
   proto.setItem = function (this: Storage, k: string, v: string) {
     native.call(this, k, v);
     if (this === localStorage && DOCS[k]) schedule(k);
+    if (this === localStorage && k === CHARS_KEY) { try { shareChars(JSON.parse(v)); } catch { /* not a list */ } }
   };
-  setInterval(() => void pullPrices(), 60_000);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") void pullPrices(); });
+  const refreshChars = async () => { const before = JSON.stringify(sharedChars); await pullChars(); if (JSON.stringify(sharedChars) !== before) { origSet(SHARED_CHARS_KEY, JSON.stringify(sharedChars)); notify(SHARED_CHARS_KEY); } };
+  setInterval(() => { void pullPrices(); void refreshChars(); }, 60_000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { void pullPrices(); void refreshChars(); } });
   return status;
 }
 
