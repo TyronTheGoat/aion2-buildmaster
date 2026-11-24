@@ -4,6 +4,7 @@
 // - character data from kisk shared by every account: whoever refreshes a character refreshes it for all (Tyron 2026-11-24)
 // Storage: SQLite-backed Durable Objects, one per account and one for the shared prices; no setup needed in the dashboard.
 import { DurableObject } from "cloudflare:workers";
+import { kiskGearUrl, mergeKiskGear } from "../src/lib/kisk/api.ts";
 
 const USER_KEYS = new Set(["chars", "gender", "planned", "craft", "skills", "skillplan"]);
 const MAX_DOC = 1_500_000;
@@ -106,7 +107,7 @@ async function api(req, env, url) {
   if (!who) return json({ error: "nicht angemeldet" }, 401);
   const email = who.id;
   // a service token may only maintain shared data (icon pack, market prices), never an account's characters or projects
-  if (who.service && !/^\/api\/(me|icons?|prices)(\/|$)/.test(url.pathname) && !(url.pathname === "/api/chars" && req.method === "GET")) return json({ error: "nur für Personen-Logins" }, 403);
+  if (who.service && !/^\/api\/(me|icons?|prices|kisk)(\/|$)/.test(url.pathname) && !(url.pathname === "/api/chars" && req.method === "GET")) return json({ error: "nur für Personen-Logins" }, 403);
   // writes need our own header: a plain cross-site form or fetch cannot send it without a CORS preflight we never allow
   if (req.method !== "GET" && req.headers.get("x-bm") !== "1") return json({ error: "forbidden" }, 403);
   const path = url.pathname.replace(/\/+$/, "");
@@ -211,6 +212,17 @@ async function api(req, env, url) {
     return json({ ok: true });
   }
 
+  // kisk.app API: status of the 30-minute refresh, one character as a test (nothing saved), or a run now (admin / service token)
+  if (path === "/api/kisk" || path === "/api/kisk/run") {
+    if (!who.service && !(await isAdmin(email))) return json({ error: "nur für den Admin" }, 403);
+    if (path === "/api/kisk/run" && req.method === "POST") return json(await kiskRefresh(env, { only: url.searchParams.get("k") ?? undefined }));
+    if (req.method !== "GET") return json({ error: "not found" }, 404);
+    const k = url.searchParams.get("k");
+    if (k) return json(await kiskRefresh(env, { only: k, dry: true }));
+    const st = await env.STORE.get(env.STORE.idFromName("kisk")).get("status");
+    return json({ key: !!env.KISK_API_KEY, status: st ? JSON.parse(st) : null });
+  }
+
   if (path === "/api/prices" && req.method === "GET") {
     const rows = await prices().list();
     return json({ prices: rows.map((r) => ({ k: r.k, p: JSON.parse(r.v), at: r.at })) });
@@ -232,7 +244,47 @@ async function api(req, env, url) {
   return json({ error: "not found" }, 404);
 }
 
+/* ---------------------------------------------------------------- kisk.app API refresh ---------------------------------------------------------------- */
+
+/** at most this many characters per run (kisk allows 60 requests a minute; the oldest data goes first) */
+const KISK_PER_RUN = 40;
+/**
+ * Refreshes the shared characters from kisk's API (Tyron 2026-11-24, kisk's team pointed us to https://kisk.app/api).
+ * The secret is the Worker secret KISK_API_KEY; without it nothing happens. `dry`: one character, returns kisk's raw answer
+ * and the result, saves nothing.
+ */
+async function kiskRefresh(env, { only, dry } = {}) {
+  if (!env.KISK_API_KEY) return { ok: false, error: "KISK_API_KEY fehlt" };
+  const store = env.STORE.get(env.STORE.idFromName("chars"));
+  const rows = (await store.rows()).filter((r) => !r.k.startsWith("o:") && (!only || r.k === only.toLowerCase()));
+  rows.sort((a, b) => a.at - b.at);
+  const result = { at: new Date().toISOString(), checked: 0, updated: [], same: 0, missing: [], errors: [] };
+  for (const r of rows.slice(0, KISK_PER_RUN)) {
+    const old = JSON.parse(r.v);
+    let res;
+    try {
+      res = await fetch(kiskGearUrl(old.region, old.server, old.name), { headers: { authorization: `Bearer ${env.KISK_API_KEY}`, accept: "application/json" } });
+    } catch (e) { result.errors.push(`${r.k}: ${String(e?.message ?? e)}`); continue; }
+    result.checked++;
+    if (res.status === 404) { result.missing.push(r.k); continue; }
+    if (res.status === 429 || res.status === 401 || res.status === 403) { result.errors.push(`${r.k}: HTTP ${res.status}`); break; }
+    if (!res.ok) { result.errors.push(`${r.k}: HTTP ${res.status}`); continue; }
+    let api;
+    try { api = await res.json(); } catch { result.errors.push(`${r.k}: kein JSON`); continue; }
+    const next = mergeKiskGear(old, api);
+    if (dry) return { ...result, raw: api, merged: next ?? null };
+    if (!next) { result.same++; continue; }
+    await store.put(r.k, JSON.stringify(next), "kisk-api");
+    result.updated.push(r.k);
+  }
+  if (!dry && !only) await env.STORE.get(env.STORE.idFromName("kisk")).put("status", JSON.stringify(result), "cron");
+  return result;
+}
+
 const worker = {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(kiskRefresh(env));
+  },
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname.startsWith("/api/")) {

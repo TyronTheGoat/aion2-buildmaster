@@ -6,5 +6,7 @@
   "compatibility_date": "2026-11-01",
   "assets": { "directory": "./out", "binding": "ASSETS" },
   "durable_objects": { "bindings": [{ "name": "STORE", "class_name": "Store" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Store"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Store"] }],
+  // every 30 minutes: shared characters from kisk.app's API (needs the Worker secret KISK_API_KEY)
+  "triggers": { "crons": ["*/30 * * * *"] }
 }

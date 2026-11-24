@@ -7,15 +7,14 @@
  * The rank (BiS, S+, S, A …) is our own score on kisk's thresholds: per target line how far the current line is
  * (missing 0, otherwise current / target up to 1), the average in % → grade.
  */
-import type { Character, Grade, IdealLine, Item } from "./types";
-import { gradeFromScore } from "./grades";
-import { toNum } from "./compare";
+import type { Character, IdealLine, Item } from "./types";
 import { refSkills } from "./reference/rolls-v3";
 import {
   ARCANA_CARD_LINES, DAEVANION_MAX, STORY_MAX, currentItems, currentLines, placeOf, refSkillKey, type Goal, type HaveMap, type Line, type PlaceId, type PlaceRule,
 } from "./skill-plan";
 
-export const ANY = "Any";
+export { ANY, ownScore, ownGrade } from "./score";
+import { ANY, ownGrade, ownScore } from "./score";
 
 export interface OwnBuild {
   id: string;
@@ -69,26 +68,6 @@ export function ownIdeal(item: Item, place: PlaceId, build: OwnBuild): IdealLine
   return out;
 }
 
-/** Our score of a piece against its target lines (0-100) on kisk's thresholds. */
-export function ownScore(item: Item, ideal: IdealLine[]): number {
-  if (!ideal.length) return NaN;
-  const used = new Set<number>();
-  const named = ideal.filter((t) => t.name !== ANY);
-  let sum = 0;
-  for (const t of named) {
-    const i = item.lines.findIndex((l, j) => !used.has(j) && key(l.name) === key(t.name));
-    if (i < 0) continue;
-    used.add(i);
-    const h = toNum(item.lines[i].value), g = toNum(t.value);
-    sum += Number.isNaN(h) || Number.isNaN(g) || g <= 0 ? 1 : Math.min(1, h / g);
-  }
-  // "Any": every other line of the piece fills one
-  const free = item.lines.length - used.size;
-  sum += Math.min(free, ideal.length - named.length);
-  return (sum / ideal.length) * 100;
-}
-
-export const ownGrade = (item: Item, ideal: IdealLine[]): Grade => gradeFromScore(ownScore(item, ideal));
 
 /** The character as the comparison should see it with an own build as target (ideal lines and rank per piece). */
 export function applyBuild(char: Character, build: OwnBuild | undefined): Character {
