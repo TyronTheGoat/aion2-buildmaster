@@ -12,6 +12,7 @@
  * - English names are the technical keys; German names may still need checking in the client, missing ones stay missing
  */
 import raw from "../../../data/reference/eu-global-rolls-v3-2026-11-24/import.json";
+import { hasGerman, statLabel } from "../stat-names";
 
 export const ROLLS_VERSION = "eu-global-rolls-v3-2026-11-24";
 
@@ -75,3 +76,13 @@ export const arcanaSlotsOf = (className: string, skillEn: string) =>
 export const gearStats = (slot: GearSlot) => DB.classes[REF_CLASSES[0]].gear_slots[slot]?.stats ?? [];
 /** +1 class skill rolls a gear slot can have for the class (active on weapon / guard / rings, passive on armour / earrings / necklace, none on bracelets). */
 export const gearSkillRolls = (className: string, slot: GearSlot) => cls(className)?.gear_slots[slot]?.skill_rolls ?? [];
+
+/**
+ * German name of a stat: the input's own name, else the client name from our stat list (gamewith.ai item pages in
+ * English and German side by side, see stat-names.ts). Never a made-up translation: unknown stays English.
+ */
+export function refStatDe(stat: Pick<RefStat, "stat_en" | "stat_de">): { de: string; source: "v3" | "client-list" | "none" } {
+  if (stat.stat_de) return { de: stat.stat_de, source: "v3" };
+  const key = hasGerman(stat.stat_en) ? stat.stat_en : stat.stat_en.replace(/ Increase$/, " increase");
+  return hasGerman(key) ? { de: statLabel(key, "de"), source: "client-list" } : { de: stat.stat_en, source: "none" };
+}

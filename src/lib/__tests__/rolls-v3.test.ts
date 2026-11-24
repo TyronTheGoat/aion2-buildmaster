@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import data from "../../../data/class-skills.json";
 import {
-  ARCANA_CARDS, GEAR_SLOT_RULES, REF_CLASSES, ROLL_RULES, ROLLS_VERSION, arcanaPool, arcanaSlotsOf, gearSkillRolls, gearStats, refClass, refSkills,
+  ARCANA_CARDS, refStatDe, GEAR_SLOT_RULES, REF_CLASSES, ROLL_RULES, ROLLS_VERSION, arcanaPool, arcanaSlotsOf, gearSkillRolls, gearStats, refClass, refSkills,
   type ArcanaSlot, type GearSlot,
 } from "../reference/rolls-v3";
 
@@ -70,6 +70,13 @@ describe("reference database EU/Global rolls V3", () => {
     }
     expect(n).toBe(1008);
     expect((["weapon", "guard", "helm", "pauldrons", "top", "legs", "gloves", "shoes", "cloak", "necklace", "earring", "ring", "bracelet"] as GearSlot[]).reduce((a, s) => a + gearStats(s).length, 0)).toBe(255);
+  });
+  test("every stat has a German client name (input or our client list), none made up", () => {
+    const all = (["weapon", "guard", "helm", "pauldrons", "top", "legs", "gloves", "shoes", "cloak", "necklace", "earring", "ring", "bracelet"] as GearSlot[]).flatMap(gearStats);
+    const missing = all.filter((s) => refStatDe(s).source === "none").map((s) => s.stat_en);
+    expect(missing).toEqual([]);
+    expect(refStatDe({ stat_en: "Move Speed", stat_de: "" }).de).toBe("Bewegungstempo");
+    expect(refStatDe({ stat_en: "Defense Increase", stat_de: "" }).de).toBe("Verteidigung +");
   });
   test("10 / consistency: the skills match the class guide data (names EN / DE, active / passive)", () => {
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
