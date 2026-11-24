@@ -50,7 +50,8 @@ export function FooterNote() {
   const t = useT();
   return (
     <footer className="pointer-events-none fixed inset-x-0 bottom-0 z-20 bg-[#0b0c10]/85 pb-[env(safe-area-inset-bottom)] text-center text-[9px] leading-[14px] text-zinc-600">
-      {t("Daten: kisk.app · Nicht offiziell, kein Bezug zu NCSOFT", "Data: kisk.app · Unofficial, not affiliated with NCSOFT")}
+      {t("Daten von ", "Data from ")}<a href="https://kisk.app/" target="_blank" rel="noreferrer" className="pointer-events-auto underline hover:text-zinc-400">kisk.app</a>
+      {t(" · Nicht offiziell, kein Bezug zu NCSOFT", " · Unofficial, not affiliated with NCSOFT")}
     </footer>
   );
 }
