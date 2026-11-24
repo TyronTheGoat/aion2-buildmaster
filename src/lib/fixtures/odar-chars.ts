@@ -14,7 +14,7 @@ const PORTRAIT = (key: string) => `https://profileimg.plaync.com/game_profile_im
 
 export const ODAR_CHARS: Character[] = [
   {
-    region: "eu", server: "odar", name: "ASNA", className: "Ranger", race: "Asmodian", level: 45, combatPower: 167344, gearGrade: "S",
+    region: "eu", server: "odar", name: "ASNA", className: "Ranger", race: "Asmodian", level: 45, combatPower: 167344, legion: "NargileNinja", gearGrade: "S",
     portrait: PORTRAIT("651333096108699568"),
     source: { url: "https://kisk.app/c/eu/odar/ASNA/gear", fetchedAt: "2026-11-22T14:00:00Z", mode: "demo" },
     warnings: [],
@@ -91,7 +91,7 @@ export const ODAR_CHARS: Character[] = [
     ],
   },
   {
-    region: "eu", server: "odar", name: "WRVITH", className: "Sorcerer", race: "Asmodian", level: 45, combatPower: 181057, gearGrade: "S",
+    region: "eu", server: "odar", name: "WRVITH", className: "Sorcerer", race: "Asmodian", level: 45, combatPower: 181057, legion: "NargileNinja", gearGrade: "S",
     portrait: PORTRAIT("651333096108653702"),
     source: { url: "https://kisk.app/c/eu/odar/WRVITH/gear", fetchedAt: "2026-11-22T14:00:00Z", mode: "demo" },
     warnings: [],
@@ -168,7 +168,7 @@ export const ODAR_CHARS: Character[] = [
     ],
   },
   {
-    region: "eu", server: "odar", name: "Creapure", className: "Gladiator", race: "Asmodian", level: 45, combatPower: 169208, gearGrade: "A",
+    region: "eu", server: "odar", name: "Creapure", className: "Gladiator", race: "Asmodian", level: 45, combatPower: 169208, legion: "NargileNinja", gearGrade: "A",
     portrait: PORTRAIT("651333096108652384"),
     source: { url: "https://kisk.app/c/eu/odar/Creapure/gear", fetchedAt: "2026-11-22T14:00:00Z", mode: "demo" },
     warnings: [],
@@ -245,7 +245,7 @@ export const ODAR_CHARS: Character[] = [
     ],
   },
   {
-    region: "eu", server: "odar", name: "Healga", className: "Cleric", race: "Asmodian", level: 45, combatPower: 77452, gearGrade: "C",
+    region: "eu", server: "odar", name: "Healga", className: "Cleric", race: "Asmodian", level: 45, combatPower: 77452, legion: "NargileNinja", gearGrade: "C",
     portrait: PORTRAIT("651333096108762792"),
     source: { url: "https://kisk.app/c/eu/odar/Healga/gear", fetchedAt: "2026-11-22T14:00:00Z", mode: "demo" },
     warnings: [],
@@ -306,7 +306,7 @@ export const ODAR_CHARS: Character[] = [
     arcana: [],
   },
   {
-    region: "eu", server: "odar", name: "TestoSpritze", className: "Chanter", race: "Asmodian", level: 45, combatPower: 102759, gearGrade: "C",
+    region: "eu", server: "odar", name: "TestoSpritze", className: "Chanter", race: "Asmodian", level: 45, combatPower: 102759, legion: "NargileNinja", gearGrade: "C",
     portrait: PORTRAIT("651333096108757532"),
     source: { url: "https://kisk.app/c/eu/odar/TestoSpritze/gear", fetchedAt: "2026-11-22T14:00:00Z", mode: "demo" },
     warnings: [],

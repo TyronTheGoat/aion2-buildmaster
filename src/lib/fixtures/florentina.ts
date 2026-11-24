@@ -20,6 +20,7 @@ export const FLORENTINA: Character = {
   race: "Asmodian",
   level: 45,
   combatPower: 195377,
+  legion: "NargileNinja",
   gearGrade: "S",
   // linked on kisk.app (og:image), 2026-11-22
   portrait: "https://profileimg.plaync.com/game_profile_images/aion2global/images?gameServerKey=2314&charKey=651333096108652459",
