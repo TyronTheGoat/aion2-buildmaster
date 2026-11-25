@@ -75,6 +75,7 @@ export function BuildMasterApp() {
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
   const [guild, setGuild] = useState("");
+  const cloudOnline = useCloud().mode === "online";
   const fav = useFavorites();
   // guilds (legions) the characters belong to, as kisk's API gives them
   const guilds = [...new Set(chars.map((c) => c.snapshot?.legion).filter((l): l is string => !!l))].sort((a, b) => a.localeCompare(b));
@@ -171,7 +172,7 @@ export function BuildMasterApp() {
             className="flex h-full min-h-[200px] w-full flex-col items-center justify-center gap-2 rounded-[20px] border border-dashed border-[#d9c58f]/25 bg-white/[0.02] p-6 text-center hover:border-[#d9c58f]/50">
             <span className="text-3xl font-light text-[#d9c58f]">+</span>
             <span className="font-semibold text-[#f4eed7]">{t("Neuen Charakter hinzufügen", "Add a new character")}</span>
-            <span className="text-xs text-zinc-500">{t("kisk.app-Link eingeben oder Seiteninhalt einfügen", "Enter a kisk.app link or paste the page content")}</span>
+            <span className="text-xs text-zinc-500">{cloudOnline ? t("kisk.app-Link oder Name eingeben", "Enter a kisk.app link or name") : t("kisk.app-Link eingeben oder Seiteninhalt einfügen", "Enter a kisk.app link or paste the page content")}</span>
           </button>
         </li>
       </ul>

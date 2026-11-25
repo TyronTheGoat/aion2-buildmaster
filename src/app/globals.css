@@ -321,8 +321,8 @@ body { overflow-x: clip; }
   --bm3d-strip: linear-gradient(180deg, rgba(255, 250, 235, 0.16) 0%, rgba(255, 250, 235, 0.06) 30%, rgba(255, 250, 235, 0) 34%);
   --bm3d-sweep: linear-gradient(105deg, rgba(255, 255, 255, 0) 38%, rgba(255, 250, 230, 0.20) 50%, rgba(255, 255, 255, 0) 62%);
 }
-.bm-3d :is(a, button, [role="tab"])[class~="border"]:not(.card-tilt):not([class*="bg-["]):not([class*="bg-linear"]):not([class*="bg-gradient"]),
-.bm-3d :is(a, button)[class*="ring-1"]:not(.card-tilt):not([class*="bg-["]):not([class*="bg-linear"]):not([class*="bg-gradient"]) {
+html.bm-3d body :is(a, button, [role="tab"])[class~="border"]:not(.card-tilt):not([class*="bg-["]):not([class*="bg-linear"]):not([class*="bg-gradient"]):not([class*="absolute"]):not([class*="min-h-"]),
+html.bm-3d body :is(a, button)[class*="ring-1"]:not(.card-tilt):not([class*="bg-["]):not([class*="bg-linear"]):not([class*="bg-gradient"]):not([class*="absolute"]):not([class*="min-h-"]) {
   background-image: var(--bm3d-sweep), var(--bm3d-strip), var(--bm3d-light);
   background-size: 260% 100%, 100% 100%, 100% 100%;
   background-position: 130% 0, 0 0, 0 0;
@@ -330,8 +330,8 @@ body { overflow-x: clip; }
   transition-property: color, background-color, border-color, box-shadow, transform, background-position;
   transition-duration: 120ms, 120ms, 120ms, 120ms, 120ms, 0s;
 }
-.bm-3d :is(a, button, [role="tab"])[class~="border"]:not(.card-tilt):hover,
-.bm-3d :is(a, button)[class*="ring-1"]:not(.card-tilt):hover {
+html.bm-3d body :is(a, button, [role="tab"])[class~="border"]:not(.card-tilt):not([class*="bg-["]):not([class*="bg-linear"]):not([class*="bg-gradient"]):not([class*="absolute"]):not([class*="min-h-"]):hover,
+html.bm-3d body :is(a, button)[class*="ring-1"]:not(.card-tilt):not([class*="bg-["]):not([class*="bg-linear"]):not([class*="bg-gradient"]):not([class*="absolute"]):not([class*="min-h-"]):hover {
   background-position: -30% 0, 0 0, 0 0;
   transition-duration: 120ms, 120ms, 120ms, 120ms, 120ms, 650ms;
 }
