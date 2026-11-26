@@ -754,8 +754,8 @@
     "name": "Klinge des Lebensraubs",
     "nameEn": "Lifestealing Blade",
     "kind": "stigma",
-    "targetLevel": 15,
-    "rank": 3,
+    "targetLevel": 20,
+    "rank": 5,
     "unlockLevel": 22,
     "cooldown": "90 s",
     "tags": [
@@ -799,8 +799,8 @@
     "name": "Furorausbruch",
     "nameEn": "Rage Burst",
     "kind": "stigma",
-    "targetLevel": 5,
-    "rank": 4,
+    "targetLevel": 20,
+    "rank": 3,
     "unlockLevel": 22,
     "cooldown": "45 s",
     "tags": [
@@ -839,6 +839,51 @@
     "featured": false,
     "icon": "ws-aion2-skill-gladiator-rage-burst.webp",
     "descriptionEn": "Deals damage to a target within 4m. Inflicts Wounded for 10 s on hit, reducing the enemy's Attack by 10%, and increases the caster's PvE Damage Boost by 10% and PvP Damage Boost by 5% for 10 s. Triggers [Overhead Slam] on the target for 10 s on hit. Wounded does not stack with the Shrink effect from the Templar skill [Taunt]."
+   },
+   {
+    "name": "Fokussierter Block",
+    "nameEn": "Focused Block",
+    "kind": "stigma",
+    "targetLevel": 16,
+    "rank": 4,
+    "unlockLevel": 22,
+    "cooldown": "20 s",
+    "tags": [
+     "Physical",
+     "Buff"
+    ],
+    "description": "Erhöht für kurze Zeit die Block-Schadensreduktion um 100 % und führt garantiert einen Waffenblock aus. Regeneriert bei erfolgreichem Block 1-mal je **260||110** MP und SP.",
+    "note": null,
+    "specialtyOrder": [],
+    "specialties": [
+     {
+      "slot": 1,
+      "level": 5,
+      "text": "Kann 1-mal zusätzlich hintereinander wirken",
+      "textEn": "+1 consecutive use"
+     },
+     {
+      "slot": 2,
+      "level": 10,
+      "text": "Fähigkeit während der Bewegung einsetzbar",
+      "textEn": "Changes to mobile skill"
+     },
+     {
+      "slot": 3,
+      "level": 15,
+      "text": "Bewegungstempo +20 % für 3s: Bei erfolgreichem Waffenblock",
+      "textEn": "+20% Move Speed for 3s on Parry"
+     },
+     {
+      "slot": 4,
+      "level": 20,
+      "text": "10 % LP-Regeneration (1-mal): Bei erfolgreichem Waffenblock",
+      "textEn": "Restores 10% HP once on Parry"
+     }
+    ],
+    "featured": false,
+    "icon": "ws-aion2-skill-gladiator-focused-block.webp",
+    "descriptionEn": "Temporarily increases Block Damage Reduction by 100% and guarantees Parry. Restores **260||110** MP and Stamina once on Parry."
    },
    {
     "name": "Erfahrener Konterangriff",
@@ -1012,11 +1057,6 @@
    }
   ],
   "stigmaSwaps": [
-   {
-    "name": "Fokussierter Block",
-    "icon": "ws-aion2-skill-gladiator-focused-block.webp",
-    "note": "ohne Templer im Team statt Zikels Segen: auf 5 reicht, damit du zweimal aktiv blocken kannst (Ersatz-Tank) und Erfahrener Konterangriff auslöst. Furorausbruch geht dann auf 20."
-   },
    {
     "name": "Rüstung der Welle",
     "icon": "ws-aion2-skill-gladiator-wave-armor.webp",
@@ -1690,7 +1730,7 @@
     "name": "Edle Rüstung",
     "nameEn": "Noble Armor",
     "kind": "stigma",
-    "targetLevel": 15,
+    "targetLevel": 20,
     "rank": 1,
     "unlockLevel": 22,
     "cooldown": "300 s",
@@ -1698,8 +1738,8 @@
      "Physical",
      "Buff"
     ],
-    "description": "Erhöht für 120 s die Max. LP des Wirkers um **11 %||5,4 %** und regeneriert sofort **11 %||5,4 %** der Max. LP. Wird nicht von Effekten zur Entfernung von Verstärkungszaubern beeinflusst.",
-    "note": "Permanenter Buff und zweiter Teil des Makros. Der Templer braucht kein Stigma auf 20, er ist eine günstige Klasse.",
+    "description": "Erhöht für 120 s die Max. LP des Wirkers um **13 %||5,4 %** und regeneriert sofort **13 %||5,4 %** der Max. LP. Wird nicht von Effekten zur Entfernung von Verstärkungszaubern beeinflusst.",
+    "note": "Permanenter Buff und zweiter Teil des Makros.",
     "specialtyOrder": [],
     "specialties": [
      {
@@ -1729,14 +1769,14 @@
     ],
     "featured": false,
     "icon": "ws-aion2-skill-templar-noble-armor.webp",
-    "descriptionEn": "Increases Max HP by **11%||5.4%** for 120 s and immediately restores HP by **11%||5.4%** of Max HP. Not affected by buff dispel effects."
+    "descriptionEn": "Increases Max HP by **13%||5.4%** for 120 s and immediately restores HP by **13%||5.4%** of Max HP. Not affected by buff dispel effects."
    },
    {
     "name": "Provokation",
     "nameEn": "Taunt",
     "kind": "stigma",
-    "targetLevel": 15,
-    "rank": 2,
+    "targetLevel": 20,
+    "rank": 5,
     "unlockLevel": 22,
     "cooldown": "30 s",
     "tags": [
@@ -1780,15 +1820,15 @@
     "name": "Wachtschild",
     "nameEn": "Shield of Protection",
     "kind": "stigma",
-    "targetLevel": 10,
-    "rank": 3,
+    "targetLevel": 20,
+    "rank": 4,
     "unlockLevel": 22,
     "cooldown": "20 s",
     "tags": [
      "Physical",
      "Buff"
     ],
-    "description": "Erhöht für kurze Zeit die Block-Schadensreduktion um 100 % und gewährt garantierten Block. Regeneriert bei erfolgreichem Block einmalig **200||110** MP und SP.",
+    "description": "Erhöht für kurze Zeit die Block-Schadensreduktion um 100 % und gewährt garantierten Block. Regeneriert bei erfolgreichem Block einmalig **300||110** MP und SP.",
     "note": "Aktiver Block. Fährt der Boss eine Schadens-Mechanik: blocken, danach Lähmender Schlag.",
     "specialtyOrder": [],
     "specialties": [
@@ -1819,14 +1859,14 @@
     ],
     "featured": false,
     "icon": "ws-aion2-skill-templar-shield-of-protection.webp",
-    "descriptionEn": "Temporarily increases Block Damage Reduction by 100% and guarantees Block. Restores **200||110** MP and Stamina once on Block."
+    "descriptionEn": "Temporarily increases Block Damage Reduction by 100% and guarantees Block. Restores **300||110** MP and Stamina once on Block."
    },
    {
     "name": "Schild des Verderbens",
     "nameEn": "Doom Shield",
     "kind": "stigma",
-    "targetLevel": 5,
-    "rank": 4,
+    "targetLevel": 16,
+    "rank": 3,
     "unlockLevel": 22,
     "cooldown": "30 s",
     "tags": [
@@ -1865,6 +1905,51 @@
     "featured": false,
     "icon": "ws-aion2-skill-templar-doom-shield.webp",
     "descriptionEn": "Rushes to a target within 20m and deals damage. Has a 75% chance to inflict Knockdown for 3 s. Grants a Protective Shield that blocks damage equaling 5% Max HP for 5 s on hit. Triggers [Judgment] for 3 s. 100% chance to inflict Knockdown on NPC targets."
+   },
+   {
+    "name": "Banner des Schlachtfelds",
+    "nameEn": "Battlefield Banner",
+    "kind": "stigma",
+    "targetLevel": 20,
+    "rank": 2,
+    "unlockLevel": 22,
+    "cooldown": "90 s",
+    "tags": [
+     "Physical",
+     "Buff"
+    ],
+    "description": "Erhöht die Angriffskraft für **20 s||10 s** proportional zur Verteidigung.",
+    "note": null,
+    "specialtyOrder": [],
+    "specialties": [
+     {
+      "slot": 1,
+      "level": 5,
+      "text": "+10 % Mehrfachtrefferchance für die Dauer",
+      "textEn": "+10% Multi-Hit Chance for duration"
+     },
+     {
+      "slot": 2,
+      "level": 10,
+      "text": "Erhöht für die Dauer die Verstärkung (Waffenschaden) um 10 %",
+      "textEn": "+10% Weapon Damage Boost for duration"
+     },
+     {
+      "slot": 3,
+      "level": 15,
+      "text": "Angriffskraft (Proportional zur Verteidigung) +20 %",
+      "textEn": "+20% Attack increase proportional to Defense"
+     },
+     {
+      "slot": 4,
+      "level": 20,
+      "text": "Abklingzeit −30 Sek.",
+      "textEn": "-30s cooldown"
+     }
+    ],
+    "featured": false,
+    "icon": "ws-aion2-skill-templar-battlefield-banner.webp",
+    "descriptionEn": "Increases Attack proportional to Defense for **20 s||10 s**."
    },
    {
     "name": "Kampfrausch",
@@ -2052,11 +2137,6 @@
     "name": "Nezekans Schild",
     "icon": "ws-aion2-skill-templar-nezekans-shield.webp",
     "note": "schützt die Gruppe, wenn du weißt, dass eine Mechanik kommt. Meist statt Edle Rüstung, ohne nötigen Stagger statt Strafe des Gebieters."
-   },
-   {
-    "name": "Banner des Schlachtfelds",
-    "icon": "ws-aion2-skill-templar-battlefield-banner.webp",
-    "note": "nicht gut, höchstens super spätes Endgame: braucht viel mehr Verteidigung und Level 20 für hohe Uptime."
    }
   ]
  },
@@ -2816,7 +2896,7 @@
     "name": "Reißzahn der Bestie",
     "nameEn": "Savage Fang",
     "kind": "stigma",
-    "targetLevel": 15,
+    "targetLevel": 20,
     "rank": 3,
     "unlockLevel": 22,
     "cooldown": "60 s",
@@ -2825,7 +2905,7 @@
      "Attack"
     ],
     "description": "Fügt bis zu 4 Gegnern innerhalb von 4 m Schaden zu und bindet 5 Glyphen für 10 s.",
-    "note": "Auf 15 statt 10: ab 15 kommt ein 10 % PvE-Schadensbonus dazu, und der ist sehr wichtig.",
+    "note": "Ab 15 kommt ein 10 % PvE-Schadensbonus dazu, und der ist sehr wichtig.",
     "specialtyOrder": [],
     "specialties": [
      {
@@ -2861,7 +2941,7 @@
     "name": "Triniels Dolch",
     "nameEn": "Triniel's Dagger",
     "kind": "stigma",
-    "targetLevel": 10,
+    "targetLevel": 16,
     "rank": 4,
     "unlockLevel": 22,
     "cooldown": "45 s",
@@ -2901,6 +2981,51 @@
     "featured": false,
     "icon": "ws-aion2-skill-assassin-triniels-dagger.webp",
     "descriptionEn": "Deals damage to a target within 4m and increases all of the target's skill cooldowns by 5% of their duration. Increases damage by 30% if attacking from behind the target."
+   },
+   {
+    "name": "Ausweichhaltung",
+    "nameEn": "Evasion Stance",
+    "kind": "stigma",
+    "targetLevel": 20,
+    "rank": 5,
+    "unlockLevel": 22,
+    "cooldown": "20 s",
+    "tags": [
+     "Physical",
+     "Buff"
+    ],
+    "description": "Weicht vorübergehend garantiert sämtlichem Schaden aus. Regeneriert bei einem erfolgreichen Ausweichen einmalig **300||110** MP und SP.",
+    "note": null,
+    "specialtyOrder": [],
+    "specialties": [
+     {
+      "slot": 1,
+      "level": 5,
+      "text": "Kann 1-mal zusätzlich hintereinander wirken",
+      "textEn": "+1 consecutive use"
+     },
+     {
+      "slot": 2,
+      "level": 10,
+      "text": "Fähigkeit während der Bewegung einsetzbar",
+      "textEn": "Changes to mobile skill"
+     },
+     {
+      "slot": 3,
+      "level": 15,
+      "text": "Bewegungstempo +20 % für 3s: Bei erfolgreichem Ausweichen",
+      "textEn": "+20% Move Speed for 3s on Evasion"
+     },
+     {
+      "slot": 4,
+      "level": 20,
+      "text": "LP-Regeneration +10 % (1-mal): Bei erfolgreichem Ausweichen",
+      "textEn": "Restore 10% HP once after successfully evading"
+     }
+    ],
+    "featured": false,
+    "icon": "ws-aion2-skill-assassin-evasion-stance.webp",
+    "descriptionEn": "Grants guaranteed evasion of all damage for a brief duration. Restores **300||110** MP and Stamina once on Evasion."
    },
    {
     "name": "Rückhieb",
@@ -3074,11 +3199,6 @@
    }
   ],
   "stigmaSwaps": [
-   {
-    "name": "Ausweichhaltung",
-    "icon": "ws-aion2-skill-assassin-evasion-stance.webp",
-    "note": "im Raid und bei hartem Content statt Reißzahn der Bestie: aktiver Block."
-   },
    {
     "name": "Schattenlauf",
     "icon": "ws-aion2-skill-assassin-shadow-walk.webp",
@@ -3847,7 +3967,7 @@
     "name": "Unterstützungsfeuer",
     "nameEn": "Supporting Fire",
     "kind": "stigma",
-    "targetLevel": 15,
+    "targetLevel": 20,
     "rank": 3,
     "unlockLevel": 22,
     "cooldown": "90 s",
@@ -3892,7 +4012,7 @@
     "name": "Greifenpfeil",
     "nameEn": "Griffon Arrow",
     "kind": "stigma",
-    "targetLevel": 5,
+    "targetLevel": 20,
     "rank": 4,
     "unlockLevel": 22,
     "cooldown": "45 s",
@@ -3932,6 +4052,51 @@
     "featured": false,
     "icon": "ws-aion2-skill-ranger-griffon-arrow.webp",
     "descriptionEn": "Selects a target within 20m and deals Fire damage to up to 4 enemies within 4m. Inflicts Crimson Flames for 10 s. Crimson Flames: Takes Fire Damage over Time every 1 s. Damage over Time amount increases when targets move."
+   },
+   {
+    "name": "Explosionspfeil",
+    "nameEn": "Explosive Arrow",
+    "kind": "stigma",
+    "targetLevel": 16,
+    "rank": 5,
+    "unlockLevel": 22,
+    "cooldown": "45 s",
+    "tags": [
+     "Physical",
+     "Attack"
+    ],
+    "description": "Fügt bis zu 4 Gegnern im Umkreis von 4 m um ein Ziel innerhalb von 20 m Feuerschaden zu. Der Schaden erhöht sich um 20 % bei Zielen mit Trägheit oder Bann.",
+    "note": null,
+    "specialtyOrder": [],
+    "specialties": [
+     {
+      "slot": 1,
+      "level": 5,
+      "text": "Abklingzeit −15 Sek.",
+      "textEn": "-15s cooldown"
+     },
+     {
+      "slot": 2,
+      "level": 10,
+      "text": "+10 % zusätzlicher Schaden auf Ziele mit Trägheit oder Bann",
+      "textEn": "+10% additional damage to targets afflicted with Slow or Root"
+     },
+     {
+      "slot": 3,
+      "level": 15,
+      "text": "Trifft garantiert als Kritischer Treffer",
+      "textEn": "Critical Hit on hit"
+     },
+     {
+      "slot": 4,
+      "level": 20,
+      "text": "+20 % zusätzlicher Schaden auf Ziele mit Trägheit oder Bann",
+      "textEn": "+20% additional damage to targets afflicted with Slow or Root"
+     }
+    ],
+    "featured": false,
+    "icon": "ws-aion2-skill-ranger-explosive-arrow.webp",
+    "descriptionEn": "Selects a target within 20m and deals Fire damage to up to 4 enemies within 4m. Increases damage by 20% to targets afflicted with Slow or Root."
    },
    {
     "name": "Fokussiertes Auge",
@@ -4859,8 +5024,8 @@
     "name": "Kältesturm",
     "nameEn": "Cold Storm",
     "kind": "stigma",
-    "targetLevel": 5,
-    "rank": 3,
+    "targetLevel": 20,
+    "rank": 4,
     "unlockLevel": 22,
     "cooldown": "60 s",
     "tags": [
@@ -4904,8 +5069,8 @@
     "name": "Verzögerte Explosion",
     "nameEn": "Delayed Explosion",
     "kind": "stigma",
-    "targetLevel": 10,
-    "rank": 4,
+    "targetLevel": 20,
+    "rank": 3,
     "unlockLevel": 22,
     "cooldown": "30 s",
     "tags": [
@@ -4944,6 +5109,51 @@
     "featured": false,
     "icon": "ws-aion2-skill-sorcerer-delayed-explosion.webp",
     "descriptionEn": "Deals Fire damage to a target within 20m after 4 s. Increases damage taken from the caster by 15% during the delay."
+   },
+   {
+    "name": "Stahlbarriere",
+    "nameEn": "Steel Barrier",
+    "kind": "stigma",
+    "targetLevel": 16,
+    "rank": 5,
+    "unlockLevel": 22,
+    "cooldown": "60 s",
+    "tags": [
+     "Magical",
+     "Buff"
+    ],
+    "description": "Erzeugt für 60 s einen Schutzschild in Höhe von **31 %||16 %** der Max. LP. Erhöht währenddessen die PvE-Schadensresistenz um 10 % und die PvP-Schadensresistenz um 5 %. Regeneriert am Ende der Wirkung 300 SP.",
+    "note": null,
+    "specialtyOrder": [],
+    "specialties": [
+     {
+      "slot": 1,
+      "level": 5,
+      "text": "Bewegungstempo +10 %",
+      "textEn": "+10% Move Speed"
+     },
+     {
+      "slot": 2,
+      "level": 10,
+      "text": "LP-Regeneration (periodisch)",
+      "textEn": "HP Regen at fixed intervals"
+     },
+     {
+      "slot": 3,
+      "level": 15,
+      "text": "Schadensresistenz (PvE) +10 % (Zusätzlich), Schadensresistenz (PvP) +5 % (Zusätzlich)",
+      "textEn": "+10% PvE Damage Tolerance increase and +5% PvP Damage Tolerance increase"
+     },
+     {
+      "slot": 4,
+      "level": 20,
+      "text": "Abklingzeit −15 Sek.",
+      "textEn": "-15s cooldown"
+     }
+    ],
+    "featured": false,
+    "icon": "ws-aion2-skill-sorcerer-steel-barrier.webp",
+    "descriptionEn": "Grants a **31%||16%** Max HP Protective Shield for 60 s. Increases PvE Damage Tolerance by 10% and PvP Damage Tolerance by 5% for the shield's duration, and restores 300 Stamina when the effect ends."
    },
    {
     "name": "Robe der Flamme",
@@ -5116,13 +5326,7 @@
     "descriptionEn": "Increases the caster's Mental-type Resist and Impact-type Resist by **34%||11.2%**."
    }
   ],
-  "stigmaSwaps": [
-   {
-    "name": "Stahlbarriere",
-    "icon": "ws-aion2-skill-sorcerer-steel-barrier.webp",
-    "note": "Defensiv-Stigma, in Wakas Build auf 5 mitgelevelt."
-   }
-  ]
+  "stigmaSwaps": []
  },
  {
   "nameEn": "Elementalist",
@@ -5788,7 +5992,7 @@
     "nameEn": "Enhance: Spirit's Benediction",
     "kind": "stigma",
     "targetLevel": 20,
-    "rank": 1,
+    "rank": 2,
     "unlockLevel": 22,
     "cooldown": "60 s",
     "tags": [
@@ -5833,7 +6037,7 @@
     "nameEn": "Summon: Ancient Spirit",
     "kind": "stigma",
     "targetLevel": 20,
-    "rank": 2,
+    "rank": 1,
     "unlockLevel": 22,
     "cooldown": "90 s",
     "tags": [
@@ -5877,15 +6081,15 @@
     "name": "Flammensegen",
     "nameEn": "Flame Blessing",
     "kind": "stigma",
-    "targetLevel": 15,
-    "rank": 3,
+    "targetLevel": 20,
+    "rank": 4,
     "unlockLevel": 22,
     "cooldown": "60 s",
     "tags": [
      "Physical",
      "Buff"
     ],
-    "description": "Fügt einem Gegner bei jedem Treffer für **17 s||10 s** mit 50 % Chance Zusatzschaden zu. Abklingzeit: 1 s.",
+    "description": "Fügt einem Gegner bei jedem Treffer für **20 s||10 s** mit 50 % Chance Zusatzschaden zu. Abklingzeit: 1 s.",
     "note": null,
     "specialtyOrder": [],
     "specialties": [
@@ -5916,14 +6120,14 @@
     ],
     "featured": false,
     "icon": "ws-aion2-skill-elementalist-flame-blessing.webp",
-    "descriptionEn": "Has a 50% chance to deal extra damage to enemies on landing an attack for **17 s||10 s**. Cooldown: 1 s."
+    "descriptionEn": "Has a 50% chance to deal extra damage to enemies on landing an attack for **20 s||10 s**. Cooldown: 1 s."
    },
    {
     "name": "Koordinationsangriff: Korrosion",
     "nameEn": "Jointstrike: Corrode",
     "kind": "stigma",
-    "targetLevel": 5,
-    "rank": 4,
+    "targetLevel": 20,
+    "rank": 3,
     "unlockLevel": 22,
     "cooldown": "45 s",
     "tags": [
@@ -5962,6 +6166,51 @@
     "featured": false,
     "icon": "ws-aion2-skill-elementalist-jointstrike-corrode.webp",
     "descriptionEn": "Selects a target within 20m and deals damage to up to 4 enemies within 4m of the target, inflicting Corrode for 20 s. Corrode: Increases damage taken from the Spirit by 10% and deals Damage over Time every 1 s. The Spirit joins for a coordinated assault. Fire: AoE damage and Knockdown. Water: damage and Slow. Earth: damage and Seal. Wind: AoE damage and Stun. Ancient: AoE damage and Knockdown."
+   },
+   {
+    "name": "Sog",
+    "nameEn": "Siphon",
+    "kind": "stigma",
+    "targetLevel": 16,
+    "rank": 5,
+    "unlockLevel": 22,
+    "cooldown": "30 s",
+    "tags": [
+     "Physical",
+     "Attack"
+    ],
+    "description": "Fügt einem Ziel innerhalb von 20 m Schaden und 300 MP-Schaden zu. Absorbiert 10 % LP und regeneriert 300 MP.",
+    "note": null,
+    "specialtyOrder": [],
+    "specialties": [
+     {
+      "slot": 1,
+      "level": 5,
+      "text": "Fähigkeitstempo +20 %",
+      "textEn": "+20% Skill Speed"
+     },
+     {
+      "slot": 2,
+      "level": 10,
+      "text": "LP-Absorption +5 %",
+      "textEn": "+5% HP absorbed"
+     },
+     {
+      "slot": 3,
+      "level": 15,
+      "text": "Schutzschild für 30s: 30 % der Max. LP",
+      "textEn": "30% of Max HP as Protective Shield for 30s on use"
+     },
+     {
+      "slot": 4,
+      "level": 20,
+      "text": "Betäubung für 3s: Bei Treffer",
+      "textEn": "Stun for 3s on hit"
+     }
+    ],
+    "featured": false,
+    "icon": "ws-aion2-skill-elementalist-siphon.webp",
+    "descriptionEn": "Deals damage and 300 MP damage to a target within 20m. Absorbs 10% HP and restores 300 MP."
    },
    {
     "name": "Geisterschlag",
@@ -6811,7 +7060,7 @@
      "Buff"
     ],
     "description": "Erhöht beim Wirker und bei Gruppenmitgliedern in der Nähe die Schadensverstärkung (PvE) und PvE-Schadensresistenz um **20 %||10,5 %** sowie die Schadensverstärkung (PvP) und PvP-Schadensresistenz um **10 %||5,25 %**. Wird nicht gleichzeitig mit der Kantor-Fähigkeit [Invokation der Unbesiegbarkeit] angewendet. Es wirkt nur der Effekt der Fähigkeit mit der höheren Stufe. Bei gleicher Stufe wirkt der Effekt von [Invokation der Unbesiegbarkeit].",
-    "note": "Toggle-Buff wie die Invokation der Unbesiegbarkeit beim Kantor: läuft permanent, mehr Schaden und mehr Tankiness für dich und die Gruppe. Mit Kantor in der Gruppe fliegt er meist raus, weil beide nicht stacken. Stigma-Reihenfolge: erst alle vier auf 5, dann Strafe der Erde und Gebet der Verstärkung über 10 auf 15, danach Licht des Schutzes und Strafe der Erde auf 20. Gebet der Verstärkung bleibt auf 15, Edle Aura auf 5.",
+    "note": "Toggle-Buff wie die Invokation der Unbesiegbarkeit beim Kantor: läuft permanent, mehr Schaden und mehr Tankiness für dich und die Gruppe. Mit Kantor in der Gruppe fliegt er meist raus, weil beide nicht stacken.",
     "specialtyOrder": [],
     "specialties": [
      {
@@ -6892,7 +7141,7 @@
     "name": "Gebet der Verstärkung",
     "nameEn": "Prayer of Amplification",
     "kind": "stigma",
-    "targetLevel": 15,
+    "targetLevel": 20,
     "rank": 3,
     "unlockLevel": 22,
     "cooldown": "60 s",
@@ -6900,7 +7149,7 @@
      "Magical",
      "Buff"
     ],
-    "description": "Erhöht die Angriffskraft für **17 s||10 s** um 20 %.",
+    "description": "Erhöht die Angriffskraft für **20 s||10 s** um 20 %.",
     "note": "Riesiger Angriffs-Buff und damit auch Heil-Buff, weil Heilungsverstärkung mit der Angriffskraft skaliert.",
     "specialtyOrder": [],
     "specialties": [
@@ -6931,13 +7180,13 @@
     ],
     "featured": false,
     "icon": "ws-aion2-skill-cleric-prayer-of-amplification.webp",
-    "descriptionEn": "Increases Attack by 20% for **17 s||10 s**."
+    "descriptionEn": "Increases Attack by 20% for **20 s||10 s**."
    },
    {
     "name": "Edle Aura",
     "nameEn": "Noble Aura",
     "kind": "stigma",
-    "targetLevel": 5,
+    "targetLevel": 20,
     "rank": 4,
     "unlockLevel": 22,
     "cooldown": "60 s",
@@ -6977,6 +7226,51 @@
     "featured": false,
     "icon": "ws-aion2-skill-cleric-noble-aura.webp",
     "descriptionEn": "Summons a Noble Aura near the caster that lasts for 300 s. The Aura follows the caster and attacks their target together. Deals damage to a target within 20m. Aura Attack Cooldown: 2 s."
+   },
+   {
+    "name": "Wiederbelebung durch Beschwörung",
+    "nameEn": "Summon Resurrection",
+    "kind": "stigma",
+    "targetLevel": 16,
+    "rank": 5,
+    "unlockLevel": 22,
+    "cooldown": "120 s",
+    "tags": [
+     "Magical",
+     "Buff"
+    ],
+    "description": "Belebt ein verstorbenes Gruppenmitglied aus einem Umkreis von 40 m in der Nähe des Wirkers wieder.",
+    "note": null,
+    "specialtyOrder": [],
+    "specialties": [
+     {
+      "slot": 1,
+      "level": 5,
+      "text": "Wirkzeit −1 Sek.",
+      "textEn": "-1s casting time"
+     },
+     {
+      "slot": 2,
+      "level": 10,
+      "text": "[Unverwundbarkeit] für 3s: Nach Wiederbelebung",
+      "textEn": "Invincible for 3s after resurrection"
+     },
+     {
+      "slot": 3,
+      "level": 15,
+      "text": "LP-Regeneration: 20 % Max. LP",
+      "textEn": "Restores 20% of Max HP"
+     },
+     {
+      "slot": 4,
+      "level": 20,
+      "text": "[Unverwundbarkeit] für 5s: Nach Wiederbelebung",
+      "textEn": "Invincible for 5s after resurrection"
+     }
+    ],
+    "featured": false,
+    "icon": "ws-aion2-skill-cleric-summon-resurrection.webp",
+    "descriptionEn": "Resurrects a fallen party member within 40m of the caster."
    },
    {
     "name": "Segen des Gebieters",
@@ -7159,11 +7453,6 @@
     "name": "Hoheit des Lebens",
     "icon": "ws-aion2-skill-cleric-benevolence.webp",
     "note": "weiterer langer Heal über Zeit, auf höheren Leveln mehr Ausdauer und Reinigung."
-   },
-   {
-    "name": "Wiederbelebung durch Beschwörung",
-    "icon": "ws-aion2-skill-cleric-summon-resurrection.webp",
-    "note": "Battle-Rez: holt gefallene Gruppenmitglieder zurück, ohne dass sie einen Wiederbelebungsstein brauchen."
    },
    {
     "name": "Erlösung",
@@ -7933,15 +8222,15 @@
     "name": "Invokation des Sprints",
     "nameEn": "Sprint Mantra",
     "kind": "stigma",
-    "targetLevel": 15,
-    "rank": 3,
+    "targetLevel": 20,
+    "rank": 4,
     "unlockLevel": 22,
     "cooldown": "5 s",
     "tags": [
      "Physical",
      "Buff"
     ],
-    "description": "Erhöht beim Wirker und bei Gruppenmitgliedern in der Nähe das Bewegungstempo um **17,5 %||10,5 %**. Stellt bei jedem erfolgreichen Angriff mit 15 % Chance LP wieder her. Abklingzeit der Heilung: 1 s.",
+    "description": "Erhöht beim Wirker und bei Gruppenmitgliedern in der Nähe das Bewegungstempo um **20 %||10,5 %**. Stellt bei jedem erfolgreichen Angriff mit 15 % Chance LP wieder her. Abklingzeit der Heilung: 1 s.",
     "note": null,
     "specialtyOrder": [],
     "specialties": [
@@ -7972,14 +8261,14 @@
     ],
     "featured": false,
     "icon": "ws-aion2-skill-chanter-sprint-mantra.webp",
-    "descriptionEn": "Increases Move Speed by **17.5%||10.5%** and grants a 15% chance to restore HP on landing an attack to the caster and nearby party members. Healing Cooldown: 1 s."
+    "descriptionEn": "Increases Move Speed by **20%||10.5%** and grants a 15% chance to restore HP on landing an attack to the caster and nearby party members. Healing Cooldown: 1 s."
    },
    {
     "name": "Marchutans Zorn",
     "nameEn": "Marchutan's Wrath",
     "kind": "stigma",
-    "targetLevel": 5,
-    "rank": 4,
+    "targetLevel": 16,
+    "rank": 5,
     "unlockLevel": 22,
     "cooldown": "30 s",
     "tags": [
@@ -8018,6 +8307,51 @@
     "featured": false,
     "icon": "ws-aion2-skill-chanter-marchutans-wrath.webp",
     "descriptionEn": "Selects a target within 20m and deals damage to up to 4 enemies within 4m. [Dark Crush] becomes available for 3 s on skill use."
+   },
+   {
+    "name": "Segen des Schutzes",
+    "nameEn": "Guardian Blessing",
+    "kind": "stigma",
+    "targetLevel": 20,
+    "rank": 3,
+    "unlockLevel": 22,
+    "cooldown": "300 s",
+    "tags": [
+     "Physical",
+     "Buff"
+    ],
+    "description": "Erhöht für 120 s die Max. LP des Wirkers um **13 %||5,4 %**. Regeneriert sofort **13 %||5,4 %** LP. Wird nicht von Effekten zur Entfernung von Verstärkungszaubern beeinflusst.",
+    "note": null,
+    "specialtyOrder": [],
+    "specialties": [
+     {
+      "slot": 1,
+      "level": 5,
+      "text": "Widerstand (Statuseffekte) +10 %",
+      "textEn": "+10% Status Effect Resist"
+     },
+     {
+      "slot": 2,
+      "level": 10,
+      "text": "[Kreuzverteidigung]-Effekt ×1,5 während der Wirkungsdauer",
+      "textEn": "x1.5 [Crossguard] effect for the duration"
+     },
+     {
+      "slot": 3,
+      "level": 15,
+      "text": "[Gelübde des Windes]-Effekt ×1,5 während der Wirkungsdauer",
+      "textEn": "x1.5 [Wind's Promise] effect for the duration"
+     },
+     {
+      "slot": 4,
+      "level": 20,
+      "text": "Heilung (Erhalten) +10 %",
+      "textEn": "+10% Incoming Heal"
+     }
+    ],
+    "featured": false,
+    "icon": "ws-aion2-skill-chanter-guardian-blessing.webp",
+    "descriptionEn": "Increases the caster's Max HP by **13%||5.4%** for 120 s and immediately restores **13%||5.4%** HP. Not affected by buff dispel effects."
    },
    {
     "name": "Angriffsvorbereitung",
@@ -8191,11 +8525,6 @@
    }
   ],
   "stigmaSwaps": [
-   {
-    "name": "Segen des Schutzes",
-    "icon": "ws-aion2-skill-chanter-guardian-blessing.webp",
-    "note": "statt Invokation des Sprints: mehr dauerhafte Tankiness, sinnvoll ohne Kleriker im Team."
-   },
    {
     "name": "Fokussierte Verteidigung",
     "icon": "ws-aion2-skill-chanter-focused-defense.webp",

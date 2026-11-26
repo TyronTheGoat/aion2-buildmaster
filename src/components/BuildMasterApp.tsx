@@ -74,14 +74,10 @@ export function BuildMasterApp() {
   const [route, go] = useHashRoute();
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
-  const [guild, setGuild] = useState("");
   const cloudOnline = useCloud().mode === "online";
   const fav = useFavorites();
-  // guilds (legions) the characters belong to, as kisk's API gives them
-  const guilds = [...new Set(chars.map((c) => c.snapshot?.legion).filter((l): l is string => !!l))].sort((a, b) => a.localeCompare(b));
   const shown = chars
     .filter((c) => !query || c.name.toLowerCase().includes(query.trim().toLowerCase()))
-    .filter((c) => !PREVIEW || !guild || c.snapshot?.legion === guild)
     // favourites first (offline preview)
     .map((c, i) => ({ c, i, f: PREVIEW && fav.isFav(charKey(c)) ? 0 : 1 })).sort((a, b) => a.f - b.f || a.i - b.i).map((x) => x.c);
   const selected = chars.find((c) => charKey(c) === route);
@@ -113,13 +109,6 @@ export function BuildMasterApp() {
         <div className="flex gap-2 md:w-[520px]">
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Suche: Charaktername …", "Search: character name …")} aria-label={t("Charakter suchen", "Search characters")}
             className="min-w-0 flex-1 rounded-xl border border-[#d9c58f]/20 bg-white/[0.03] px-3.5 py-2.5 text-base text-[#f4eed7] outline-none placeholder:text-zinc-500 focus:border-[#d9c58f]/50" />
-          {PREVIEW && (
-            <select value={guild} onChange={(e) => setGuild(e.target.value)} aria-label={t("Nach Gilde filtern", "Filter by guild")}
-              className="w-36 shrink-0 rounded-xl border border-[#d9c58f]/20 bg-[#0d1119] px-2.5 py-2.5 text-sm text-[#f4eed7] outline-none focus:border-[#d9c58f]/50 sm:w-44">
-              <option value="">{guilds.length ? t("Alle Gilden", "All guilds") : t("Gilde: noch keine", "Guild: none yet")}</option>
-              {guilds.map((g) => <option key={g} value={g}>{g} ({chars.filter((c) => c.snapshot?.legion === g).length})</option>)}
-            </select>
-          )}
         </div>
       </div>
 
@@ -143,7 +132,6 @@ export function BuildMasterApp() {
                     <div className="truncate text-sm text-[#beac80]/80">
                       {[s?.className, s?.race, `${c.server} · ${c.region.toUpperCase()}`].filter(Boolean).join(" · ")}
                     </div>
-                    {PREVIEW && s?.legion && <div className="truncate text-xs text-[#d9c58f]/80">{t("Gilde", "Guild")}: {s.legion}</div>}
                     <div className="mt-0.5 text-xs text-[#99e4e2]/60">
                       {[s?.combatPower && `CP ${s.combatPower.toLocaleString(numberLocale(lang))}`, s?.gearGrade && `${t("Gear-Rang", "Gear rank")} ${s.gearGrade}`].filter(Boolean).join(" · ") || t("Noch keine Daten", "No data yet")}
                     </div>

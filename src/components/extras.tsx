@@ -160,7 +160,7 @@ export function ProgressView({ char, charKey, portrait, online, onClose }: { cha
           <div className="min-w-0 text-center sm:text-left">
             <div className="text-[11px] uppercase tracking-widest text-zinc-500">{t("Fortschritt", "Progress")}</div>
             <h2 className="truncate text-2xl font-semibold text-[#f4eed7]">{char.name}</h2>
-            <div className="text-sm text-[#beac80]/80">{[char.className, char.legion].filter(Boolean).join(" · ")}</div>
+            <div className="text-sm text-[#beac80]/80">{char.className}</div>
             {last && <div className="mt-1 text-3xl font-semibold tabular-nums text-[#f4eed7]">{fmt(last[1])} <span className="text-base font-normal text-zinc-500">CP</span></div>}
             {pts && pts.length > 1 && <div className={`text-sm font-semibold ${gain >= 0 ? "text-[#5fbf8a]" : "text-[#ff8b8b]"}`}>{gain >= 0 ? "+" : ""}{fmt(gain)} {t("seit", "since")} {date(first![0])}</div>}
           </div>
