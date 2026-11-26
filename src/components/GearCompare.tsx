@@ -68,12 +68,13 @@ export function GearCompare({ char, item, slotId }: {
   const step = buildPlan(char).steps.find((s) => s.item === item);
   const isBis = item.grade === "BiS";
   const todo = [
-    ...(cmp?.rows.filter((r) => r.state === "missing").map((r) => `${statLabel(r.name, lang)} ${r.target} ${t("fehlt", "missing")}`) ?? []),
-    ...(cmp?.rows.filter((r) => r.state === "low").map((r) => `${statLabel(r.name, lang)}: ${r.have?.value} → ${r.target}`) ?? []),
+    // weapons and gear: only what is still to do, without the target values (Tyron 2026-11-26); Arcana keeps the plus
+    ...(cmp?.rows.filter((r) => r.state === "missing").map((r) => arcana ? `${statLabel(r.name, lang)} ${r.target} ${t("fehlt", "missing")}` : `${statLabel(r.name, lang)} ${t("fehlt", "missing")}`) ?? []),
+    ...(cmp?.rows.filter((r) => r.state === "low").map((r) => arcana ? `${statLabel(r.name, lang)}: ${r.have?.value} → ${r.target}` : `${statLabel(r.name, lang)} ${t("verbessern", "improve")}`) ?? []),
     // Arcana: a plus above the ideal is wasted too
     ...(arcana ? cmp?.rows.filter((r) => r.name !== "Any" && r.have && toNum(r.have.value) > toNum(r.target)).map((r) => `${statLabel(r.name, lang)}: ${r.have?.value} → ${r.target} (${t("zu hoch", "too high")})`) ?? [] : []),
     // Arcana with fewer ideal abilities than lines: the other abilities do not matter as long as no ideal one is missing
-    ...((arcana && (item.ideal?.length ?? 4) < 4 && !cmp?.rows.some((r) => r.state === "missing") ? [] : cmp?.extra ?? []).map((l) => `${statLabel(l.name, lang)} ${l.value} ${item.fixedLines ? t("ist fest (Teil ersetzen)", "is fixed (replace the item)") : t("neu rollen", "reroll")}`)),
+    ...((arcana && (item.ideal?.length ?? 4) < 4 && !cmp?.rows.some((r) => r.state === "missing") ? [] : cmp?.extra ?? []).map((l) => `${statLabel(l.name, lang)}${arcana ? ` ${l.value}` : ""} ${item.fixedLines ? t("ist fest (Teil ersetzen)", "is fixed (replace the item)") : t("neu rollen", "reroll")}`)),
   ];
 
   // the target piece shown on the Soll card
