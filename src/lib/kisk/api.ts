@@ -6,7 +6,7 @@
  * Relative imports only: the worker bundles this file.
  */
 import type { Character, Item, StatLine } from "../types";
-import { slotFromName } from "../knowledge/slots";
+import { SCORED_SLOTS, slotFromName } from "../knowledge/slots";
 import { ownScore } from "../score";
 import { gradeFromScore } from "../grades";
 import { toNum } from "../compare";
@@ -163,3 +163,39 @@ export function charFromApi(who: { region: string; server: string; name: string 
 
 export const kiskCharUrl = (region: string, server: string, name: string) =>
   `https://kisk.app/api/v1/c/${encodeURIComponent(region)}/${encodeURIComponent(server)}/${encodeURIComponent(name)}`;
+
+/** kisk's public gear page of a character: the only place with the BiS lines (the API has none). */
+export const kiskPageUrl = (region: string, server: string, name: string) =>
+  `https://kisk.app/c/${encodeURIComponent(region)}/${encodeURIComponent(server)}/${encodeURIComponent(name)}/gear`;
+
+/** Scored pieces (weapon, armor, jewellery, Arcana) without BiS lines. */
+export const missingIdeals = (c: Character) => [...c.gear, ...c.arcana].some((i) => SCORED_SLOTS.includes(i.slot) && !i.ideal?.length);
+
+/**
+ * Pieces without BiS lines get them from the parsed gear page (same slot, the same name first). A piece with the same
+ * name and lines as on the page takes kisk's rank, else our own rank against the lines. Undefined when nothing was filled.
+ * Added after Asna's longbow came without BiS lines (Tyron 2026-11-26).
+ */
+export function fillIdeals(c: Character, page: Character): Character | undefined {
+  const pool = [...page.gear, ...page.arcana].filter((i) => i.ideal?.length);
+  const used = new Set<Item>();
+  let filled = 0;
+  const fill = (it: Item): Item => {
+    if (!SCORED_SLOTS.includes(it.slot) || it.ideal?.length) return it;
+    const same = pool.filter((p) => !used.has(p) && p.slot === it.slot);
+    const src = same.find((p) => key(p.name) === key(it.name)) ?? same[0];
+    if (!src?.ideal) return it;
+    used.add(src);
+    filled++;
+    const next: Item = { ...it, ideal: src.ideal, ...(src.fixedLines ? { fixedLines: true } : {}) };
+    if (key(src.name) === key(it.name) && sameLines(src.lines, it.lines) && src.grade !== "?") {
+      next.grade = src.grade; next.score = src.score;
+    } else {
+      const sc = ownScore(next, src.ideal);
+      next.score = Math.round(sc); next.grade = gradeFromScore(sc);
+    }
+    return next;
+  };
+  const gear = c.gear.map(fill), arcana = c.arcana.map(fill);
+  return filled ? { ...c, gear, arcana } : undefined;
+}

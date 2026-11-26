@@ -16,7 +16,7 @@ export const SLOT_WEIGHT: Record<SlotKind, number> = {
 
 const RULES: [RegExp, SlotKind][] = [
   [/\b(chalice|parchment|compass|bell|mirror)\s+of\b/i, "arcana"],
-  [/\b(orb|sword|greatsword|staff|spellbook|tome|bow|mace|dagger|polearm|cannon|harp|cipher|gun|jewel)\b/i, "weapon"],
+  [/\b(orb|sword|greatsword|longsword|staff|rod|spellbook|grimoire|tome|bow|longbow|\w+bow|mace|warhammer|mallet|\w+mace|dagger|knife|kukri|\w+blade|claymore|\w+more|polearm|cannon|harp|cipher|gun|jewel|fist|gauntlet)\b/i, "weapon"],
   [/\b(guard|shield)\b/i, "offhand"],
   [/\b(breastplate|chest|jerkin|robe|hauberk|tunic|armor)\b/i, "torso"],
   [/\b(greaves|pants|leggings|chausses|breeches)\b/i, "pants"],

@@ -1,4 +1,4 @@
-import type { Character, Grade, IdealLine, Item, StatLine } from "../types";
+import type { Character, Grade, IdealLine, Item, SlotKind, StatLine } from "../types";
 import { gradeFromScore } from "../grades";
 import { slotFromName } from "../knowledge/slots";
 
@@ -35,7 +35,24 @@ function parseStat(line: string): StatLine | undefined {
 }
 
 /** Finds item starts: index of the "Lv NN Rarity" line + the item name. */
-type Start = { at: number; nameAt: number; name: string };
+type Start = { at: number; nameAt: number; name: string; slot: SlotKind };
+
+const IDEAL_SLOT: Record<string, SlotKind> = {
+  weapon: "weapon", offhand: "offhand", torso: "torso", pants: "pants", helmet: "helmet", shoulders: "shoulders", gloves: "gloves",
+  boots: "boots", cape: "cape", necklace: "necklace", earring: "earring", ring: "ring", bracelet: "bracelet", arcana: "arcana",
+};
+/**
+ * The slot from kisk's "Ideal <Class> <Slot>" label inside the piece's block (up to the next "Lv NN" line). Pieces with
+ * their own names (e.g. "Enraged Kromede Longbow", "Ludra's Grimoire") do not tell the slot by name (Tyron 2026-11-26).
+ */
+function idealSlot(lines: string[], from: number): SlotKind {
+  for (let k = from; k < Math.min(lines.length, from + 60); k++) {
+    if (LV_RE.test(lines[k])) break;
+    const m = lines[k].match(/^Ideal\s+[A-Za-z]+\s+([A-Za-z-]+)$/);
+    if (m) return IDEAL_SLOT[m[1].toLowerCase().replace("-", "")] ?? "unknown";
+  }
+  return "unknown";
+}
 function findItemStarts(lines: string[]): Start[] {
   const out: Start[] = [];
   lines.forEach((line, i) => {
@@ -43,16 +60,25 @@ function findItemStarts(lines: string[]): Start[] {
     if (!m) return;
     const before = line.slice(0, m.index).trim();
     if (before && slotFromName(before) !== "unknown") {
-      out.push({ at: i, nameAt: i, name: cleanName(before) });
+      out.push({ at: i, nameAt: i, name: cleanName(before), slot: slotFromName(before) });
       return;
     }
     for (let j = i - 1; j >= Math.max(0, i - 4); j--) {
       if (IMG_RE.test(lines[j])) continue;
       const cand = cleanName(lines[j]);
       if (cand && slotFromName(cand) !== "unknown") {
-        out.push({ at: i, nameAt: j, name: cand });
+        out.push({ at: i, nameAt: j, name: cand, slot: slotFromName(cand) });
         return;
       }
+    }
+    // a name that does not tell the slot: the nearest text line before, when kisk's ideal label names the slot
+    const byLabel = idealSlot(lines, i + 1);
+    if (byLabel === "unknown") return;
+    if (before) { out.push({ at: i, nameAt: i, name: cleanName(before), slot: byLabel }); return; }
+    for (let j = i - 1; j >= Math.max(0, i - 4); j--) {
+      if (IMG_RE.test(lines[j])) continue;
+      const cand = cleanName(lines[j]);
+      if (cand && !/^\+?\d+$/.test(cand)) { out.push({ at: i, nameAt: j, name: cand, slot: byLabel }); return; }
     }
   });
   return out;
@@ -66,10 +92,10 @@ function iconBefore(lines: string[], nameAt: number): string | undefined {
   return undefined;
 }
 
-function parseItemBlock(name: string, block: string[], header: string): Item {
+function parseItemBlock(name: string, block: string[], header: string, slot: SlotKind): Item {
   const lv = header.match(LV_RE);
   const item: Item = {
-    slot: slotFromName(name),
+    slot,
     name,
     level: num(lv?.[1]),
     rarity: lv?.[2],
@@ -157,7 +183,7 @@ export function parseKiskGear(lines: string[], opts: ParseOptions): Character {
   const items: Item[] = starts.map((s, idx) => {
     const end = idx + 1 < starts.length ? starts[idx + 1].nameAt : lines.length;
     const header = lines.slice(s.nameAt, s.at + 1).join(" ");
-    const item = parseItemBlock(s.name, lines.slice(s.at + 1, end), header);
+    const item = parseItemBlock(s.name, lines.slice(s.at + 1, end), header, s.slot);
     item.icon = iconBefore(lines, s.nameAt);
     return item;
   });

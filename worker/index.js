@@ -3,7 +3,9 @@
 // - character data from kisk shared by every account: whoever refreshes a character refreshes it for all (Tyron 2026-11-24)
 // Storage: SQLite-backed Durable Objects, one per account plus shared ones (characters, kisk, history, icons); no setup needed in the dashboard.
 import { DurableObject } from "cloudflare:workers";
-import { charFromApi, kiskCharUrl, kiskGearUrl, legionOf, mergeKiskGear } from "../src/lib/kisk/api.ts";
+import { charFromApi, fillIdeals, kiskCharUrl, kiskGearUrl, kiskPageUrl, legionOf, mergeKiskGear, missingIdeals } from "../src/lib/kisk/api.ts";
+import { htmlToLines } from "../src/lib/kisk/html-to-text.ts";
+import { parseKiskGear } from "../src/lib/kisk/parse.ts";
 
 const USER_KEYS = new Set(["chars", "gender", "planned", "skills", "skillplan", "builds", "buildactive", "favorites", "intro"]);
 const MAX_DOC = 1_500_000;
@@ -230,11 +232,13 @@ async function api(req, env, url) {
     const info = infoRes.ok ? await infoRes.json() : undefined;
     if (oldRaw) {
       const old = JSON.parse(oldRaw);
-      const next = mergeKiskGear(old, gear, info) ?? withLegion(old, info);
+      const merged = mergeKiskGear(old, gear, info) ?? withLegion(old, info);
+      const next = (await withPageIdeals(merged ?? old)) ?? merged;
       return json({ c: next ?? old, same: !next, kiskFetched: gear.fetched ?? null });
     }
     const donors = await classDonors(env, await store.rows());
-    return json({ c: charFromApi(who, info, gear, donors), same: false, kiskFetched: gear.fetched ?? null });
+    const made = charFromApi(who, info, gear, donors);
+    return json({ c: (await withPageIdeals(made)) ?? made, same: false, kiskFetched: gear.fetched ?? null });
   }
 
   // kisk.app API: status of the 30-minute refresh, one character as a test (nothing saved), or a run now (admin / service token)
@@ -282,6 +286,21 @@ async function classDonors(env, rows) {
     className: b.className, gear: b.items.filter((i) => i.slot !== "arcana"), arcana: b.items.filter((i) => i.slot === "arcana"),
   }));
   return [...rows.filter((r) => !r.k.startsWith("o:")).map((r) => JSON.parse(r.v)), ...fromBis];
+}
+
+/**
+ * Missing BiS lines (the API has none) from kisk's public gear page: only while a scored piece has none, so a
+ * character costs one page load until its lines are complete. Undefined when nothing could be filled.
+ */
+async function withPageIdeals(c) {
+  if (!missingIdeals(c)) return undefined;
+  try {
+    const url = kiskPageUrl(c.region, c.server, c.name);
+    const res = await fetch(url, { headers: { accept: "text/html" } });
+    if (!res.ok) return undefined;
+    const page = parseKiskGear(htmlToLines(await res.text()), { region: c.region, server: c.server, name: c.name, url, mode: "live" });
+    return fillIdeals(c, page);
+  } catch { return undefined; }
 }
 
 /** The character with the guild from kisk's answer when it had none or another one (same data time), else undefined. */
@@ -341,7 +360,8 @@ async function kiskRefresh(env, { only, dry } = {}) {
         if (ir.ok) info = await ir.json();
       } catch { /* next time */ }
     }
-    const next = mergeKiskGear(old, api, info) ?? withLegion(old, info);
+    const merged = mergeKiskGear(old, api, info) ?? withLegion(old, info);
+    const next = (await withPageIdeals(merged ?? old)) ?? merged;
     if (dry) return { ...result, raw: api, info: info ?? null, merged: next ?? null };
     if (!next) { result.same++; continue; }
     await store.put(r.k, JSON.stringify(next), "kisk-api");
