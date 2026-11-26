@@ -7,7 +7,7 @@
  * Without the API (offline file, dev server) nothing changes.
  */
 import { useSyncExternalStore } from "react";
-import { CHARS_KEY, GENDER_KEY, SEEDED_KEY, SEED_VERSION, SHARED_CHARS_KEY, charKey, type SavedChar } from "./store";
+import { CHARS_KEY, GENDER_KEY, SEEDED_KEY, SEED_VERSION, SHARED_CHARS_KEY, charKey, newer, type SavedChar } from "./store";
 import type { Character } from "@/lib/types";
 import { SKILLS_KEY } from "./skill-store";
 
@@ -59,8 +59,7 @@ let sharedChars: Record<string, Character> = {};
 /** characters this account added for everybody, and how many it may add (null: no limit) */
 const sharedMine = new Set<string>();
 let sharedLimit: number | null = 10;
-// same data time but now with the guild (filled in by the server later) counts as newer too
-const isNewer = (a?: Character, b?: Character) => !!a && (!b || a.source.fetchedAt > b.source.fetchedAt || (a.source.fetchedAt === b.source.fetchedAt && !!a.legion && !b.legion));
+const isNewer = newer;
 const writeShared = () => origSet(SHARED_CHARS_KEY, JSON.stringify({ chars: sharedChars, mine: [...sharedMine], limit: sharedLimit }));
 
 /** Sends every character of the list whose data is newer than the shared one (real kisk data only, never the demo data). */

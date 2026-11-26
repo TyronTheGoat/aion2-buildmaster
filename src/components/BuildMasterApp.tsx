@@ -11,7 +11,7 @@ import { ItemCatalog } from "./ItemCatalog";
 import { GearDeck, deckOf } from "./deck/GearDeck";
 import { Filler, Portrait, SHOW_ITEM_ICONS } from "./deck/Card";
 import { iconFor } from "@/lib/knowledge/item-catalog";
-import { charKey, parseKiskLink, portraitOf, useCharacters, type SavedChar } from "./store";
+import { charKey, newer, parseKiskLink, portraitOf, useCharacters, type SavedChar } from "./store";
 import { numberLocale, useLang, useT } from "@/lib/i18n";
 import { addBlocked, isAdminAccount, removeShared, useCloud } from "./cloud";
 import { PREVIEW } from "@/lib/preview";
@@ -318,8 +318,9 @@ function CharacterScreen({ saved, onBack, onRemove, upsert }: {
       const r = await fetchLive(saved);
       const mine = saved.snapshot;
       // only something newer than what this device has replaces it
-      if (!mine || r.c.source.fetchedAt > mine.source.fetchedAt) upsert({ ...saved, snapshot: { ...r.c, portrait: r.c.portrait ?? portraitOf(saved) } });
-      if (manual !== false) setInfo(r.same || (mine && r.c.source.fetchedAt <= mine.source.fetchedAt)
+      const isNew = newer(r.c, mine);
+      if (isNew) upsert({ ...saved, snapshot: { ...r.c, portrait: r.c.portrait ?? portraitOf(saved) } });
+      if (manual !== false) setInfo(!isNew
         ? t("kisk.app hat keinen neueren Stand. Für frische Daten einmal die Gear-Seite auf kisk.app öffnen, dann noch mal aktualisieren.", "kisk.app has nothing newer. For fresh data open the gear page on kisk.app once, then refresh again.")
         : t("Neuer Stand von kisk.app übernommen.", "New data from kisk.app applied."));
       setStatus("idle");
