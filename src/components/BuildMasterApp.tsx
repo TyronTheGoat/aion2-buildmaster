@@ -7,6 +7,8 @@ import { CharacterView } from "./CharacterView";
 import { GRADE_HEX_CSS } from "@/lib/grades";
 import { Sheet } from "./ui";
 import { ClassGuides } from "./ClassGuides";
+import { PetAtlas } from "./PetAtlas";
+import { PatchNotes } from "./PatchNotes";
 import { ItemCatalog } from "./ItemCatalog";
 import { GearDeck, deckOf } from "./deck/GearDeck";
 import { Filler, Portrait, SHOW_ITEM_ICONS } from "./deck/Card";
@@ -19,6 +21,8 @@ import { useFavorites } from "./fav-store";
 import { FavStar, IntroPopups } from "./extras";
 import { bookmarklet } from "./kisk-import";
 
+/** Pages of the header (their back button returns to the page they were opened from). */
+const PAGES = new Set(["klassen", "pets", "patch"]);
 /** The page the class guides were opened from (their back button returns there, Tyron 2026-11-24). */
 let guidesFrom: string | undefined;
 let lastRoute: string | undefined;
@@ -27,7 +31,7 @@ function useHashRoute(): [string | undefined, (k?: string) => void] {
   useEffect(() => {
     const read = () => {
       const r = decodeURIComponent(location.hash.replace(/^#\/?c\//, "")) || undefined;
-      if (r === "klassen" && lastRoute !== "klassen") guidesFrom = lastRoute;
+      if (r && PAGES.has(r) && !PAGES.has(lastRoute ?? "")) guidesFrom = lastRoute;
       lastRoute = r;
       setRoute(r);
     };
@@ -85,7 +89,10 @@ export function BuildMasterApp() {
   const lang = useLang();
 
   if (route === "katalog") return <ItemCatalog onBack={() => go()} />;
-  if (route === "klassen") return <ClassGuides onBack={() => go(guidesFrom && guidesFrom !== "katalog" ? guidesFrom : undefined)} />;
+  const back = () => go(guidesFrom && guidesFrom !== "katalog" ? guidesFrom : undefined);
+  if (route === "klassen") return <ClassGuides onBack={back} />;
+  if (route === "pets") return <PetAtlas onBack={back} />;
+  if (route === "patch") return <PatchNotes onBack={back} />;
 
   if (route && selected) {
     return <CharacterScreen key={route} saved={selected} onBack={() => go()} upsert={upsert}

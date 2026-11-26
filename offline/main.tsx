@@ -8,9 +8,9 @@ function App() {
   return (
     <div className="min-h-full flex flex-col">
       <header className="sticky top-0 z-10 border-b border-[#d9c58f]/10 bg-[#0b0c10]/80 backdrop-blur pt-[env(safe-area-inset-top)]">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:gap-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:flex-nowrap sm:gap-6">
           <a href="#" className="whitespace-nowrap font-semibold tracking-tight text-[#f4eed7]">Build Master</a>
-          <OfflineNav />
+          <div className="order-last w-full sm:order-none sm:w-auto"><OfflineNav /></div>
           <LangSwitch />
           <div className="hidden min-w-0 truncate sm:block"><OfflineBadge /></div>
         </div>

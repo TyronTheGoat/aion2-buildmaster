@@ -29,9 +29,20 @@ export function GuidesLabel() {
   return <><span className="sm:hidden">{t("Klassen", "Classes")}</span><span className="hidden sm:inline">{t("Klassenguides", "Class guides")}</span></>;
 }
 
-/** Offline shell: the character selection and the class guides. */
+export function PatchLabel() {
+  return <><span className="sm:hidden">Patches</span><span className="hidden sm:inline">Patch Notes</span></>;
+}
+
+/** Offline shell: characters, class guides, pets and patch notes (Tyron 2026-11-26). */
 export function OfflineNav() {
-  return <nav aria-label="Main navigation" className="flex gap-2"><a href="#" className={NAV_CLS}><NavLabel /></a><a href="#/c/klassen" className={NAV_CLS}><GuidesLabel /></a></nav>;
+  return (
+    <nav aria-label="Main navigation" className="-mx-1 flex min-w-0 gap-2 overflow-x-auto px-1 [scrollbar-width:none]">
+      <a href="#" className={NAV_CLS}><NavLabel /></a>
+      <a href="#/c/klassen" className={NAV_CLS}><GuidesLabel /></a>
+      <a href="#/c/pets" className={NAV_CLS}>Pets</a>
+      <a href="#/c/patch" className={NAV_CLS}><PatchLabel /></a>
+    </nav>
+  );
 }
 
 export function OfflineBadge() {

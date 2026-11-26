@@ -27,7 +27,7 @@ for (const [name, local] of Object.entries(iconFiles)) {
 }
 // class pictures for the class guides (git-ignored like the icons; online they come from the icon pack)
 try {
-  for (const dir of ["public/class-art", "public/class-art/skills"])
+  for (const dir of ["public/class-art", "public/class-art/skills", "public/class-art/pets"])
     for (const f of readdirSync(path.join(root, dir))) if (f.endsWith(".webp")) icons[f] = `data:image/webp;base64,${readFileSync(path.join(root, dir, f)).toString("base64")}`;
 } catch { /* not installed */ }
 console.log(`Original-Icons eingebettet: ${shrunk.size} Dateien, ${Object.keys(iconFiles).length} Namen`);
@@ -54,12 +54,15 @@ for (const dir of ["class-icons"]) {
     if (mime) assets[`${dir}/${f}`] = `data:${mime};base64,${readFileSync(path.join(root, "public", dir, f)).toString("base64")}`;
   }
 }
+// official patch notes (scripts/fetch-patch-notes.mjs, git-ignored); online the server serves them
+let patch = "undefined";
+try { patch = readFileSync(path.join(root, "data/patch-notes.json"), "utf8"); } catch { /* not fetched */ }
 console.log(`Eingebettet: ${Object.keys(assets).length} Dateien (${Object.keys(assets).join(", ") || "keine"})`);
 const html = `<!DOCTYPE html><html lang="de" class="h-full antialiased"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b0c10">
 <title>Aion 2 BuildMaster</title><meta name="apple-mobile-web-app-title" content="Aion 2 BuildMaster"><meta name="application-name" content="Aion 2 BuildMaster"><link rel="icon" href="data:image/svg+xml,${encodeURIComponent(icon)}">
 <style>${css}</style></head><body class="min-h-full"><div id="root" class="min-h-full"></div>
-<script>window.__BM_ASSETS__=${JSON.stringify(assets)};window.__BM_ICONS__=${JSON.stringify(icons)}</script>
+<script>window.__BM_ASSETS__=${JSON.stringify(assets)};window.__BM_ICONS__=${JSON.stringify(icons)};window.__BM_PATCH__=${patch.replace(/<\//g, "<\\/")}</script>
 <script>${js.outputFiles[0].text.replace(/<\/script/g, "<\\/script")}</script></body></html>`;
 mkdirSync(path.join(root, "dist"), { recursive: true });
 writeFileSync(path.join(root, "dist/aion2-buildmaster-offline.html"), html);
