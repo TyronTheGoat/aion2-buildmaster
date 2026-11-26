@@ -10,7 +10,6 @@ const root = path.resolve(import.meta.dirname, "..");
 const out = process.argv[2] ?? path.join(root, "dist/buildmaster-icons.json");
 let map = {};
 try { map = JSON.parse(readFileSync(path.join(root, "data/icon-files.json"), "utf8")); } catch { /* none */ }
-try { for (const local of Object.values(JSON.parse(readFileSync(path.join(root, "data/craft-icon-files.json"), "utf8")))) map[local.split("/").pop()] = local; } catch { /* none */ }
 const files = {}, alias = {};
 for (const [name, local] of Object.entries(map)) {
   const base = local.split("/").pop();

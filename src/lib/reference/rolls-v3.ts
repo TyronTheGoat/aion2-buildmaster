@@ -1,7 +1,7 @@
 /**
  * Read-only reference database of the possible Arcana and equipment rolls, AION 2 EU/Global (Tyron's input V3,
  * 2026-11-24, data/reference/eu-global-rolls-v3-2026-11-24). Only a reference for later planners: nothing here
- * changes characters, gear, Arcana, crafting, prices or notes, and no calculator is built on it yet.
+ * changes characters, gear, Arcana or notes, and no calculator is built on it yet.
  *
  * Rules kept from the input:
  * - regular (mastery) skills: trained up to 10, Daevanion up to +4, more only from equipped Arcana and gear;

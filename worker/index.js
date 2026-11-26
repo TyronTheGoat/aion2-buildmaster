@@ -1,14 +1,12 @@
 // Cloudflare Worker: serves the single-file app (static assets) and a small API behind Cloudflare Access.
-// - private data per account (the e-mail Cloudflare Access logged in): character box, crafting projects, stock
-// - market prices shared by every account (anyone with access can change them)
+// - private data per account (the e-mail Cloudflare Access logged in): character box, skills, builds, favourites
 // - character data from kisk shared by every account: whoever refreshes a character refreshes it for all (Tyron 2026-11-24)
-// Storage: SQLite-backed Durable Objects, one per account and one for the shared prices; no setup needed in the dashboard.
+// Storage: SQLite-backed Durable Objects, one per account plus shared ones (characters, kisk, history, icons); no setup needed in the dashboard.
 import { DurableObject } from "cloudflare:workers";
 import { charFromApi, kiskCharUrl, kiskGearUrl, legionOf, mergeKiskGear } from "../src/lib/kisk/api.ts";
 
-const USER_KEYS = new Set(["chars", "gender", "planned", "craft", "skills", "skillplan", "builds", "buildactive", "favorites", "intro"]);
+const USER_KEYS = new Set(["chars", "gender", "planned", "skills", "skillplan", "builds", "buildactive", "favorites", "intro"]);
 const MAX_DOC = 1_500_000;
-const MAX_PRICE = 4_000;
 const MAX_CHAR = 400_000;
 /** characters one account may add for everybody (Tyron 2026-11-24); the admin has no limit */
 const CHAR_LIMIT = 10;
@@ -96,23 +94,16 @@ async function identity(req, env) {
 
 /* ---------------------------------------------------------------- API ---------------------------------------------------------------- */
 
-const okNum = (v) => v === null || v === undefined || (typeof v === "number" && Number.isFinite(v) && v >= 0);
-function validPrice(p) {
-  return p && typeof p === "object" && typeof p.name === "string" && p.name.length < 200 && okNum(p.low) && okNum(p.high) && okNum(p.ref)
-    && (p.low == null || p.high == null || p.low <= p.high) && !p.suggested;
-}
-
 async function api(req, env, url) {
   const who = await identity(req, env);
   if (!who) return json({ error: "nicht angemeldet" }, 401);
   const email = who.id;
-  // a service token may only maintain shared data (icon pack, market prices), never an account's characters or projects
-  if (who.service && !/^\/api\/(me|icons?|prices|kisk|history)(\/|$)/.test(url.pathname) && !(url.pathname === "/api/chars" && req.method === "GET")) return json({ error: "nur für Personen-Logins" }, 403);
+  // a service token may only maintain shared data (icon pack, kisk data), never an account's characters or projects
+  if (who.service && !/^\/api\/(me|icons?|kisk|history)(\/|$)/.test(url.pathname) && !(url.pathname === "/api/chars" && req.method === "GET")) return json({ error: "nur für Personen-Logins" }, 403);
   // writes need our own header: a plain cross-site form or fetch cannot send it without a CORS preflight we never allow
   if (req.method !== "GET" && req.headers.get("x-bm") !== "1") return json({ error: "forbidden" }, 403);
   const path = url.pathname.replace(/\/+$/, "");
   const user = () => env.STORE.get(env.STORE.idFromName(`user:${email}`));
-  const prices = () => env.STORE.get(env.STORE.idFromName("prices"));
 
   if (path === "/api/me") return json({ email: who.service ? null : email, service: who.service || undefined });
 
@@ -268,24 +259,6 @@ async function api(req, env, url) {
     return json({ k, points: h ? JSON.parse(h) : [] });
   }
 
-  if (path === "/api/prices" && req.method === "GET") {
-    const rows = await prices().list();
-    return json({ prices: rows.map((r) => ({ k: r.k, p: JSON.parse(r.v), at: r.at })) });
-  }
-  if (path === "/api/prices" && req.method === "PUT") {
-    const text = await req.text();
-    if (text.length > MAX_PRICE) return json({ error: "zu groß" }, 413);
-    let body;
-    try { body = JSON.parse(text); } catch { return json({ error: "kein JSON" }, 400); }
-    if (typeof body.k !== "string" || body.k.length > 300 || !validPrice(body.p)) return json({ error: "ungültiger Preis" }, 400);
-    return json({ at: await prices().put(body.k, JSON.stringify(body.p), email) });
-  }
-  if (path === "/api/prices" && req.method === "DELETE") {
-    const k = url.searchParams.get("k");
-    if (!k || k.length > 300) return json({ error: "Schlüssel fehlt" }, 400);
-    await prices().del(k);
-    return json({ ok: true });
-  }
   return json({ error: "not found" }, 404);
 }
 

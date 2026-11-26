@@ -29,7 +29,7 @@ const showResult = (r: { route?: string; error?: string }) => {
 };
 
 (async () => {
-  // online: the account's data and the shared prices first, so the app starts with them
+  // online: the account's data first, so the app starts with them
   await initCloud();
   const sent = await takeKiskImport();
   if (sent) showResult(sent);
