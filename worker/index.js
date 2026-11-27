@@ -101,7 +101,7 @@ async function api(req, env, url) {
   if (!who) return json({ error: "nicht angemeldet" }, 401);
   const email = who.id;
   // a service token may only maintain shared data (icon pack, kisk data), never an account's characters or projects
-  if (who.service && !/^\/api\/(me|icons?|kisk|history)(\/|$)/.test(url.pathname) && !(url.pathname === "/api/chars" && req.method === "GET")) return json({ error: "nur für Personen-Logins" }, 403);
+  if (who.service && !/^\/api\/(me|icons?|kisk|history|patch-notes)(\/|$)/.test(url.pathname) && !(url.pathname === "/api/chars" && req.method === "GET")) return json({ error: "nur für Personen-Logins" }, 403);
   // writes need our own header: a plain cross-site form or fetch cannot send it without a CORS preflight we never allow
   if (req.method !== "GET" && req.headers.get("x-bm") !== "1") return json({ error: "forbidden" }, 403);
   const path = url.pathname.replace(/\/+$/, "");
@@ -257,6 +257,9 @@ async function api(req, env, url) {
   }
 
   // CP over time per character (stored by the server since 2026-11-24 with every new snapshot)
+  // official EU patch notes (NCSOFT posts them on Steam), kept for an hour (Tyron 2026-11-27)
+  if (path === "/api/patch-notes" && req.method === "GET") return json(await patchNotes(env));
+
   if (path === "/api/history" && req.method === "GET") {
     const k = (url.searchParams.get("k") ?? "").toLowerCase();
     const h = k ? await env.STORE.get(env.STORE.idFromName("history")).get(k) : null;
@@ -327,6 +330,28 @@ async function recordCp(env, k, c) {
 
 /** at most this many characters per run (kisk allows 60 requests a minute; the oldest data goes first) */
 const KISK_PER_RUN = 25;
+
+const PATCH_URL = "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=3393110&count=300&maxlength=0&format=json&feeds=steam_community_announcements";
+/** Patch notes and hotfixes from AION 2's Steam news (BBCode, the app renders it); an hour old at most, the last answer when Steam fails. */
+async function patchNotes(env) {
+  const store = env.STORE.get(env.STORE.idFromName("kisk"));
+  const raw = await store.get("patch-notes");
+  const old = raw ? JSON.parse(raw) : null;
+  if (old && Date.now() - Date.parse(old.fetched) < 3_600_000) return old;
+  try {
+    const res = await fetch(PATCH_URL, { headers: { accept: "application/json" } });
+    if (!res.ok) throw new Error(`Steam ${res.status}`);
+    const items = (await res.json())?.appnews?.newsitems ?? [];
+    const notes = items.filter((n) => /patch notes|hotfix/i.test(n.title ?? ""))
+      .map((n) => ({ id: String(n.gid), title: n.title, date: n.date, url: n.url, body: n.contents }));
+    if (!notes.length) throw new Error("keine Patch Notes");
+    const next = { source: "Steam / NCSOFT", fetched: new Date().toISOString(), notes };
+    await store.put("patch-notes", JSON.stringify(next), "steam");
+    return next;
+  } catch (e) {
+    return old ?? { fetched: null, notes: [], error: String(e?.message ?? e) };
+  }
+}
 /**
  * Refreshes the shared characters from kisk's API (Tyron 2026-11-24, kisk's team pointed us to https://kisk.app/api).
  * The secret is the Worker secret KISK_API_KEY; without it nothing happens. `dry`: one character, returns kisk's raw answer
