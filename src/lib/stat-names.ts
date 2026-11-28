@@ -13,8 +13,8 @@ const STATS: Record<string, string> = {
   Willpower: "Wille",
   Attack: "Angriffskraft",
   Defense: "Verteidigung",
-  // the German pages call Accuracy "Präzision" as well; the suffix keeps it apart from Precision
-  Accuracy: "Präzision (Treffer)",
+  // the German game calls Accuracy "Präzision" as well; the app keeps the English word for it (Tyron 2026-11-28)
+  Accuracy: "Accuracy",
   Evasion: "Ausweichen",
   "Critical Hit": "Kritischer Treffer",
   "Critical Hit Resist": "Krit.-Widerstand",

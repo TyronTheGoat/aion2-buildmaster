@@ -63,7 +63,7 @@ export function RollChances({ slot, className, want = [] }: { slot: SlotKind; cl
             </div>
             <ul className="mt-1 divide-y divide-white/5 text-sm">
               {rows.map((s) => {
-                // same German names as the rest of the site (Accuracy = "Präzision (Treffer)", apart from Precision)
+                // same German names as the rest of the site (Accuracy stays "Accuracy", apart from Precision = "Präzision")
                 const name = lang === "en" ? statLabel(s.stat_en, "en") : hasGerman(s.stat_en) ? statLabel(s.stat_en, "de") : refStatDe(s).de;
                 const hit = wanted.has(norm(s.stat_en));
                 return <li key={s.stat_en} className={`flex justify-between gap-3 py-1 ${hit ? "text-[#f4eed7]" : "text-[#efe6cc]/80"}`}>
