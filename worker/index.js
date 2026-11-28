@@ -4,7 +4,7 @@
 // Storage: SQLite-backed Durable Objects, one per account plus shared ones (characters, kisk, history, icons); no setup needed in the dashboard.
 import { DurableObject } from "cloudflare:workers";
 import { charFromApi, fillIdeals, kiskCharUrl, kiskGearUrl, kiskPageUrl, legionOf, mergeKiskGear, missingIdeals } from "../src/lib/kisk/api.ts";
-import { htmlToLines } from "../src/lib/kisk/html-to-text.ts";
+import { extractPortrait, htmlToLines } from "../src/lib/kisk/html-to-text.ts";
 import { parseKiskGear } from "../src/lib/kisk/parse.ts";
 
 const USER_KEYS = new Set(["chars", "gender", "planned", "skills", "skillplan", "builds", "buildactive", "favorites", "intro"]);
@@ -296,13 +296,19 @@ async function classDonors(env, rows) {
  * character costs one page load until its lines are complete. Undefined when nothing could be filled.
  */
 async function withPageIdeals(c) {
-  if (!missingIdeals(c)) return undefined;
+  const noIdeals = missingIdeals(c);
+  // characters added by name or link have no portrait: the API has none, the gear page links it (Tyron 2026-11-28)
+  if (!noIdeals && c.portrait) return undefined;
   try {
     const url = kiskPageUrl(c.region, c.server, c.name);
     const res = await fetch(url, { headers: { accept: "text/html" } });
     if (!res.ok) return undefined;
-    const page = parseKiskGear(htmlToLines(await res.text()), { region: c.region, server: c.server, name: c.name, url, mode: "live" });
-    return fillIdeals(c, page);
+    const html = await res.text();
+    const portrait = c.portrait ? undefined : extractPortrait(html);
+    const base = portrait ? { ...c, portrait } : c;
+    if (!noIdeals) return portrait ? base : undefined;
+    const page = parseKiskGear(htmlToLines(html), { region: c.region, server: c.server, name: c.name, url, mode: "live" });
+    return fillIdeals(base, page) ?? (portrait ? base : undefined);
   } catch { return undefined; }
 }
 

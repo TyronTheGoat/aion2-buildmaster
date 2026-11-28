@@ -30,10 +30,9 @@ export const CHARS_KEY = KEY;
 export const GENDER_KEY = "bm:gender";
 /** Newest kisk data per character shared by all accounts on the live site (charKey → snapshot), see cloud.ts */
 export const SHARED_CHARS_KEY = "bm:shared-chars";
-// same data time but now with the guild (filled in by the server later) counts as newer too
-/** Newer data: a later kisk time, or the same time with the guild or the missing BiS lines filled in by the server later. */
+/** Newer data: a later kisk time, or the same time with the guild, the portrait or the missing BiS lines filled in by the server later. */
 export const newer = (a?: Character, b?: Character) => !!a && (!b || a.source.fetchedAt > b.source.fetchedAt
-  || (a.source.fetchedAt === b.source.fetchedAt && ((!!a.legion && !b.legion) || (missingIdeals(b) && !missingIdeals(a)))));
+  || (a.source.fetchedAt === b.source.fetchedAt && ((!!a.legion && !b.legion) || (!!a.portrait && !b.portrait) || (missingIdeals(b) && !missingIdeals(a)))));
 /** fetchedAt of the short version-2 snapshots (no stat lines), replaced by the full ones in version 3 */
 const SHORT_SNAPSHOT = "2026-11-22T13:50:00Z";
 /** Gender per character, kept separately so it stays even if the character is removed and added again */
